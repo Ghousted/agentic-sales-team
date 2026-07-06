@@ -15,6 +15,13 @@
       "when": 1783355807520,
       "tag": "0001_polite_rage",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783356878456,
+      "tag": "0002_goofy_patch",
+      "breakpoints": true
     }
   ]
 }

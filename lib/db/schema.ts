@@ -1,5 +1,5 @@
 // Drizzle schema for the app's Postgres (Neon) database.
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -63,6 +63,17 @@ export const agentStates = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.agentId] }) })
 );
+
+// Chat messages between a user and an agent. The serial id preserves order
+// within each conversation. Seed opener messages stay static (not stored here).
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  who: text("who").notNull(), // 'ai' | 'me'
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

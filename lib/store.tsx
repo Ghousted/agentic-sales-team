@@ -6,7 +6,7 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
-import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, type WorkspaceData } from "./workspace/actions";
+import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, type WorkspaceData } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -123,6 +123,16 @@ export interface AuthedUser {
   workspaceName: string;
 }
 
+// Combine the static seed openers with the user's persisted messages: for each
+// agent, the seed opener(s) come first, then the stored conversation.
+function mergeChats(seed: Chats, loaded?: Chats): Chats {
+  const out: Chats = { ...seed };
+  for (const [agentId, msgs] of Object.entries(loaded ?? {})) {
+    out[agentId] = (seed[agentId] ?? []).concat(msgs);
+  }
+  return out;
+}
+
 export function AppProvider({ children, initialUser, initialWorkspace }: { children: React.ReactNode; initialUser?: AuthedUser | null; initialWorkspace?: WorkspaceData | null }) {
   // Initialize from the server-verified session + persisted workspace so a
   // refresh stays logged in and keeps the user's created/deleted/paused agents.
@@ -136,6 +146,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     extraTeams: initialWorkspace?.extraTeams ?? initialState.extraTeams,
     removed: Object.fromEntries((initialWorkspace?.removed ?? []).map((id) => [id, true])),
     paused: Object.fromEntries((initialWorkspace?.paused ?? []).map((id) => [id, true])),
+    // Chats = static seed openers + the user's persisted messages appended in order.
+    chats: mergeChats(chatsInit(), initialWorkspace?.chats),
   }));
   const sRef = useRef(s);
   sRef.current = s;
@@ -210,14 +222,18 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       chatInput: "",
       chatTyping: true,
     }));
-    const appendAi = (reply: string) =>
+    // Persist the user's message immediately (fire-and-forget).
+    appendMessages(convId, [{ who: "me", text: t }]).catch((e) => console.error("[sendChat] persist user msg failed:", e));
+    const appendAi = (reply: string, persist: boolean) => {
       set((prev) => ({
         chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "ai", text: reply }]) },
         chatTyping: false,
       }));
+      if (persist) appendMessages(convId, [{ who: "ai", text: reply }]).catch((e) => console.error("[sendChat] persist ai msg failed:", e));
+    };
     chatReply({ agent: { name: agent.name, role: agent.role, goal: agent.goal, task: agent.task }, history, message: t })
-      .then(appendAi)
-      .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again."));
+      .then((reply) => appendAi(reply, true))
+      .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again.", false));
   }, [agents, set]);
 
   const createTeam = useCallback((): string => {

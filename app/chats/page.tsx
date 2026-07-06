@@ -23,9 +23,15 @@ function ChatsInner() {
     });
   }, [wantAgent, byId, set]);
 
-  const conv = byId(s.convId) || agents[0];
   const convIds = Object.keys(s.chats).filter((id) => byId(id));
-  const messages = s.chats[s.convId] || [];
+  // The stored convId can point at a deleted agent (e.g. the default). Fall back
+  // to the first valid conversation so the header and messages stay in sync.
+  const activeId = byId(s.convId) ? s.convId : convIds[0] ?? s.convId;
+  useEffect(() => {
+    if (!byId(s.convId) && convIds[0]) set({ convId: convIds[0] });
+  }, [s.convId, convIds, byId, set]);
+  const conv = byId(activeId) || agents[0];
+  const messages = s.chats[activeId] || [];
 
   return (
     <div style={css("display:flex;height:100%;animation:fadeUp .3s ease")}>
@@ -38,7 +44,7 @@ function ChatsInner() {
             const msgs = s.chats[id];
             const last = msgs[msgs.length - 1];
             return (
-              <Box key={id} onClick={() => set({ convId: id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;transition:background .12s;" + (id === s.convId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
+              <Box key={id} onClick={() => set({ convId: id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;transition:background .12s;" + (id === activeId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
                 <div style={css(av(a, 32))}>{a.initials}</div>
                 <div style={css("min-width:0")}>
                   <div style={css("font-size:12.5px;font-weight:600")}>{a.name}</div>

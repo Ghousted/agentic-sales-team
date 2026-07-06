@@ -67,6 +67,15 @@ export const agentConfig = pgTable(
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.agentId] }) })
 );
 
+// Password-reset tokens. A request creates one (1-hour expiry); using it to set
+// a new password consumes it. No email infra — the link is surfaced on-screen.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  token: text("token").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Per-user flags on any agent (seed or created): soft-delete and pause.
 export const agentStates = pgTable(
   "agent_states",

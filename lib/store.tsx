@@ -208,7 +208,13 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const logout = useCallback(async () => {
     await signOutAction();
-    set({ authed: false, authMode: "login" });
+    // Clear this user's workspace from the store so nothing leaks into the next
+    // session before the post-login full reload re-hydrates the right data.
+    set({
+      authed: false, authMode: "login",
+      extraAgents: [], extraTeams: [], removed: {}, paused: {}, agentConfig: {},
+      feedExtra: [], chats: chatsInit(),
+    });
   }, [set]);
 
   const deleteAgent = useCallback((id: string) => {

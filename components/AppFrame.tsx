@@ -12,10 +12,22 @@ import TeamModal from "./TeamModal";
 // onboarding wizard, which is its own full-page takeover in the design).
 const FULLSCREEN = ["/create"];
 
+// Routes that render themselves even without a session (e.g. password reset,
+// reached from an emailed/surfaced link before the user is logged in).
+const PUBLIC = ["/reset"];
+
 export default function AppFrame({ children }: { children: React.ReactNode }) {
   const { s } = useApp();
   const path = usePathname();
   if (!s.authed) {
+    if (PUBLIC.includes(path)) {
+      return (
+        <>
+          {children}
+          <Toast />
+        </>
+      );
+    }
     return (
       <>
         <Login />

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { signIn, signUp } from "@/lib/auth/actions";
+import { signIn, signUp, requestPasswordReset } from "@/lib/auth/actions";
 import { css, Box, Btn } from "./primitives";
 
 /* Eye / eye-off icon (mdi) for the password reveal toggle. */
@@ -51,7 +51,7 @@ function Field({ id, label, placeholder, password, value, setValue, onEnter }: {
 }
 
 export default function Login() {
-  const { s, set, signedIn, showToast } = useApp();
+  const { s, set } = useApp();
   const router = useRouter();
   const isSignup = s.authMode === "signup";
   const [email, setEmail] = useState("");
@@ -60,6 +60,25 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Forgot-password sub-flow (no email infra: surface the reset link on-screen).
+  const [forgot, setForgot] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [resetPath, setResetPath] = useState<string | null>(null);
+
+  const openForgot = () => { setError(""); setResetDone(false); setResetPath(null); setForgot(true); };
+  const closeForgot = () => { setError(""); setForgot(false); };
+
+  const sendReset = async () => {
+    if (loading) return;
+    setError("");
+    setLoading(true);
+    const res = await requestPasswordReset({ email });
+    setLoading(false);
+    if (!res.ok) { setError(res.error || "Something went wrong. Please try again."); return; }
+    setResetPath(res.resetPath ?? null);
+    setResetDone(true);
+  };
 
   const submit = async () => {
     if (loading) return;
@@ -75,9 +94,10 @@ export default function Login() {
       setError(res.error || "Something went wrong. Please try again.");
       return;
     }
-    signedIn(res.user);
-    router.push("/");
-    router.refresh();
+    // Full navigation (not router.push) so the server re-hydrates THIS user's
+    // own workspace and no agents/teams/chats from a prior session linger in
+    // the client store. The session cookie is already set by the action above.
+    window.location.href = "/";
   };
 
   const switchMode = () => {
@@ -107,13 +127,49 @@ export default function Login() {
             </div>
             <div style={css("display:flex;flex-direction:column;gap:12px;text-align:center;width:100%")}>
               <div style={css("font-size:30px;font-weight:700;line-height:38px;color:#181d27;letter-spacing:-.01em")}>
-                {isSignup ? "Sign up and create an account" : "Log in to your account"}
+                {forgot ? "Reset your password" : isSignup ? "Sign up and create an account" : "Log in to your account"}
               </div>
-              <div style={css("font-size:16px;color:#535862;line-height:24px")}>Welcome back! Please enter your details.</div>
+              <div style={css("font-size:16px;color:#535862;line-height:24px")}>{forgot ? "Enter your email and we’ll get you a reset link." : "Welcome back! Please enter your details."}</div>
             </div>
           </div>
 
+          {/* ===== forgot-password view ===== */}
+          {forgot && (
+            <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
+              {resetDone ? (
+                <div style={css("display:flex;flex-direction:column;gap:16px;width:100%")}>
+                  {resetPath ? (
+                    <>
+                      <div style={css("font-size:13px;color:#3F3F46;background:#F1EDFD;border:1px solid #E3DBF9;border-radius:12px;padding:14px 16px;line-height:1.55")}>
+                        No email server is configured in this demo, so use the link below to set a new password (valid for 1 hour):
+                      </div>
+                      <Btn onClick={() => { router.push(resetPath); router.refresh(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);cursor:pointer" styleHover="background:#42199E">Reset your password →</Btn>
+                    </>
+                  ) : (
+                    <div style={css("font-size:14px;color:#3F3F46;background:#F4F4F5;border:1px solid #E4E4E7;border-radius:12px;padding:14px 16px;line-height:1.55")}>
+                      If an account exists for <strong>{email}</strong>, a reset link has been generated.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <Field id="reset-email" label="Email" placeholder="Enter your account email" value={email} setValue={setEmail} onEnter={sendReset} />
+                  {error && (
+                    <div role="alert" style={css("font-size:13px;color:#B91C1C;background:#FEECEC;border:1px solid #FBD5D5;border-radius:10px;padding:10px 14px")}>{error}</div>
+                  )}
+                  <Btn onClick={sendReset} disabled={loading} style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#42199E"}>
+                    {loading ? "Generating link…" : "Send reset link"}
+                  </Btn>
+                </>
+              )}
+              <div style={css("display:flex;justify-content:center;width:100%")}>
+                <Box as="span" onClick={closeForgot} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">← Back to login</Box>
+              </div>
+            </div>
+          )}
+
           {/* form + submit */}
+          {!forgot && (
           <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
             <div style={css("display:flex;flex-direction:column;gap:20px;width:100%")}>
               <Field id="email" label="Email" placeholder="Enter email" value={email} setValue={setEmail} onEnter={submit} />
@@ -141,7 +197,7 @@ export default function Login() {
                   </span>
                   <span style={css("font-size:14px;font-weight:500;color:#414651;white-space:nowrap")}>Remember for 30 days</span>
                 </div>
-                <Box as="span" onClick={() => showToast("Password reset link sent")} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer;white-space:nowrap">Forgot password?</Box>
+                <Box as="span" onClick={openForgot} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer;white-space:nowrap">Forgot password?</Box>
               </div>
             </div>
 
@@ -149,14 +205,17 @@ export default function Login() {
               {loading ? (isSignup ? "Creating account…" : "Signing in…") : isSignup ? "Create account" : "Sign In"}
             </Btn>
           </div>
+          )}
 
           {/* toggle row */}
+          {!forgot && (
           <div style={css("display:flex;gap:4px;align-items:center;justify-content:center;width:100%")}>
             <span style={css("font-size:14px;color:#535862")}>{isSignup ? "Already have an account?" : "Don’t have an account?"}</span>
             <Box as="span" onClick={switchMode} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">
               {isSignup ? "Log in" : "Sign up"}
             </Box>
           </div>
+          )}
         </div>
       </div>
     </div>

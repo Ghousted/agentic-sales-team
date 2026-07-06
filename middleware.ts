@@ -4,8 +4,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifySession, SESSION_COOKIE } from "@/lib/auth/jwt";
 
-// Routes reachable without a session.
-const PUBLIC_PATHS = ["/"];
+// Routes reachable without a session (login screen + password reset).
+const PUBLIC_PATHS = ["/", "/reset"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

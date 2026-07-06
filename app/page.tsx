@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { statusMeta } from "@/lib/data";
+import { statusMeta, parsePipeline, fmtMoney } from "@/lib/data";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 
@@ -60,9 +60,19 @@ export default function Home() {
   });
   const collabs = HN >= 5 ? [[0, 2], [1, 4]] : [];
 
-  const goalPct = Math.round((47 / 61) * 100 * ct);
-  const goalDone = Math.round(47 * ct);
   const hubWorking = hubMembers.filter((a) => a.status === "working").length;
+
+  // Hero stats derived from the teams in view (all, or the selected pill) and
+  // the working agents shown in the hub — so the ring/pills track real data.
+  const scopeTeams = s.hubTeam === "all" ? teams : teams.filter((t) => t.id === s.hubTeam);
+  const meetingsBooked = scopeTeams.reduce((n, t) => n + t.meetings, 0);
+  const scopePipeline = scopeTeams.reduce((n, t) => n + parsePipeline(t.pipeline), 0);
+  // Monthly target: a ~20%-above-current stretch goal, rounded to a clean 10.
+  const meetingsTarget = Math.max(10, Math.ceil((meetingsBooked * 1.2) / 10) * 10);
+  const goalPct = Math.min(100, Math.round((meetingsBooked / meetingsTarget) * 100 * ct));
+  const goalDone = Math.round(meetingsBooked * ct);
+  const tasksRunning = hubMembers.reduce((n, a) => n + (a.status === "working" ? (hubPools[a.id]?.length ?? 3) : 0), 0);
+  const monthLabel = new Date().toLocaleString("en-US", { month: "long" }).toUpperCase();
 
   const lastF = s.feedExtra[0] || feedBase[tick % feedBase.length];
   const lastA = byId(lastF.id) || agents[0];
@@ -118,14 +128,14 @@ export default function Home() {
               <div style={css("position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out 1.5s infinite")} />
               <div style={css("width:124px;height:124px;border-radius:50%;background:conic-gradient(#B57BFF 0 " + goalPct + "%,rgba(255,255,255,.12) " + goalPct + "% 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 44px rgba(139,92,246,.4)")}>
                 <div style={css("width:106px;height:106px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center")}>
-                  <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1")}>{goalDone}<span style={css("font-size:13px;color:#8F7EC9")}>/61</span></div>
-                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#A99BD8;margin-top:3px")}>MEETINGS · JULY</div>
+                  <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1")}>{goalDone}<span style={css("font-size:13px;color:#8F7EC9")}>/{meetingsTarget}</span></div>
+                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#A99BD8;margin-top:3px")}>MEETINGS · {monthLabel}</div>
                 </div>
               </div>
             </div>
             <div style={css("display:flex;gap:8px")}>
-              <div style={css("font-size:10.5px;font-weight:600;color:#E5DEFF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:4px 11px;backdrop-filter:blur(6px)")}>⚡ {hubWorking} working · 38 tasks</div>
-              <div style={css("font-size:10.5px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 11px")}>$2.4M pipeline</div>
+              <div style={css("font-size:10.5px;font-weight:600;color:#E5DEFF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:4px 11px;backdrop-filter:blur(6px)")}>⚡ {hubWorking} working · {tasksRunning} tasks</div>
+              <div style={css("font-size:10.5px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 11px")}>{fmtMoney(scopePipeline)} pipeline</div>
             </div>
           </div>
 

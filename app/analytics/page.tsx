@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
+import { parsePipeline, fmtMoney } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box } from "@/components/primitives";
 
@@ -17,20 +18,6 @@ const timeSlots = ["3:00p", "4:30p", "6:00p", "7:15p"];
 const pipeMonths = ["Feb", "Mar", "Apr", "May", "Jun", "Jul"];
 const pipeRamp = [0.5, 0.62, 0.74, 0.86, 0.95, 1];
 
-// Parse a team's pipeline string ("$1.1M", "$860K", "—") into raw dollars.
-function parsePipe(str: string): number {
-  const m = /([\d.]+)\s*([MK])?/i.exec(str || "");
-  if (!m) return 0;
-  const n = parseFloat(m[1]);
-  const u = (m[2] || "").toUpperCase();
-  return u === "M" ? n * 1e6 : u === "K" ? n * 1e3 : n;
-}
-function fmtMoney(n: number): string {
-  if (n >= 1e6) return "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
-  if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
-  return "$" + Math.round(n);
-}
-
 export default function AnalyticsPage() {
   const { s, agents, teams, byId, showToast } = useApp();
   const router = useRouter();
@@ -40,7 +27,7 @@ export default function AnalyticsPage() {
   // ----- Real aggregates derived from the live agents + teams -----
   const totalMeetings = teams.reduce((sum, t) => sum + t.meetings, 0);
   const totalLeads = teams.reduce((sum, t) => sum + t.leads, 0);
-  const totalPipeline = teams.reduce((sum, t) => sum + parsePipe(t.pipeline), 0);
+  const totalPipeline = teams.reduce((sum, t) => sum + parsePipeline(t.pipeline), 0);
   const revenue = totalPipeline * 0.16;
   const avgScore = agents.length ? Math.round(agents.reduce((sum, a) => sum + a.score, 0) / agents.length) : 0;
   const waitingCount = agents.filter((a) => a.status === "waiting").length;

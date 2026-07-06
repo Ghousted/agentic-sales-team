@@ -47,6 +47,22 @@ export const ACTIVITY_FEED: ActivityItem[] = [
   { id: "al", text: "got a reply from Snowflake — flagged as hot lead", chip: "🔥 Hot", chipBg: "#FEECEC", chipColor: "#B91C1C", time: "1h" },
 ];
 
+// Parse a team's pipeline string ("$1.1M", "$860K", "—") into raw dollars.
+export function parsePipeline(str: string): number {
+  const m = /([\d.]+)\s*([MK])?/i.exec(str || "");
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const u = (m[2] || "").toUpperCase();
+  return u === "M" ? n * 1e6 : u === "K" ? n * 1e3 : n;
+}
+
+// Format raw dollars back to a compact label ("$2.4M", "$860K").
+export function fmtMoney(n: number): string {
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+  if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
+  return "$" + Math.round(n);
+}
+
 export function chatsInit(): Chats {
   return {
     sk: [{ who: "ai", text: "Morning! I booked a meeting with Datadog's VP Eng for Thursday 2pm. I'm now working through the Fintech CTO list — 14 left to contact today." }],

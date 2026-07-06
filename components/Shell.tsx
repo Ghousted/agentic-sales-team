@@ -4,6 +4,7 @@ import { useApp } from "@/lib/store";
 import { navIcon } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
+import NotificationsBell from "./NotificationsBell";
 
 const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/", icon: "home", label: "Dashboard" },
@@ -31,7 +32,7 @@ function headerTitle(path: string): string {
 }
 
 export default function Shell({ children }: { children: React.ReactNode }) {
-  const { s, set, logout, showToast } = useApp();
+  const { s, set, logout } = useApp();
   const router = useRouter();
   const path = usePathname();
   const sbOpen = s.sidebarOpen;
@@ -97,14 +98,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div style={css("font-size:24px;font-weight:600;letter-spacing:-.01em;white-space:nowrap")}>{headerTitle(path)}</div>
           <GlobalSearch />
           <div style={css("display:flex;align-items:center;gap:14px;flex:none")}>
-            <Box
-              onClick={() => showToast("You have 3 new notifications")}
-              aria-label="Notifications"
-              style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;font-size:18px;color:#5122C1;cursor:pointer;flex:none"
-            >
-              ◔
-              <span style={css("position:absolute;top:7px;right:9px;width:9px;height:9px;border-radius:50%;background:#F43F7E;border:2px solid #EEE9F8")} />
-            </Box>
+            <NotificationsBell />
             <Btn
               onClick={() => router.push("/create")}
               style="height:48px;background:#5122C1;color:#fff;border:none;border-radius:100px;padding:0 24px;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);cursor:pointer;display:flex;align-items:center;gap:8px"

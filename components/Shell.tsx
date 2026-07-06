@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { navIcon } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
+import GlobalSearch from "./GlobalSearch";
 
 const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/", icon: "home", label: "Dashboard" },
@@ -94,22 +95,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;background:#FAFAFB")}>
         <div style={css("display:flex;align-items:center;gap:16px;padding:0 26px;height:80px;background:#fff;border-bottom:1px solid #E9EAEB;flex:none")}>
           <div style={css("font-size:24px;font-weight:600;letter-spacing:-.01em;white-space:nowrap")}>{headerTitle(path)}</div>
-          <div style={css("margin-left:auto;width:380px;height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
-            <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>
-            <input
-              aria-label="Search agents, leads, and conversations"
-              value={s.search}
-              onChange={(e) => set({ search: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const q = s.search.trim();
-                  if (q) showToast("Searching “" + q + "”");
-                }
-              }}
-              placeholder="Search agents, leads, conversations…"
-              style={css("flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#18181B;min-width:0")}
-            />
-          </div>
+          <GlobalSearch />
           <div style={css("display:flex;align-items:center;gap:14px;flex:none")}>
             <Box
               onClick={() => showToast("You have 3 new notifications")}

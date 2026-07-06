@@ -1,0 +1,87 @@
+"use client";
+// Top-bar global search: live results across agents, teams, and conversations.
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useApp } from "@/lib/store";
+import { av } from "@/lib/visuals";
+import { css, Box } from "./primitives";
+
+interface Result {
+  key: string;
+  type: "Agent" | "Team" | "Conversation";
+  title: string;
+  subtitle: string;
+  avatar: string; // inline style for the leading swatch/avatar
+  initials?: string;
+  go: () => void;
+}
+
+export default function GlobalSearch() {
+  const { s, set, agents, teams, byId } = useApp();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const q = s.search.trim().toLowerCase();
+
+  const results: Result[] = [];
+  if (q) {
+    const has = (...xs: (string | undefined)[]) => xs.some((x) => x?.toLowerCase().includes(q));
+    for (const a of agents.filter((a) => has(a.name, a.role, a.task, a.goal)).slice(0, 5)) {
+      results.push({ key: "a:" + a.id, type: "Agent", title: a.name, subtitle: a.role + " · " + a.task, avatar: av(a, 28), initials: a.initials, go: () => router.push("/agents/" + a.id) });
+    }
+    for (const t of teams.filter((t) => has(t.name, t.desc, t.goal)).slice(0, 4)) {
+      results.push({ key: "t:" + t.id, type: "Team", title: t.name, subtitle: t.desc, avatar: "width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:15px;background:" + t.iconBg, initials: t.icon, go: () => router.push("/teams/" + t.id) });
+    }
+    for (const id of Object.keys(s.chats)) {
+      const a = byId(id);
+      if (!a || !has(a.name)) continue;
+      const msgs = s.chats[id];
+      const last = msgs[msgs.length - 1];
+      results.push({ key: "c:" + id, type: "Conversation", title: a.name, subtitle: last ? last.text : "Open conversation", avatar: av(a, 28), initials: a.initials, go: () => router.push("/chats?agent=" + id) });
+      if (results.filter((r) => r.type === "Conversation").length >= 3) break;
+    }
+  }
+
+  const showDropdown = open && q.length > 0;
+
+  return (
+    <div style={css("margin-left:auto;position:relative;width:380px")}>
+      <div style={css("height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
+        <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>
+        <input
+          aria-label="Search agents, teams, and conversations"
+          value={s.search}
+          onChange={(e) => set({ search: e.target.value })}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => { if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); } }}
+          placeholder="Search agents, teams, conversations…"
+          style={css("flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#18181B;min-width:0")}
+        />
+      </div>
+
+      {showDropdown && (
+        <div style={css("position:absolute;top:52px;left:0;right:0;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.12);padding:6px;z-index:40;max-height:60vh;overflow-y:auto")}>
+          {results.length === 0 ? (
+            <div style={css("padding:14px 12px;font-size:12.5px;color:#A1A1AA")}>No matches for “{s.search.trim()}”</div>
+          ) : (
+            results.map((r) => (
+              <Box
+                key={r.key}
+                onClick={() => { r.go(); set({ search: "" }); setOpen(false); }}
+                style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer"
+                styleHover="background:#F8F7FB"
+              >
+                <div style={css(r.avatar)}>{r.initials}</div>
+                <div style={css("min-width:0;flex:1")}>
+                  <div style={css("font-size:12.5px;font-weight:600;color:#18181B")}>{r.title}</div>
+                  <div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{r.subtitle}</div>
+                </div>
+                <span style={css("font-size:10px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 8px;flex:none")}>{r.type}</span>
+              </Box>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

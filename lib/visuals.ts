@@ -41,9 +41,9 @@ export function faceUrl(seed: number): string {
 // cropped into circular avatars.
 const SPRITE = "/agents-sprite.png";
 const CHAR_HEADS: [number, number, number][] = [
-  [118, 102, 106], [264, 99, 126], [431, 110, 105], [571, 119, 124], [727, 119, 127],
-  [124, 400, 135], [314, 386, 154], [531, 387, 148], [744, 396, 107], [113, 677, 128],
-  [288, 691, 106], [435, 688, 108], [584, 683, 106], [708, 693, 139],
+  [83, 95, 176], [242, 92, 171], [400, 104, 167], [544, 112, 176], [696, 112, 189],
+  [77, 391, 228], [290, 378, 203], [507, 378, 214], [710, 389, 176], [87, 670, 180],
+  [258, 685, 166], [400, 681, 178], [554, 677, 167], [684, 686, 187],
 ];
 // Deterministic character per agent: named seeds get a hand-matched figure; anyone
 // else (agents created in the wizard) can carry an explicit `char`, else hash by id.

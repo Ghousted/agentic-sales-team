@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
@@ -6,16 +7,51 @@ import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
-const teamWeek = [55, 70, 62, 85, 74, 30, 12];
+
+// Deterministic weekly performance series for a team: seeded by team id and
+// scaled by the members' average score (weekends run lighter). Same team →
+// same bars across reloads; recomputes when membership changes.
+function weekSeries(teamId: string, activity: number): number[] {
+  let a = 2166136261;
+  for (let i = 0; i < teamId.length; i++) { a ^= teamId.charCodeAt(i); a = Math.imul(a, 16777619); }
+  const out: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
+    const base = 32 + (a % 58);
+    out.push(Math.max(6, Math.round(base * (i >= 5 ? 0.4 : 1) * activity)));
+  }
+  return out;
+}
 
 export default function TeamDetail() {
-  const { teams, byId, showToast } = useApp();
+  const { agents, teams, byId, addTeamMembers } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const [showAdd, setShowAdd] = useState(false);
+  const [pick, setPick] = useState<Record<string, boolean>>({});
+
   const team = teams.find((t) => t.id === params.id) || teams[0];
   if (!team) return null;
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
+  const avgScore = members.length ? Math.round(members.reduce((n, a) => n + a!.score, 0) / members.length) : 0;
+  const activity = Math.max(0.55, Math.min(avgScore / 85, 1.15));
+  const teamWeek = weekSeries(team.id, activity);
+  const working = members.filter((a) => a!.status === "working").length;
+
+  // Agents not already on this team, for the add picker.
+  const candidates = agents.filter((a) => !team.members.includes(a.id));
+  const chosen = Object.keys(pick).filter((id) => pick[id]);
+
+  const openAdd = () => { setPick({}); setShowAdd(true); };
+  const confirmAdd = () => {
+    if (chosen.length) addTeamMembers(team.id, chosen);
+    setShowAdd(false);
+  };
+
+  const kpis: [string, string][] = [
+    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", team.leads.toLocaleString()], ["Avg score", avgScore ? String(avgScore) : "—"],
+  ];
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
@@ -23,8 +59,22 @@ export default function TeamDetail() {
 
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:" + team.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:24px;flex:none")}>{team.icon}</div>
-        <div><div style={css("font-size:19px;font-weight:700")}>{team.name}</div><div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{team.desc}</div></div>
-        <Btn onClick={() => showToast("Select agents to add to " + team.name)} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Add agents</Btn>
+        <div style={css("min-width:0")}>
+          <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
+          <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{team.desc}</div>
+          <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {working} working now</div>
+        </div>
+        <Btn onClick={openAdd} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none" styleHover="background:#42199E">+ Add agents</Btn>
+      </div>
+
+      {/* KPIs */}
+      <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
+        {kpis.map(([l, v]) => (
+          <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:16px 18px")}>
+            <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>
+            <div style={css("font-size:24px;font-weight:700;margin-top:4px;letter-spacing:-.01em")}>{v}</div>
+          </div>
+        ))}
       </div>
 
       <div style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
@@ -32,7 +82,9 @@ export default function TeamDetail() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Members</div>
             <div style={css("display:flex;flex-direction:column;gap:6px")}>
-              {members.map((a) => {
+              {members.length === 0 ? (
+                <div style={css("font-size:12.5px;color:#A1A1AA;padding:8px 10px")}>No agents on this team yet. Use “Add agents” to build it out.</div>
+              ) : members.map((a) => {
                 const m = statusMeta(a!.status);
                 return (
                   <Box key={a!.id} onClick={() => router.push("/agents/" + a!.id)} style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer" styleHover="background:#FAFAFB">
@@ -70,6 +122,40 @@ export default function TeamDetail() {
           </div>
         </div>
       </div>
+
+      {/* Add-agents picker */}
+      {showAdd && (
+        <div onClick={() => setShowAdd(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
+          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:440px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+            <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
+              <div style={css("font-size:15px;font-weight:700")}>Add agents to {team.name}</div>
+              <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Pick from agents not already on this team.</div>
+            </div>
+            <div style={css("flex:1;overflow-y:auto;padding:8px")}>
+              {candidates.length === 0 ? (
+                <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA;text-align:center")}>Every agent is already on this team.</div>
+              ) : candidates.map((a) => {
+                const on = !!pick[a.id];
+                return (
+                  <Box key={a.id} onClick={() => setPick((p) => ({ ...p, [a.id]: !p[a.id] }))} style={"display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" + (on ? "background:#F1EDFD" : "")} styleHover="background:#FAFAFB">
+                    <div style={css(av(a, 32))}>{a.initials}</div>
+                    <div style={css("min-width:0")}><div style={css("font-size:13px;font-weight:600")}>{a.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a.role}</div></div>
+                    <span style={css("margin-left:auto;width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#5122C1" : "#D4D4D8") + ";background:" + (on ? "#5122C1" : "#fff"))}>
+                      {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                    </span>
+                  </Box>
+                );
+              })}
+            </div>
+            <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
+              <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
+              <Btn onClick={confirmAdd} disabled={chosen.length === 0} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#5122C1;" + (chosen.length === 0 ? "opacity:.5;cursor:default" : "cursor:pointer")} styleHover={chosen.length === 0 ? "" : "background:#42199E"}>
+                Add{chosen.length ? " " + chosen.length : ""}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

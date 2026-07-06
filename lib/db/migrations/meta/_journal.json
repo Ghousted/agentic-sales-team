@@ -43,6 +43,13 @@
       "when": 1783361709422,
       "tag": "0005_complex_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783364060893,
+      "tag": "0006_magical_toad_men",
+      "breakpoints": true
     }
   ]
 }

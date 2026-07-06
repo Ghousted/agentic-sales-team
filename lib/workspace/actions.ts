@@ -3,7 +3,7 @@
 // per-agent removed/paused flags. The 8 seed agents / 4 seed teams stay static;
 // only a user's own changes are stored (and merged client-side on load).
 import { eq, asc } from "drizzle-orm";
-import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig } from "@/lib/db";
+import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig, teamMembers } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import type { Agent, Team, StatusKey, ChatMsg, Chats } from "@/lib/types";
 
@@ -20,6 +20,7 @@ export interface WorkspaceData {
   paused: string[];
   chats: Chats;
   config: Record<string, AgentConfig>;
+  teamMembers: Record<string, string[]>;
 }
 
 async function uid(): Promise<string | null> {
@@ -29,19 +30,20 @@ async function uid(): Promise<string | null> {
 
 /** Load the signed-in user's persisted workspace (for hydrating the store). */
 export async function loadWorkspace(): Promise<WorkspaceData> {
-  const empty: WorkspaceData = { extraAgents: [], extraTeams: [], removed: [], paused: [], chats: {}, config: {} };
+  const empty: WorkspaceData = { extraAgents: [], extraTeams: [], removed: [], paused: [], chats: {}, config: {}, teamMembers: {} };
   if (!isDbConfigured()) return empty;
   const userId = await uid();
   if (!userId) return empty;
   const db = getDb();
 
-  const [agentRows, teamRows, stateRows, msgRows, configRows] = await Promise.all([
+  const [agentRows, teamRows, stateRows, msgRows, configRows, memberRows] = await Promise.all([
     db.select().from(agents).where(eq(agents.userId, userId)),
     db.select().from(teams).where(eq(teams.userId, userId)),
     db.select().from(agentStates).where(eq(agentStates.userId, userId)),
     db.select({ agentId: messages.agentId, who: messages.who, text: messages.text })
       .from(messages).where(eq(messages.userId, userId)).orderBy(asc(messages.id)),
     db.select().from(agentConfig).where(eq(agentConfig.userId, userId)),
+    db.select().from(teamMembers).where(eq(teamMembers.userId, userId)),
   ]);
 
   // Group persisted messages by agent, preserving insertion order.
@@ -59,9 +61,13 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     };
   }
 
+  const teamMembersMap: Record<string, string[]> = {};
+  for (const m of memberRows) teamMembersMap[m.teamId] = m.members;
+
   return {
     chats,
     config,
+    teamMembers: teamMembersMap,
     extraAgents: agentRows.map((r) => ({
       id: r.id, name: r.name, initials: r.initials, role: r.role, color: r.color,
       status: r.status as StatusKey, task: r.task, score: r.score, goal: r.goal,
@@ -121,6 +127,17 @@ export async function setAgentPaused(agentId: string, paused: boolean): Promise<
     .insert(agentStates)
     .values({ userId, agentId, paused })
     .onConflictDoUpdate({ target: [agentStates.userId, agentStates.agentId], set: { paused } });
+}
+
+/** Save a team's full member list (override for seed or created teams). */
+export async function saveTeamMembers(teamId: string, members: string[]): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  await getDb()
+    .insert(teamMembers)
+    .values({ userId, teamId, members })
+    .onConflictDoUpdate({ target: [teamMembers.userId, teamMembers.teamId], set: { members } });
 }
 
 /** Save per-agent config overrides (role, goal, permissions). */

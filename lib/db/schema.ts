@@ -67,6 +67,18 @@ export const agentConfig = pgTable(
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.agentId] }) })
 );
 
+// Per-user membership override for any team (seed or created). When present it
+// replaces the team's base member list — lets users add agents to seed teams.
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    teamId: text("team_id").notNull(),
+    members: jsonb("members").$type<string[]>().notNull().default([]),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.teamId] }) })
+);
+
 // Password-reset tokens. A request creates one (1-hour expiry); using it to set
 // a new password consumes it. No email infra — the link is surfaced on-screen.
 export const passwordResetTokens = pgTable("password_reset_tokens", {

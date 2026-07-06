@@ -6,7 +6,7 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
-import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
+import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -51,6 +51,7 @@ interface State extends WizardState {
   paused: Record<string, boolean>;
   removed: Record<string, boolean>;
   agentConfig: Record<string, AgentConfig>;
+  teamMembers: Record<string, string[]>;
   extraAgents: Agent[];
   extraTeams: Team[];
   search: string;
@@ -78,7 +79,7 @@ const initialState: State = {
   authed: false, authMode: "login", sidebarOpen: true,
   chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false,
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
-  toast: "", paused: {}, removed: {}, agentConfig: {}, extraAgents: [], extraTeams: [],
+  toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
   showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true },
   toggles: { t0: true, t1: true, t2: false },
@@ -105,6 +106,7 @@ interface Ctx {
   deleteAgent: (id: string) => void;
   togglePause: (id: string) => void;
   saveConfig: (id: string, cfg: AgentConfig) => void;
+  addTeamMembers: (teamId: string, ids: string[]) => void;
   sendChat: (text: string) => void;
   createTeam: () => string;
   createAgent: () => void;
@@ -150,6 +152,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     removed: Object.fromEntries((initialWorkspace?.removed ?? []).map((id) => [id, true])),
     paused: Object.fromEntries((initialWorkspace?.paused ?? []).map((id) => [id, true])),
     agentConfig: initialWorkspace?.config ?? {},
+    teamMembers: initialWorkspace?.teamMembers ?? {},
     // Chats = static seed openers + the user's persisted messages appended in order.
     chats: mergeChats(chatsInit(), initialWorkspace?.chats),
     // Notification toggles: account-saved values over the defaults.
@@ -174,7 +177,13 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         }),
     [s.removed, s.extraAgents, s.agentConfig]
   );
-  const teams = useMemo(() => TEAMS_BASE.concat(s.extraTeams), [s.extraTeams]);
+  const teams = useMemo(
+    () =>
+      TEAMS_BASE.concat(s.extraTeams).map((t) =>
+        s.teamMembers[t.id] ? { ...t, members: s.teamMembers[t.id] } : t
+      ),
+    [s.extraTeams, s.teamMembers]
+  );
   const byId = useCallback((id: string) => agents.find((a) => a.id === id), [agents]);
 
   const showToast = useCallback((msg: string) => {
@@ -212,7 +221,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     // session before the post-login full reload re-hydrates the right data.
     set({
       authed: false, authMode: "login",
-      extraAgents: [], extraTeams: [], removed: {}, paused: {}, agentConfig: {},
+      extraAgents: [], extraTeams: [], removed: {}, paused: {}, agentConfig: {}, teamMembers: {},
       feedExtra: [], chats: chatsInit(),
     });
   }, [set]);
@@ -236,6 +245,20 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: cfg } }));
     showToast("Configuration saved");
     saveAgentConfigAction(id, cfg).catch((e) => console.error("[saveConfig] persist failed:", e));
+  }, [set, showToast]);
+
+  const addTeamMembers = useCallback((teamId: string, ids: string[]) => {
+    const st = sRef.current;
+    // Effective current members: override if set, else the team's base list.
+    const base = TEAMS_BASE.concat(st.extraTeams).find((t) => t.id === teamId);
+    if (!base) return;
+    const current = st.teamMembers[teamId] ?? base.members;
+    const merged = Array.from(new Set(current.concat(ids)));
+    const added = merged.length - current.length;
+    if (added <= 0) return;
+    set((prev) => ({ teamMembers: { ...prev.teamMembers, [teamId]: merged } }));
+    showToast(added === 1 ? "1 agent added" : added + " agents added");
+    saveTeamMembersAction(teamId, merged).catch((e) => console.error("[addTeamMembers] persist failed:", e));
   }, [set, showToast]);
 
   const sendChat = useCallback((text: string) => {
@@ -317,7 +340,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, sendChat, createTeam, createAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, createTeam, createAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

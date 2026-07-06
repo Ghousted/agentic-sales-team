@@ -3,8 +3,9 @@
 // and lifecycle timers (count-up, hub tick, live activity feed) into a Context.
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, Team, Chats } from "./types";
-import { AGENTS_BASE, TEAMS_BASE, chatsInit, aiReply } from "./data";
+import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { signOut as signOutAction } from "./auth/actions";
+import { chatReply } from "./ai/actions";
 
 export interface FeedItem {
   id: string;
@@ -198,17 +199,20 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     if (!t) return;
     const convId = sRef.current.convId;
     const agent = agents.find((a) => a.id === convId) || agents[0];
+    const history = (sRef.current.chats[convId] || []).map((m) => ({ who: m.who, text: m.text }));
     set((prev) => ({
       chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "me", text: t }]) },
       chatInput: "",
       chatTyping: true,
     }));
-    setTimeout(() => {
+    const appendAi = (reply: string) =>
       set((prev) => ({
-        chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "ai", text: aiReply(t, agent) }]) },
+        chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "ai", text: reply }]) },
         chatTyping: false,
       }));
-    }, 1200);
+    chatReply({ agent: { name: agent.name, role: agent.role, goal: agent.goal, task: agent.task }, history, message: t })
+      .then(appendAi)
+      .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again."));
   }, [agents, set]);
 
   const createTeam = useCallback((): string => {

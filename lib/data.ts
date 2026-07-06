@@ -38,7 +38,7 @@ export function chatsInit(): Chats {
   };
 }
 
-export function aiReply(q: string, agent: Agent): string {
+export function aiReply(q: string, agent: { task: string; goal: string }): string {
   const l = q.toLowerCase();
   if (l.includes("working")) return "Right now: " + agent.task + ". I have 6 tasks queued after this — the next one is a follow-up pass on prospects who opened twice but didn't reply.";
   if (l.includes("summar")) return "Today so far: 23 emails sent (48% open), 4 replies, 1 meeting booked, and 12 new leads qualified. My reply rate is trending up 3% week-over-week. Biggest win: the Datadog meeting.";

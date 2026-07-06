@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AppProvider } from "@/lib/store";
 import AppFrame from "@/components/AppFrame";
 import { currentUser } from "@/lib/auth/actions";
+import { loadWorkspace } from "@/lib/workspace/actions";
 
 export const metadata: Metadata = {
   title: "Agentic Salesforce",
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser(); // server-verified session → hydrates the client store
+  const workspace = user ? await loadWorkspace() : null; // persisted agents/teams/flags
   return (
     <html lang="en">
       <head>
@@ -23,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body>
-        <AppProvider initialUser={user}>
+        <AppProvider initialUser={user} initialWorkspace={workspace}>
           <AppFrame>{children}</AppFrame>
         </AppProvider>
       </body>

@@ -6,6 +6,7 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
+import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, type WorkspaceData } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -122,14 +123,19 @@ export interface AuthedUser {
   workspaceName: string;
 }
 
-export function AppProvider({ children, initialUser }: { children: React.ReactNode; initialUser?: AuthedUser | null }) {
-  // Initialize from the server-verified session so a refresh stays logged in.
+export function AppProvider({ children, initialUser, initialWorkspace }: { children: React.ReactNode; initialUser?: AuthedUser | null; initialWorkspace?: WorkspaceData | null }) {
+  // Initialize from the server-verified session + persisted workspace so a
+  // refresh stays logged in and keeps the user's created/deleted/paused agents.
   const [s, setS] = useState<State>(() => ({
     ...initialState,
     authed: !!initialUser,
     userName: initialUser?.name ?? initialState.userName,
     userEmail: initialUser?.email ?? initialState.userEmail,
     workspaceName: initialUser?.workspaceName ?? initialState.workspaceName,
+    extraAgents: initialWorkspace?.extraAgents ?? initialState.extraAgents,
+    extraTeams: initialWorkspace?.extraTeams ?? initialState.extraTeams,
+    removed: Object.fromEntries((initialWorkspace?.removed ?? []).map((id) => [id, true])),
+    paused: Object.fromEntries((initialWorkspace?.paused ?? []).map((id) => [id, true])),
   }));
   const sRef = useRef(s);
   sRef.current = s;
@@ -182,16 +188,15 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     const a = agents.find((x) => x.id === id);
     set((prev) => ({ removed: { ...prev.removed, [id]: true } }));
     if (a) showToast(a.name + " deleted");
+    setAgentRemoved(id, true).catch((e) => console.error("[deleteAgent] persist failed:", e));
   }, [agents, set, showToast]);
 
   const togglePause = useCallback((id: string) => {
     const a = agents.find((x) => x.id === id);
-    let next = false;
-    set((prev) => {
-      next = !prev.paused[id];
-      return { paused: { ...prev.paused, [id]: next } };
-    });
+    const next = !sRef.current.paused[id];
+    set((prev) => ({ paused: { ...prev.paused, [id]: next } }));
     if (a) showToast(a.name + (next ? " paused" : " resumed"));
+    setAgentPaused(id, next).catch((e) => console.error("[togglePause] persist failed:", e));
   }, [agents, set, showToast]);
 
   const sendChat = useCallback((text: string) => {
@@ -220,7 +225,7 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     const name = cur.tName.trim() || "New Team";
     const members = Object.keys(cur.tSel).filter((k) => cur.tSel[k]);
     const bgs: Record<string, string> = { "🚀": "#F1EDFD", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#F1EDFD" };
-    const id = "tx" + members.length + "-" + name.replace(/\s/g, "").slice(0, 6);
+    const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
       id, name, icon: cur.tIcon, iconBg: bgs[cur.tIcon] || "#F1EDFD",
       desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
@@ -229,6 +234,7 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     };
     set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {} }));
     showToast(name + " created");
+    saveTeam(team).catch((e) => console.error("[createTeam] persist failed:", e));
     return id;
   }, [set, showToast]);
 
@@ -236,7 +242,7 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     const cur = sRef.current;
     const name = cur.wName.trim() || "New Agent";
     const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-    const id = "x" + name.replace(/\s/g, "").slice(0, 6) + cur.extraAgents.length;
+    const id = "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const agent: Agent = {
       id, name, initials, role: cur.wPosition, color: cur.wColor, status: "working",
       task: "Onboarding — building prospect list for " + cur.wIndustry, score: 75,
@@ -245,6 +251,7 @@ export function AppProvider({ children, initialUser }: { children: React.ReactNo
     };
     // 5 input steps (0-4); step 5 is the "agent is live" success screen.
     set((prev) => ({ extraAgents: prev.extraAgents.concat([agent]), wStep: 5, wCreatedId: id }));
+    saveAgent(agent).catch((e) => console.error("[createAgent] persist failed:", e));
   }, [set]);
 
   // Lifecycle: count-up + hub tick + live activity, running once authenticated.

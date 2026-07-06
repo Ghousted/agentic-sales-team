@@ -34,11 +34,35 @@ export function faceUrl(seed: number): string {
   return (faceCache[seed] = 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")');
 }
 
-export function av(a: { id: string; color: string }, size: number): string {
+// ---- character avatars ----
+// Agents are represented by the illustrated business characters from the design's
+// sprite sheet (public/agents-sprite.png). CHAR_HEADS are pixel-exact head+shoulder
+// squares [x, y, side] per character (extracted by alpha-scanning each figure's top),
+// cropped into circular avatars.
+const SPRITE = "/agents-sprite.png";
+const CHAR_HEADS: [number, number, number][] = [
+  [118, 102, 106], [264, 99, 126], [431, 110, 105], [571, 119, 124], [727, 119, 127],
+  [124, 400, 135], [314, 386, 154], [531, 387, 148], [744, 396, 107], [113, 677, 128],
+  [288, 691, 106], [435, 688, 108], [584, 683, 106], [708, 693, 139],
+];
+// Deterministic character per agent: named seeds get a hand-matched figure; anyone
+// else (agents created in the wizard) can carry an explicit `char`, else hash by id.
+const SEED_CHAR: Record<string, number> = { sk: 7, mt: 1, ew: 3, rp: 8, al: 4, nc: 2, ps: 5, lm: 12 };
+export function agentCharIndex(a: { id: string; char?: number }): number {
+  if (typeof a.char === "number") return a.char % CHAR_HEADS.length;
+  if (a.id in SEED_CHAR) return SEED_CHAR[a.id];
+  return hashId(a.id) % CHAR_HEADS.length;
+}
+
+export function av(a: { id: string; color: string; char?: number }, size: number): string {
+  const [hx, hy, side] = CHAR_HEADS[agentCharIndex(a)];
+  const scale = size / side;
+  const bsize = Math.round(980 * scale);
   return (
     "width:" + size + "px;height:" + size + "px;border-radius:50%;flex:none;overflow:hidden;background-color:" +
-    a.color + "1F;background-image:" + faceUrl(hashId(a.id)) +
-    ";background-size:cover;background-position:center;color:transparent;display:flex;align-items:center;justify-content:center;font-size:" +
+    a.color + "1F;background-image:url('" + SPRITE + "');background-repeat:no-repeat;background-size:" +
+    bsize + "px " + bsize + "px;background-position:-" + Math.round(hx * scale) + "px -" + Math.round(hy * scale) +
+    "px;color:transparent;display:flex;align-items:center;justify-content:center;font-size:" +
     Math.round(size * 0.37) + "px;font-weight:700"
   );
 }

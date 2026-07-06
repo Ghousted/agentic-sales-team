@@ -12,6 +12,7 @@ export interface Agent {
   task: string;
   score: number;
   goal: string;
+  char?: number; // index into the character sprite (chosen in the create wizard)
 }
 
 export interface Team {

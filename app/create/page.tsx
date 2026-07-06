@@ -1,20 +1,24 @@
 "use client";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
 
 /* ---------- character sprite (public/agents-sprite.png, 980x980) ----------
    The design crops individual business-character illustrations out of one
-   sprite sheet. CHARS are pixel-exact bounding boxes [x, y, w, h] extracted by
-   scanning the PNG's alpha channel. charBox() height-normalizes each character
-   (scale = targetH / box.h) so they render at a consistent height regardless of
-   the source box, with the window sized to the box so nothing clips. */
+   sprite sheet. CHARS are the pixel-exact bounding boxes [x, y, w, h] of all 14
+   figures (extracted by alpha-scanning the sheet). Indices are canonical and
+   shared with the app's avatar head-crops (lib/visuals.ts), so the character you
+   pick here is the one shown as the agent's avatar everywhere. PICKS is the
+   subset offered in the wizard. charBox() height-normalizes each character
+   (scale = targetH / box.h) with the window sized to the box so nothing clips. */
 const SPRITE = "/agents-sprite.png";
 const CHARS: [number, number, number, number][] = [
   [118, 104, 106, 239], [273, 101, 126, 242], [427, 112, 105, 231], [568, 121, 124, 222],
-  [719, 121, 127, 222], [123, 402, 135, 230], [536, 389, 148, 243], [724, 695, 139, 227],
+  [719, 121, 127, 222], [123, 402, 135, 230], [325, 388, 177, 244], [536, 389, 148, 243],
+  [744, 398, 107, 234], [124, 679, 128, 243], [289, 693, 106, 230], [434, 690, 108, 232],
+  [582, 685, 106, 237], [724, 695, 139, 227],
 ];
+const PICKS = [0, 1, 2, 3, 4, 5, 7, 13];
 function charBox(i: number, targetH: number) {
   const [x, y, w, h] = CHARS[i];
   const scale = targetH / h;
@@ -90,7 +94,7 @@ export default function CreatePage() {
   const { s, set, showToast, createAgent } = useApp();
   const router = useRouter();
   const step = s.wStep;
-  const [character, setCharacter] = useState(2);
+  const character = s.wCharacter;
 
   const reset = () => set({ wStep: 0, wName: "", wGoals: "", wTitles: "", wGeo: "", wPosInput: "" });
   const back = () => set((p) => ({ wStep: Math.max(0, p.wStep - 1) }));
@@ -180,11 +184,11 @@ export default function CreatePage() {
                   <div style={css(charBox(character, 380))} />
                 </div>
                 <div style={css("flex:1;min-width:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px")}>
-                  {CHARS.map((_, i) => {
-                    const on = character === i;
+                  {PICKS.map((idx, i) => {
+                    const on = character === idx;
                     return (
-                      <Box key={i} onClick={() => setCharacter(i)} aria-label={"Character option " + (i + 1)} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#EEE9F8;border:2px solid #5122c1" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#C9B8F5">
-                        <div style={css(charBox(i, 150))} />
+                      <Box key={idx} onClick={() => set({ wCharacter: idx })} aria-label={"Character option " + (i + 1)} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#EEE9F8;border:2px solid #5122c1" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#C9B8F5">
+                        <div style={css(charBox(idx, 150))} />
                       </Box>
                     );
                   })}

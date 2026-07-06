@@ -21,6 +21,16 @@ export function css(input?: Style): CSSProperties {
     const val = decl.slice(i + 1).trim();
     if (!prop) continue;
     const key = prop.startsWith("--") ? prop : prop.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase());
+    // Expand the `border` shorthand to longhand so a base `border:1px solid X`
+    // never coexists with a hover `borderColor` override (mixing shorthand and
+    // longhand for the same value triggers a React styling warning on rerender).
+    const bm = key === "border" && val.match(/^(\S+)\s+(solid|dashed|dotted|double|none)(?:\s+(.+))?$/);
+    if (bm) {
+      o.borderWidth = bm[1];
+      o.borderStyle = bm[2];
+      if (bm[3]) o.borderColor = bm[3];
+      continue;
+    }
     o[key] = val;
   }
   return o as CSSProperties;

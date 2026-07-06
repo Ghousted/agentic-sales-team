@@ -28,6 +28,7 @@ interface WizardState {
   wGoals: string;
   wChannels: Record<string, boolean>;
   wPosInput: string;
+  wCharacter: number;
   wCreatedId: string | null;
 }
 
@@ -64,7 +65,7 @@ interface State extends WizardState {
 const initialWizard: WizardState = {
   wStep: 0, wName: "", wNick: "", wAvatar: "Professional", wColor: "#5122C1",
   wPosition: "SDR", wIndustry: "SaaS", wSize: "51-200", wTitles: "", wGeo: "", wGoals: "",
-  wChannels: { Email: true, LinkedIn: true }, wPosInput: "", wCreatedId: null,
+  wChannels: { Email: true, LinkedIn: true }, wPosInput: "", wCharacter: 2, wCreatedId: null,
 };
 
 const initialState: State = {
@@ -217,6 +218,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id, name, initials, role: cur.wPosition, color: cur.wColor, status: "working",
       task: "Onboarding — building prospect list for " + cur.wIndustry, score: 75,
       goal: cur.wGoals.split(".")[0] || "Ramp up in week 1",
+      char: cur.wCharacter, // the illustrated character chosen in the wizard
     };
     // 5 input steps (0-4); step 5 is the "agent is live" success screen.
     set((prev) => ({ extraAgents: prev.extraAgents.concat([agent]), wStep: 5, wCreatedId: id }));

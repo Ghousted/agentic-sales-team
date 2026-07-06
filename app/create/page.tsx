@@ -113,7 +113,7 @@ export default function CreatePage() {
   if (step === 5) {
     return (
       <div style={css("position:fixed;inset:0;background:#fafafa;z-index:40;display:flex;flex-direction:column;animation:fadeUp .3s ease")}>
-        <Header onClose={() => { reset(); router.push("/agents"); }} />
+        <Header onClose={() => { router.push("/agents"); reset(); }} />
         <div style={css("flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;padding:40px")}>
           <div style={css("display:flex;flex-direction:column;align-items:center;gap:10px")}>
             <div style={css("width:182px;height:258px;background:#EEE9F8;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden")}>
@@ -129,8 +129,8 @@ export default function CreatePage() {
             <div style={css("font-size:16px;color:#606b79;margin-top:12px;max-width:520px")}>They&rsquo;re ready to receive conversations and start helping customers.</div>
           </div>
           <div style={css("display:flex;gap:10px;margin-top:8px")}>
-            <Btn onClick={() => { reset(); router.push("/agents"); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:100px;height:48px;padding:0 24px;font-size:14px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Back to agents</Btn>
-            <Btn onClick={() => { const id = s.wCreatedId; reset(); if (id) router.push("/agents/" + id); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">View agent →</Btn>
+            <Btn onClick={() => { router.push("/agents"); reset(); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:100px;height:48px;padding:0 24px;font-size:14px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Back to agents</Btn>
+            <Btn onClick={() => { const id = s.wCreatedId; router.push(id ? "/agents/" + id : "/agents"); reset(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">View agent →</Btn>
           </div>
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function CreatePage() {
 
   return (
     <div style={css("position:fixed;inset:0;background:#fafafa;z-index:40;display:flex;flex-direction:column;animation:fadeUp .3s ease")}>
-      <Header onClose={() => { reset(); router.push("/agents"); }} />
+      <Header onClose={() => { router.push("/agents"); reset(); }} />
       <div style={css("flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px 120px;overflow-y:auto")}>
         <Stepper step={step} />
 

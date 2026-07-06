@@ -4,10 +4,6 @@ import { useApp } from "@/lib/store";
 import { av, chip } from "@/lib/visuals";
 import { css, Box } from "@/components/primitives";
 
-const pastel = [
-  { bg: "#F1EDFD", fg: "#5122C1" }, { bg: "#FDF0F5", fg: "#DB2777" },
-  { bg: "#FEF6E8", fg: "#B45309" }, { bg: "#E9F5FE", fg: "#0369A1" },
-];
 const feedBase = [
   { id: "sk", text: "booked a meeting with Datadog — VP Eng, Thursday 2pm", chip: "Meeting", chipBg: "#FDF0F5", chipColor: "#DB2777", time: "2m" },
   { id: "mt", text: "sent 12 personalized emails to the Fintech CTO segment", chip: "Outreach", chipBg: "#FEF6E8", chipColor: "#B45309", time: "9m" },
@@ -15,16 +11,25 @@ const feedBase = [
   { id: "rp", text: "finished research on 8 prospects using AWS", chip: "Research", chipBg: "#F1EDFD", chipColor: "#5122C1", time: "31m" },
   { id: "al", text: "got a reply from Snowflake — flagged as hot lead", chip: "🔥 Hot", chipBg: "#FEECEC", chipColor: "#B91C1C", time: "1h" },
 ];
-const upcoming = [
-  { label: "Follow-up sequence · Fintech CTOs", time: "3:00p", c: "#5122C1" },
-  { label: "Weekly pipeline review draft", time: "4:30p", c: "#F43F7E" },
-  { label: "Lead scoring refresh · Healthcare", time: "6:00p", c: "#0EA5E9" },
-];
-const trendData = [[45, 12], [60, 15], [38, 10], [72, 18], [55, 14], [80, 22], [64, 16], [48, 11], [70, 20], [85, 24], [58, 15], [76, 21], [90, 26], [68, 19]];
-const orgKpiDefs = [["Pipeline", "$2.4M", "▲ $410K"], ["Leads", "1,794", "▲ 210"], ["Meetings", "47", "▲ 18%"], ["Revenue attributed", "$380K", "▲ $52K"]];
-const pipeVals: [string, number, number][] = [["Feb", 280, 40], ["Mar", 350, 50], ["Apr", 420, 60], ["May", 510, 73], ["Jun", 590, 84], ["Jul", 410, 58]];
 const compareColors = ["#5122C1", "#F43F7E", "#F59E0B", "#0EA5E9"];
 const filters = ["Last 30 days", "All teams", "All roles"];
+const timeSlots = ["3:00p", "4:30p", "6:00p", "7:15p"];
+const pipeMonths = ["Feb", "Mar", "Apr", "May", "Jun", "Jul"];
+const pipeRamp = [0.5, 0.62, 0.74, 0.86, 0.95, 1];
+
+// Parse a team's pipeline string ("$1.1M", "$860K", "—") into raw dollars.
+function parsePipe(str: string): number {
+  const m = /([\d.]+)\s*([MK])?/i.exec(str || "");
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const u = (m[2] || "").toUpperCase();
+  return u === "M" ? n * 1e6 : u === "K" ? n * 1e3 : n;
+}
+function fmtMoney(n: number): string {
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+  if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
+  return "$" + Math.round(n);
+}
 
 export default function AnalyticsPage() {
   const { s, agents, teams, byId, showToast } = useApp();
@@ -32,20 +37,68 @@ export default function AnalyticsPage() {
   const ct = s.countT;
   const activeCount = agents.filter((a) => a.status === "working").length;
 
+  // ----- Real aggregates derived from the live agents + teams -----
+  const totalMeetings = teams.reduce((sum, t) => sum + t.meetings, 0);
+  const totalLeads = teams.reduce((sum, t) => sum + t.leads, 0);
+  const totalPipeline = teams.reduce((sum, t) => sum + parsePipe(t.pipeline), 0);
+  const revenue = totalPipeline * 0.16;
+  const avgScore = agents.length ? Math.round(agents.reduce((sum, a) => sum + a.score, 0) / agents.length) : 0;
+  const waitingCount = agents.filter((a) => a.status === "waiting").length;
+  const attentionCount = agents.filter((a) => a.status === "error" || a.status === "offline").length;
+  const newAgents = s.extraAgents.length;
+
   const metricDefs: [string, string, string, string, boolean][] = [
-    ["Active Agents", String(Math.round(activeCount * ct)), "of " + agents.length, "▲ 2 this week", true],
-    ["Meetings Booked", String(Math.round(47 * ct)), "this month", "▲ 18% vs June", true],
-    ["Emails Sent", Math.round(1284 * ct).toLocaleString(), "42% open", "▼ 4% vs June", false],
-    ["Pipeline Generated", "$" + (2.4 * ct).toFixed(1) + "M", "", "▲ $410K this month", true],
+    ["Active Agents", String(Math.round(activeCount * ct)), "of " + agents.length, newAgents > 0 ? "▲ " + newAgents + " added" : activeCount + " working", true],
+    ["Meetings Booked", String(Math.round(totalMeetings * ct)), "across " + teams.length + " teams", "▲ this month", true],
+    ["Avg Agent Score", String(Math.round(avgScore * ct)), "/ 100", avgScore >= 85 ? "▲ healthy" : "▼ needs attention", avgScore >= 85],
+    ["Pipeline Generated", fmtMoney(totalPipeline * ct), "", "▲ " + fmtMoney(revenue) + " attributed", true],
   ];
-  const feed = s.feedExtra.concat(feedBase as never).slice(0, 6);
-  const recentConvs = ["sk", "rp"].map((id) => byId(id)).filter(Boolean);
+
+  const orgKpiDefs: [string, string, string][] = [
+    ["Pipeline", fmtMoney(totalPipeline), "▲ " + teams.length + " teams"],
+    ["Leads", totalLeads.toLocaleString(), "▲ across segments"],
+    ["Meetings", String(totalMeetings), "▲ this quarter"],
+    ["Revenue attributed", fmtMoney(revenue), "▲ ~16% of pipeline"],
+  ];
+
+  // Team comparison bars scale to the busiest team; pipeline-by-month ramps to
+  // the current real pipeline total (no historical series exists yet).
+  const maxMeetings = Math.max(1, ...teams.map((t) => t.meetings));
+  const pipeSeries = pipeRamp.map((f) => Math.round((totalPipeline / 1e3) * f));
+  const pipeMax = Math.max(1, ...pipeSeries);
+
+  // Outreach trend: deterministic 14-day shape seeded from real totals.
+  const trendData = Array.from({ length: 14 }, (_, i) => {
+    const emails = 40 + ((i * 11 + totalMeetings * 3 + totalLeads) % 55);
+    return [emails, Math.round(emails * 0.28)];
+  });
+
+  // Upcoming tasks = what the working agents are actually doing right now.
+  const upcoming = agents.filter((a) => a.status === "working").slice(0, 4).map((a, i) => ({
+    label: a.name.split(" ")[0] + " · " + a.task,
+    time: timeSlots[i] || "—",
+    c: a.color,
+  }));
+
+  // Activity feed: live events first, then seed feed; drop any deleted agents.
+  const feed = s.feedExtra
+    .concat(feedBase as never)
+    .map((f) => ({ f, a: byId((f as { id: string }).id) }))
+    .filter((x) => x.a)
+    .slice(0, 6);
+
+  // Recent conversations = agents the user has actually chatted with.
+  const recentConvs = Object.keys(s.chats)
+    .map((id) => byId(id))
+    .filter((a) => a && (s.chats[a.id] || []).length > 0)
+    .slice(0, 4);
+
   const ranking = agents.slice().sort((a, b) => b.score - a.score).slice(0, 5);
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:20px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        <div style={css("font-size:13px;color:#71717A")}>{activeCount} agents active · 38 tasks running · Tuesday, Jul 2</div>
+        <div style={css("font-size:13px;color:#71717A")}>{activeCount} agents active · {totalMeetings} meetings booked · {totalLeads.toLocaleString()} leads in pipeline</div>
         <div style={css("margin-left:auto;display:flex;gap:8px")}>
           {filters.map((f) => <Box key={f} onClick={() => showToast("Filter: " + f)} style="font-size:12.5px;font-weight:600;color:#5122C1;background:#EEE9F8;border:none;border-radius:99px;padding:8px 16px;cursor:pointer" styleHover="background:#E3DBF9">{f} ⌄</Box>)}
         </div>
@@ -70,16 +123,13 @@ export default function AnalyticsPage() {
             <div style={css("margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1B7A3D;background:#E7F7EC;border-radius:99px;padding:3px 10px")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 2s infinite")} />Live</div>
           </div>
           <div style={css("display:flex;flex-direction:column")}>
-            {feed.map((f, i) => {
-              const a = byId(f.id) || agents[0];
-              return (
-                <div key={i} style={css("display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #F4F4F6;animation:fadeUp .35s ease")}>
-                  <div style={css(av(a, 30))}>{a.initials}</div>
-                  <div style={css("font-size:12.5px;color:#52525B")}><strong style={{ color: "#18181B", fontWeight: 600 }}>{a.name}</strong> {f.text}</div>
-                  <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}><span style={css(chip(f.chipBg, f.chipColor))}>{f.chip}</span><span style={css("font-size:11px;color:#A1A1AA")}>{f.time}</span></div>
-                </div>
-              );
-            })}
+            {feed.map(({ f, a }, i) => (
+              <div key={i} style={css("display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #F4F4F6;animation:fadeUp .35s ease")}>
+                <div style={css(av(a!, 30))}>{a!.initials}</div>
+                <div style={css("font-size:12.5px;color:#52525B")}><strong style={{ color: "#18181B", fontWeight: 600 }}>{a!.name}</strong> {f.text}</div>
+                <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}><span style={css(chip(f.chipBg, f.chipColor))}>{f.chip}</span><span style={css("font-size:11px;color:#A1A1AA")}>{f.time}</span></div>
+              </div>
+            ))}
           </div>
         </div>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
@@ -150,18 +200,18 @@ export default function AnalyticsPage() {
             {teams.map((t, i) => (
               <div key={t.id} style={css("display:flex;align-items:center;gap:12px")}>
                 <div style={css("width:130px;font-size:12px;font-weight:600;color:#3F3F46;flex:none")}>{t.name}</div>
-                <div style={css("flex:1;height:22px;background:#F4F4F5;border-radius:6px;overflow:hidden")}><div style={css("height:100%;border-radius:6px;background:" + compareColors[i % 4] + ";width:" + Math.round((t.meetings / 28) * 100) + "%;transition:width .4s")} /></div>
+                <div style={css("flex:1;height:22px;background:#F4F4F5;border-radius:6px;overflow:hidden")}><div style={css("height:100%;border-radius:6px;background:" + compareColors[i % 4] + ";width:" + Math.round((t.meetings / maxMeetings) * 100) + "%;transition:width .4s")} /></div>
                 <div style={css("width:30px;font-size:12.5px;font-weight:700;text-align:right")}>{t.meetings}</div>
               </div>
             ))}
           </div>
           <div style={css("font-size:13.5px;font-weight:700;margin:20px 0 14px")}>Pipeline by month</div>
           <div style={css("display:flex;align-items:flex-end;gap:10px;height:130px")}>
-            {pipeVals.map((p) => (
-              <div key={p[0]} style={css("flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end")}>
-                <div style={css("font-size:10.5px;font-weight:700;color:#5122C1")}>${p[1]}K</div>
-                <div style={css("width:100%;max-width:44px;background:linear-gradient(180deg,#8B5CF6,#5122C1);border-radius:8px 8px 4px 4px;height:" + p[2] + "%")} />
-                <div style={css("font-size:10.5px;color:#A1A1AA")}>{p[0]}</div>
+            {pipeMonths.map((mo, i) => (
+              <div key={mo} style={css("flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end")}>
+                <div style={css("font-size:10.5px;font-weight:700;color:#5122C1")}>{fmtMoney(pipeSeries[i] * 1e3)}</div>
+                <div style={css("width:100%;max-width:44px;background:linear-gradient(180deg,#8B5CF6,#5122C1);border-radius:8px 8px 4px 4px;height:" + Math.round((pipeSeries[i] / pipeMax) * 88 + 8) + "%")} />
+                <div style={css("font-size:10.5px;color:#A1A1AA")}>{mo}</div>
               </div>
             ))}
           </div>
@@ -181,13 +231,13 @@ export default function AnalyticsPage() {
             </div>
           </div>
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Task completion</div>
+            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Fleet health</div>
             <div style={css("display:flex;align-items:center;gap:16px")}>
-              <div style={css("width:84px;height:84px;border-radius:50%;background:conic-gradient(#5122C1 0 87%,#F1EDFD 87% 100%);display:flex;align-items:center;justify-content:center;flex:none")}><div style={css("width:62px;height:62px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700")}>87%</div></div>
+              <div style={css("width:84px;height:84px;border-radius:50%;background:conic-gradient(#5122C1 0 " + avgScore + "%,#F1EDFD " + avgScore + "% 100%);display:flex;align-items:center;justify-content:center;flex:none")}><div style={css("width:62px;height:62px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700")}>{avgScore}%</div></div>
               <div style={css("display:flex;flex-direction:column;gap:6px;font-size:12px;color:#3F3F46")}>
-                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#5122C1")} />412 completed</div>
-                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#F59E0B")} />38 running</div>
-                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#EF4444")} />7 failed</div>
+                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#5122C1")} />{activeCount} working</div>
+                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#F59E0B")} />{waitingCount} waiting</div>
+                <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#EF4444")} />{attentionCount} need attention</div>
               </div>
             </div>
           </div>

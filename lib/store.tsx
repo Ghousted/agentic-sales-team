@@ -121,6 +121,7 @@ export interface AuthedUser {
   name: string;
   email: string;
   workspaceName: string;
+  notifications: Record<string, boolean>;
 }
 
 // Combine the static seed openers with the user's persisted messages: for each
@@ -148,6 +149,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     paused: Object.fromEntries((initialWorkspace?.paused ?? []).map((id) => [id, true])),
     // Chats = static seed openers + the user's persisted messages appended in order.
     chats: mergeChats(chatsInit(), initialWorkspace?.chats),
+    // Notification toggles: account-saved values over the defaults.
+    toggles: { ...initialState.toggles, ...(initialUser?.notifications ?? {}) },
   }));
   const sRef = useRef(s);
   sRef.current = s;
@@ -186,7 +189,10 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   // Apply a successful sign-in/sign-up (the session cookie is set server-side).
   const signedIn = useCallback((user: AuthedUser) => {
-    set({ authed: true, userName: user.name, userEmail: user.email, workspaceName: user.workspaceName });
+    set((prev) => ({
+      authed: true, userName: user.name, userEmail: user.email, workspaceName: user.workspaceName,
+      toggles: { ...prev.toggles, ...(user.notifications ?? {}) },
+    }));
     animateCount();
     showToast("Welcome, " + user.name.split(" ")[0] + "!");
   }, [set, animateCount, showToast]);

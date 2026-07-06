@@ -6,7 +6,7 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
-import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, type WorkspaceData } from "./workspace/actions";
+import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -50,6 +50,7 @@ interface State extends WizardState {
   toast: string;
   paused: Record<string, boolean>;
   removed: Record<string, boolean>;
+  agentConfig: Record<string, AgentConfig>;
   extraAgents: Agent[];
   extraTeams: Team[];
   search: string;
@@ -77,7 +78,7 @@ const initialState: State = {
   authed: false, authMode: "login", sidebarOpen: true,
   chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false,
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
-  toast: "", paused: {}, removed: {}, extraAgents: [], extraTeams: [],
+  toast: "", paused: {}, removed: {}, agentConfig: {}, extraAgents: [], extraTeams: [],
   search: "",
   showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true },
   toggles: { t0: true, t1: true, t2: false },
@@ -103,6 +104,7 @@ interface Ctx {
   logout: () => Promise<void>;
   deleteAgent: (id: string) => void;
   togglePause: (id: string) => void;
+  saveConfig: (id: string, cfg: AgentConfig) => void;
   sendChat: (text: string) => void;
   createTeam: () => string;
   createAgent: () => void;
@@ -147,6 +149,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     extraTeams: initialWorkspace?.extraTeams ?? initialState.extraTeams,
     removed: Object.fromEntries((initialWorkspace?.removed ?? []).map((id) => [id, true])),
     paused: Object.fromEntries((initialWorkspace?.paused ?? []).map((id) => [id, true])),
+    agentConfig: initialWorkspace?.config ?? {},
     // Chats = static seed openers + the user's persisted messages appended in order.
     chats: mergeChats(chatsInit(), initialWorkspace?.chats),
     // Notification toggles: account-saved values over the defaults.
@@ -162,8 +165,14 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
   }, []);
 
   const agents = useMemo(
-    () => AGENTS_BASE.filter((a) => !s.removed[a.id]).concat(s.extraAgents),
-    [s.removed, s.extraAgents]
+    () =>
+      AGENTS_BASE.filter((a) => !s.removed[a.id])
+        .concat(s.extraAgents)
+        .map((a) => {
+          const c = s.agentConfig[a.id];
+          return c ? { ...a, role: c.role ?? a.role, goal: c.goal ?? a.goal } : a;
+        }),
+    [s.removed, s.extraAgents, s.agentConfig]
   );
   const teams = useMemo(() => TEAMS_BASE.concat(s.extraTeams), [s.extraTeams]);
   const byId = useCallback((id: string) => agents.find((a) => a.id === id), [agents]);
@@ -216,6 +225,12 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     if (a) showToast(a.name + (next ? " paused" : " resumed"));
     setAgentPaused(id, next).catch((e) => console.error("[togglePause] persist failed:", e));
   }, [agents, set, showToast]);
+
+  const saveConfig = useCallback((id: string, cfg: AgentConfig) => {
+    set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: cfg } }));
+    showToast("Configuration saved");
+    saveAgentConfigAction(id, cfg).catch((e) => console.error("[saveConfig] persist failed:", e));
+  }, [set, showToast]);
 
   const sendChat = useCallback((text: string) => {
     const t = (text || "").trim();
@@ -296,7 +311,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, togglePause, sendChat, createTeam, createAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, sendChat, createTeam, createAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

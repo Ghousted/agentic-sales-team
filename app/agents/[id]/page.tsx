@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
@@ -63,19 +63,46 @@ const memory = [
   { icon: "🧭", title: "Prospect history", bg: "#FEF6E8", items: ["Brex replied positively to latency angle (reuse)", "Mercury gatekeeper redirects to eng-leads@", "Chime requires security one-pager before calls"] },
   { icon: "✨", title: "Successful messaging", bg: "#FDF0F5", items: ["Subject lines with a number → +12% opens", "Referencing a recent blog post → 2.1× replies", "Tuesday 9am sends perform best"] },
 ];
-const perms: [string, boolean][] = [["Send emails autonomously", true], ["Book meetings on your calendar", true], ["Make phone calls", false]];
+// [key, label, default] — key is the stable id stored in agent_config.permissions.
+const PERM_DEFS: [string, string, boolean][] = [
+  ["emails", "Send emails autonomously", true],
+  ["meetings", "Book meetings on your calendar", true],
+  ["calls", "Make phone calls", false],
+];
+const ROLE_OPTIONS = ["SDR", "BDR", "Account Executive", "Sales Manager", "Customer Success", "Recruiter"];
+
+function permsFrom(saved?: Record<string, boolean>): Record<string, boolean> {
+  const base: Record<string, boolean> = {};
+  for (const [key, , def] of PERM_DEFS) base[key] = def;
+  return { ...base, ...(saved ?? {}) };
+}
 
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
   return <div id={id} style={css("font-family:'Poetsen One',sans-serif;font-size:15px;font-weight:700;margin-top:4px")}>{children}</div>;
 }
 
 export default function AgentDetail() {
-  const { s, agents, byId, showToast, togglePause, deleteAgent } = useApp();
+  const { s, agents, byId, togglePause, deleteAgent, saveConfig } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
 
   const sel = byId(params.id) || agents[0];
+
+  // Editable Configuration state, seeded from the (config-applied) agent + saved
+  // permissions. Reset whenever the viewed agent changes (route stays mounted).
+  const selId = sel?.id;
+  const [cfgRole, setCfgRole] = useState(sel?.role ?? "");
+  const [cfgGoal, setCfgGoal] = useState(sel?.goal ?? "");
+  const [cfgPerms, setCfgPerms] = useState<Record<string, boolean>>(() => permsFrom(selId ? s.agentConfig[selId]?.permissions : undefined));
+  useEffect(() => {
+    if (!selId) return;
+    setCfgRole(sel.role);
+    setCfgGoal(sel.goal);
+    setCfgPerms(permsFrom(s.agentConfig[selId]?.permissions));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selId]);
+
   if (!sel) return null;
   const paused = !!s.paused[sel.id];
   const selM = statusMeta(paused ? "waiting" : sel.status);
@@ -300,20 +327,46 @@ export default function AgentDetail() {
       {/* Configuration */}
       <SectionTitle id="sec-settings">Configuration</SectionTitle>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;max-width:640px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .25s ease")}>
-        <div><div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Role</div><div style={css("border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;display:flex;justify-content:space-between;color:#18181B")}>{sel.role}<span style={css("color:#A1A1AA")}>⌄</span></div></div>
-        <div><div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Goals</div><div style={css("border:1px solid #E4E4E7;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#52525B;line-height:1.6")}>Book 30 meetings every month. Target CTOs. Prioritize companies using AWS. Always personalize outreach. Avoid duplicate contacts.</div></div>
+        <div>
+          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Role</div>
+          <select
+            value={cfgRole}
+            onChange={(e) => setCfgRole(e.target.value)}
+            style={css("width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;background:#fff;cursor:pointer;appearance:none;outline:none")}
+          >
+            {(ROLE_OPTIONS.includes(cfgRole) ? ROLE_OPTIONS : [cfgRole, ...ROLE_OPTIONS]).map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Goal</div>
+          <textarea
+            value={cfgGoal}
+            onChange={(e) => setCfgGoal(e.target.value)}
+            rows={3}
+            style={css("width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#3F3F46;line-height:1.6;resize:vertical;font-family:inherit;outline:none")}
+          />
+        </div>
         <div><div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Prospect targeting</div><div style={css("display:flex;gap:6px;flex-wrap:wrap")}>{["SaaS", "51–200 employees", "CTO / VP Eng", "North America"].map((tg) => <span key={tg} style={css("font-size:11.5px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:4px 12px")}>{tg}</span>)}</div></div>
         <div>
           <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Permissions</div>
           <div style={css("display:flex;flex-direction:column;gap:8px")}>
-            {perms.map((p) => (
-              <div key={p[0]} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{p[0]}
-                <span style={css("margin-left:auto;width:34px;height:20px;border-radius:99px;padding:2px;display:flex;transition:background .15s;background:" + (p[1] ? "#5122C1" : "#E4E4E7") + ";justify-content:" + (p[1] ? "flex-end" : "flex-start"))}><span style={css("width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)")} /></span>
-              </div>
-            ))}
+            {PERM_DEFS.map(([key, label]) => {
+              const on = !!cfgPerms[key];
+              return (
+                <div key={key} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
+                  <Box
+                    onClick={() => setCfgPerms((p) => ({ ...p, [key]: !p[key] }))}
+                    aria-label={"Toggle " + label}
+                    style={"margin-left:auto;width:34px;height:20px;border-radius:99px;padding:2px;display:flex;cursor:pointer;transition:background .15s;background:" + (on ? "#5122C1" : "#E4E4E7") + ";justify-content:" + (on ? "flex-end" : "flex-start")}
+                  ><span style={css("width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)")} /></Box>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <Btn onClick={() => showToast("Configuration saved")} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
+        <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal, permissions: cfgPerms })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
       </div>
     </div>
   );

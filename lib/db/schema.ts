@@ -53,6 +53,20 @@ export const teams = pgTable(
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.id] }) })
 );
 
+// Per-user config overrides for any agent (seed or created). Only edited fields
+// are stored; they take precedence over the base/seed values on load.
+export const agentConfig = pgTable(
+  "agent_config",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    agentId: text("agent_id").notNull(),
+    role: text("role"),
+    goal: text("goal"),
+    permissions: jsonb("permissions").$type<Record<string, boolean>>(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.agentId] }) })
+);
+
 // Per-user flags on any agent (seed or created): soft-delete and pause.
 export const agentStates = pgTable(
   "agent_states",

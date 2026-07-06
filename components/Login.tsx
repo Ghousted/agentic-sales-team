@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
+import { signIn, signUp } from "@/lib/auth/actions";
 import { css, Box, Btn } from "./primitives";
 
 /* Eye / eye-off icon (mdi) for the password reveal toggle. */
@@ -21,8 +22,8 @@ const LABEL = "font-size:14px;font-weight:500;color:#414651;line-height:20px";
 const FIELD_WRAP = "background:#fff;border:1px solid #e4e4e4;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 16px;height:52px;width:100%";
 const FIELD_INPUT = "flex:1;border:none;outline:none;background:transparent;font-size:14px;color:#181d27;min-width:0";
 
-function Field({ id, label, placeholder, password, value, setValue }: {
-  id: string; label: string; placeholder: string; password?: boolean; value: string; setValue: (v: string) => void;
+function Field({ id, label, placeholder, password, value, setValue, onEnter }: {
+  id: string; label: string; placeholder: string; password?: boolean; value: string; setValue: (v: string) => void; onEnter?: () => void;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -34,6 +35,7 @@ function Field({ id, label, placeholder, password, value, setValue }: {
           type={password && !show ? "password" : "text"}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && onEnter) onEnter(); }}
           placeholder={placeholder}
           aria-label={label}
           style={css(FIELD_INPUT + ";color:#181d27")}
@@ -49,17 +51,38 @@ function Field({ id, label, placeholder, password, value, setValue }: {
 }
 
 export default function Login() {
-  const { s, set, login, showToast } = useApp();
+  const { s, set, signedIn, showToast } = useApp();
   const router = useRouter();
   const isSignup = s.authMode === "signup";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [remember, setRemember] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const doLogin = () => {
-    login();
+  const submit = async () => {
+    if (loading) return;
+    setError("");
+    if (isSignup && password !== confirm) {
+      setError("Passwords don’t match.");
+      return;
+    }
+    setLoading(true);
+    const res = isSignup ? await signUp({ email, password }) : await signIn({ email, password });
+    setLoading(false);
+    if (!res.ok || !res.user) {
+      setError(res.error || "Something went wrong. Please try again.");
+      return;
+    }
+    signedIn(res.user);
     router.push("/");
+    router.refresh();
+  };
+
+  const switchMode = () => {
+    setError("");
+    set({ authMode: isSignup ? "login" : "signup" });
   };
 
   return (
@@ -93,9 +116,13 @@ export default function Login() {
           {/* form + submit */}
           <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
             <div style={css("display:flex;flex-direction:column;gap:20px;width:100%")}>
-              <Field id="email" label="Email" placeholder="Enter email" value={email} setValue={setEmail} />
-              <Field id="password" label="Password" placeholder="Enter password" password value={password} setValue={setPassword} />
-              {isSignup && <Field id="confirm" label="Confirm password" placeholder="Confirm password" password value={confirm} setValue={setConfirm} />}
+              <Field id="email" label="Email" placeholder="Enter email" value={email} setValue={setEmail} onEnter={submit} />
+              <Field id="password" label="Password" placeholder="Enter password" password value={password} setValue={setPassword} onEnter={submit} />
+              {isSignup && <Field id="confirm" label="Confirm password" placeholder="Confirm password" password value={confirm} setValue={setConfirm} onEnter={submit} />}
+
+              {error && (
+                <div role="alert" style={css("font-size:13px;color:#B91C1C;background:#FEECEC;border:1px solid #FBD5D5;border-radius:10px;padding:10px 14px")}>{error}</div>
+              )}
 
               <div style={css("display:flex;align-items:center;justify-content:space-between;width:100%")}>
                 <div
@@ -118,15 +145,15 @@ export default function Login() {
               </div>
             </div>
 
-            <Btn onClick={doLogin} style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">
-              {isSignup ? "Create account" : "Sign In"}
+            <Btn onClick={submit} disabled={loading} style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;letter-spacing:-.15px;box-shadow:0 2px 8px rgba(81,34,193,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#42199E"}>
+              {loading ? (isSignup ? "Creating account…" : "Signing in…") : isSignup ? "Create account" : "Sign In"}
             </Btn>
           </div>
 
           {/* toggle row */}
           <div style={css("display:flex;gap:4px;align-items:center;justify-content:center;width:100%")}>
             <span style={css("font-size:14px;color:#535862")}>{isSignup ? "Already have an account?" : "Don’t have an account?"}</span>
-            <Box as="span" onClick={() => set({ authMode: isSignup ? "login" : "signup" })} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">
+            <Box as="span" onClick={switchMode} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">
               {isSignup ? "Log in" : "Sign up"}
             </Box>
           </div>

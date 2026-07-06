@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit, aiReply } from "./data";
+import { signOut as signOutAction } from "./auth/actions";
 
 export interface FeedItem {
   id: string;
@@ -60,6 +61,7 @@ interface State extends WizardState {
   toggles: Record<string, boolean>;
   workspaceName: string;
   userName: string;
+  userEmail: string;
 }
 
 const initialWizard: WizardState = {
@@ -77,7 +79,7 @@ const initialState: State = {
   search: "",
   showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true },
   toggles: { t0: true, t1: true, t2: false },
-  workspaceName: "Acme Sales", userName: "Jordan Diaz",
+  workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
 
 const ACTIVITY_POOL: FeedItem[] = [
@@ -95,8 +97,8 @@ interface Ctx {
   teams: Team[];
   byId: (id: string) => Agent | undefined;
   showToast: (msg: string) => void;
-  login: () => void;
-  logout: () => void;
+  signedIn: (user: AuthedUser) => void;
+  logout: () => Promise<void>;
   deleteAgent: (id: string) => void;
   togglePause: (id: string) => void;
   sendChat: (text: string) => void;
@@ -113,8 +115,21 @@ export function useApp(): Ctx {
   return ctx;
 }
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [s, setS] = useState<State>(initialState);
+export interface AuthedUser {
+  name: string;
+  email: string;
+  workspaceName: string;
+}
+
+export function AppProvider({ children, initialUser }: { children: React.ReactNode; initialUser?: AuthedUser | null }) {
+  // Initialize from the server-verified session so a refresh stays logged in.
+  const [s, setS] = useState<State>(() => ({
+    ...initialState,
+    authed: !!initialUser,
+    userName: initialUser?.name ?? initialState.userName,
+    userEmail: initialUser?.email ?? initialState.userEmail,
+    workspaceName: initialUser?.workspaceName ?? initialState.workspaceName,
+  }));
   const sRef = useRef(s);
   sRef.current = s;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,13 +165,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     rafRef.current = requestAnimationFrame(step);
   }, [set]);
 
-  const login = useCallback(() => {
-    set({ authed: true });
+  // Apply a successful sign-in/sign-up (the session cookie is set server-side).
+  const signedIn = useCallback((user: AuthedUser) => {
+    set({ authed: true, userName: user.name, userEmail: user.email, workspaceName: user.workspaceName });
     animateCount();
-    showToast("Welcome back, " + sRef.current.userName.split(" ")[0] + "!");
+    showToast("Welcome, " + user.name.split(" ")[0] + "!");
   }, [set, animateCount, showToast]);
 
-  const logout = useCallback(() => set({ authed: false, authMode: "login" }), [set]);
+  const logout = useCallback(async () => {
+    await signOutAction();
+    set({ authed: false, authMode: "login" });
+  }, [set]);
 
   const deleteAgent = useCallback((id: string) => {
     const a = agents.find((x) => x.id === id);
@@ -244,7 +263,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, login, logout, deleteAgent, togglePause, sendChat, createTeam, createAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, togglePause, sendChat, createTeam, createAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

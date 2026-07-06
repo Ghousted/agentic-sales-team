@@ -37,7 +37,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   const userName = s.userName;
   const userInitials = userName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const userEmail = userName.toLowerCase().split(" ").join(".") + "@spark.so";
+  const userEmail = s.userEmail || userName.toLowerCase().split(" ").join(".") + "@spark.so";
 
   return (
     <div style={css("display:flex;height:100vh;overflow:hidden")}>
@@ -72,7 +72,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         })}
 
         <Box
-          onClick={logout}
+          onClick={async () => { await logout(); router.replace("/"); router.refresh(); }}
           aria-label="Log out"
           style={"margin-top:auto;display:flex;align-items:center;gap:14px;height:46px;padding:0 " + (sbOpen ? "14px" : "0") + ";border-radius:12px;font-size:16px;color:#475467;font-weight:600;cursor:pointer;" + (sbOpen ? "" : "justify-content:center")}
           styleHover="background:#F4F4F5"

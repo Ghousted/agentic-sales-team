@@ -2,13 +2,15 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { AppProvider } from "@/lib/store";
 import AppFrame from "@/components/AppFrame";
+import { currentUser } from "@/lib/auth/actions";
 
 export const metadata: Metadata = {
   title: "Agentic Salesforce",
   description: "The command center for your AI sales workforce.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser(); // server-verified session → hydrates the client store
   return (
     <html lang="en">
       <head>
@@ -21,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <AppProvider>
+        <AppProvider initialUser={user}>
           <AppFrame>{children}</AppFrame>
         </AppProvider>
       </body>

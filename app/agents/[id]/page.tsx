@@ -11,9 +11,17 @@ import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import Link from "next/link";
 
-const TABS: [string, string][] = [
-  ["overview", "Overview"], ["leads", "Leads"], ["emails", "Emails"], ["reach", "Reach Outs"],
-  ["tasks", "Tasks"], ["analytics", "Performance"], ["memory", "Memory"], ["settings", "Configuration"],
+// [key, label, requiredCapability?] — no capability ⇒ always shown.
+const SECTIONS: [string, string, string?][] = [
+  ["overview", "Overview"],
+  ["leads", "Leads"],
+  ["emails", "Emails", "outreach"],
+  ["reach", "Reach Outs", "follow-up"],
+  ["meetings", "Meetings", "book-meeting"],
+  ["tasks", "Tasks"],
+  ["analytics", "Performance"],
+  ["memory", "Memory"],
+  ["settings", "Configuration"],
 ];
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
@@ -150,6 +158,10 @@ export default function AgentDetail() {
   if (!sel || !detail) return null;
   const selM = statusMeta(paused ? "waiting" : sel.status);
 
+  const caps = sel.capabilities ?? [];
+  const visibleSections = SECTIONS.filter(([, , cap]) => !cap || caps.includes(cap));
+  const isVisible = (key: string) => visibleSections.some(([k]) => k === key);
+
   const gotoTab = (key: string) => {
     setTab(key);
     const el = document.getElementById("sec-" + key);
@@ -187,7 +199,7 @@ export default function AgentDetail() {
 
       {/* sticky tab bar */}
       <div id="detailTabBar" style={css("position:sticky;top:0;z-index:5;background:#FAFAFB;padding:8px 0;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #ECECF1")}>
-        {TABS.map(([key, label]) => (
+        {visibleSections.map(([key, label]) => (
           <Box key={key} onClick={() => gotoTab(key)} style={"padding:7px 14px;font-size:12.5px;cursor:pointer;border-radius:99px;transition:all .12s;" + (tab === key ? "background:#18181B;color:#fff;font-weight:600" : "color:#52525B;font-weight:500")} styleHover="color:#18181B">{label}</Box>
         ))}
       </div>
@@ -271,51 +283,71 @@ export default function AgentDetail() {
       </div>
 
       {/* Emails */}
-      <SectionTitle id="sec-emails">Emails</SectionTitle>
-      <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
-        <div style={css("display:flex;align-items:center;gap:10px")}>
-          <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
-          {sel.capabilities?.includes("outreach") && (
-            <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
-          )}
-        </div>
-        {drafts.length === 0 ? (
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet. Add leads in the Leads tab, then hit “Run outreach”.</div>
-        ) : drafts.map((d) => (
-          <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("display:flex;align-items:center;gap:8px")}>
-              <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#F1EDFD", d.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
-              <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail}</div>
-            </div>
-            <div style={css("font-size:13.5px;font-weight:700;margin-top:10px")}>{d.subject}</div>
-            <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px;white-space:pre-wrap")}>{d.body}</div>
-            <div style={css("display:flex;gap:8px;margin-top:12px")}>
-              <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
-              {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
-            </div>
+      {isVisible("emails") && (<>
+        <SectionTitle id="sec-emails">Emails</SectionTitle>
+        <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
+          <div style={css("display:flex;align-items:center;gap:10px")}>
+            <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
+            {sel.capabilities?.includes("outreach") && (
+              <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
+            )}
           </div>
-        ))}
-      </div>
-
-      {/* Reach Outs */}
-      <SectionTitle id="sec-reach">Reach outs</SectionTitle>
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;animation:fadeUp .25s ease")}>
-        <div style={css("display:flex;flex-direction:column")}>
-          {detail.reach.map((r, i) => (
-            <div key={i} style={css("display:flex;gap:16px")}>
-              <div style={css("display:flex;flex-direction:column;align-items:center")}>
-                <div style={css("width:12px;height:12px;border-radius:50%;background:" + r.c[1] + ";border:3px solid " + r.c[0] + ";flex:none;margin-top:2px")} />
-                <div style={css("width:2px;flex:1;background:#F0F0F3")} />
+          {drafts.length === 0 ? (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet. Add leads in the Leads tab, then hit “Run outreach”.</div>
+          ) : drafts.map((d) => (
+            <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+              <div style={css("display:flex;align-items:center;gap:8px")}>
+                <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#F1EDFD", d.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
+                <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail}</div>
               </div>
-              <div style={css("padding-bottom:20px;min-width:0;flex:1")}>
-                <div style={css("display:flex;align-items:center;gap:8px")}><span style={css(chip(r.c[0], r.c[1]))}>{r.type}</span><span style={css("font-size:11px;color:#A1A1AA")}>{r.time}</span></div>
-                <div style={css("font-size:13px;font-weight:600;margin-top:6px")}>{r.title}</div>
-                <div style={css("font-size:12px;color:#71717A;margin-top:2px")}>{r.desc}</div>
+              <div style={css("font-size:13.5px;font-weight:700;margin-top:10px")}>{d.subject}</div>
+              <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px;white-space:pre-wrap")}>{d.body}</div>
+              <div style={css("display:flex;gap:8px;margin-top:12px")}>
+                <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+                {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </>)}
+
+      {/* Reach Outs */}
+      {isVisible("reach") && (<>
+        <SectionTitle id="sec-reach">Reach outs</SectionTitle>
+        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;animation:fadeUp .25s ease")}>
+          <div style={css("display:flex;flex-direction:column")}>
+            {detail.reach.map((r, i) => (
+              <div key={i} style={css("display:flex;gap:16px")}>
+                <div style={css("display:flex;flex-direction:column;align-items:center")}>
+                  <div style={css("width:12px;height:12px;border-radius:50%;background:" + r.c[1] + ";border:3px solid " + r.c[0] + ";flex:none;margin-top:2px")} />
+                  <div style={css("width:2px;flex:1;background:#F0F0F3")} />
+                </div>
+                <div style={css("padding-bottom:20px;min-width:0;flex:1")}>
+                  <div style={css("display:flex;align-items:center;gap:8px")}><span style={css(chip(r.c[0], r.c[1]))}>{r.type}</span><span style={css("font-size:11px;color:#A1A1AA")}>{r.time}</span></div>
+                  <div style={css("font-size:13px;font-weight:600;margin-top:6px")}>{r.title}</div>
+                  <div style={css("font-size:12px;color:#71717A;margin-top:2px")}>{r.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </>)}
+
+      {/* Meetings */}
+      {isVisible("meetings") && (<>
+        <SectionTitle id="sec-meetings">Meetings</SectionTitle>
+        <div style={css("display:flex;flex-direction:column;gap:10px;animation:fadeUp .25s ease")}>
+          {detail.meetings.length === 0 ? (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No meetings scheduled.</div>
+          ) : detail.meetings.map((m, i) => (
+            <div key={i} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px")}>
+              <span style={css(chip(m.c[0], m.c[1]))}>{m.purpose}</span>
+              <div style={css("font-size:13px;font-weight:600")}>{m.title}<div style={css("font-size:11.5px;color:#A1A1AA;font-weight:400;margin-top:1px")}>{m.withWho}</div></div>
+              <div style={css("margin-left:auto;font-size:11px;color:#A1A1AA")}>{m.time}</div>
+            </div>
+          ))}
+        </div>
+      </>)}
 
       {/* Tasks */}
       <SectionTitle id="sec-tasks">Tasks</SectionTitle>

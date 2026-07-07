@@ -69,8 +69,8 @@ def insert_lead(conn, user_id, agent_id, prospect: dict) -> None:
         cur.execute(
             """
             INSERT INTO leads (user_id, agent_id, name, title, company, email,
-                               source, profile_url, platform)
-            VALUES (%s, %s, %s, %s, %s, %s, 'scrape', %s, %s)
+                               source, profile_url, platform, review)
+            VALUES (%s, %s, %s, %s, %s, %s, 'scrape', %s, %s, 'pending')
             """,
             (
                 user_id, agent_id,

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { pickLeadsForRun, applyOutreachResult } from "@/lib/leads/store";
+import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResearchResult } from "@/lib/leads/store";
 import { draftOutreach } from "@/lib/ai/outreach";
+import { draftResearch } from "@/lib/ai/research";
 import type { AgentSnapshot } from "@/lib/leads/types";
 
 // Needs the Node runtime (raw fetch to Gemini, no edge constraints) and room to
@@ -22,10 +23,11 @@ export async function POST() {
 
   let processed = 0;
   let drafts = 0;
+  let briefed = 0;
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), eq(jobs.kind, "outreach"))).orderBy(asc(jobs.createdAt)).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research"]))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
@@ -38,25 +40,43 @@ export async function POST() {
     let created = 0;
     let failed = 0;
     try {
-      const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
-      for (const lead of batch) {
-        try {
-          const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email });
-          await applyOutreachResult(userId, params.agent.id, lead, result);
-          created++;
-          drafts++;
-        } catch (e) {
-          console.error("[jobs/run] lead failed:", e);
-          failed++;
+      if (candidate.kind === "outreach") {
+        const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        for (const lead of batch) {
+          try {
+            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email });
+            await applyOutreachResult(userId, params.agent.id, lead, result);
+            created++;
+            drafts++;
+          } catch (e) {
+            console.error("[jobs/run] lead failed:", e);
+            failed++;
+          }
         }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else {
+        // research
+        const batch = await pickLeadsForResearch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        for (const lead of batch) {
+          try {
+            const brief = await draftResearch(params.agent, { name: lead.name, title: lead.title, company: lead.company, platform: lead.platform });
+            await applyResearchResult(userId, params.agent.id, lead, brief);
+            created++;
+            briefed++;
+          } catch (e) {
+            console.error("[jobs/run] research failed:", e);
+            failed++;
+          }
+        }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { briefed: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       }
-      await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
-        .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     } catch (e) {
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })
         .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     }
   }
 
-  return NextResponse.json({ processed, drafts });
+  return NextResponse.json({ processed, drafts, briefed });
 }

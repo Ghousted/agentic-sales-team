@@ -5,7 +5,7 @@ import "server-only";
 import { and, desc, eq, inArray, asc, ne } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult } from "./types";
+import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief } from "./types";
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -131,4 +131,26 @@ export async function applyOutreachResult(userId: string, agentId: string, lead:
     score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
   }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "email_drafted", leadId: lead.id, text: `Drafted "${result.subject}" for ${lead.name}` });
+}
+
+/** Pick the agent's leads that don't have a research brief yet (or the given
+ *  ids), oldest first, capped. */
+export async function pickLeadsForResearch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+  const db = getDb();
+  if (leadIds && leadIds.length) {
+    return db.select().from(leads)
+      .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId), inArray(leads.id, leadIds)))
+      .limit(batchSize);
+  }
+  const all = await db.select().from(leads)
+    .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId))).orderBy(asc(leads.createdAt));
+  return all.filter((l) => !l.research).slice(0, batchSize);
+}
+
+/** Persist one research brief onto the lead + log activity. */
+export async function applyResearchResult(userId: string, agentId: string, lead: LeadRow, brief: ResearchBrief): Promise<void> {
+  const db = getDb();
+  await db.update(leads).set({ research: brief, updatedAt: new Date() })
+    .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
+  await db.insert(activity).values({ userId, agentId, type: "lead_researched", leadId: lead.id, text: `Researched ${lead.name}` });
 }

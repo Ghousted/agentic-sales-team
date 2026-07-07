@@ -129,6 +129,7 @@ export const leads = pgTable("leads", {
   status: text("status").notNull().default("new"), // new|contacted|engaged|replied|meeting
   score: integer("score").notNull().default(0),
   source: text("source").notNull().default("manual"),
+  review: text("review").notNull().default("accepted"),
   profileUrl: text("profile_url"),
   platform: text("platform"),
   research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),

@@ -17,7 +17,7 @@ async function uid(): Promise<string | null> {
 function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
-    email: r.email, status: r.status, score: r.score, source: r.source, profileUrl: r.profileUrl, platform: r.platform, research: r.research ?? null,
+    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: r.profileUrl, platform: r.platform, research: r.research ?? null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
 }

@@ -21,6 +21,7 @@ export interface LeadDTO {
   status: string;
   score: number;
   source: string;
+  review: string;
   profileUrl: string | null;
   platform: string | null;
   research: ResearchBrief | null;

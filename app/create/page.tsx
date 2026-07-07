@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
+import { AGENT_TYPES, CAPABILITIES, typeById, capabilitiesForType, type Capability } from "@/lib/agentTypes";
 
 /* ---------- character sprite (public/agents-sprite.png, 980x980) ----------
    The design crops individual business-character illustrations out of one
@@ -31,18 +32,7 @@ function charBox(i: number, targetH: number) {
 }
 
 /* ---------- static content ---------- */
-const STEPS = ["Identity", "Appearance", "Position", "Prospect", "Goal"];
-const POSITIONS: [string, string][] = [
-  ["SDR", "Prospects, qualifies, and books first meetings"],
-  ["BDR", "Outbound-only pipeline generation at volume"],
-  ["Account Executive", "Runs deals from demo to close"],
-  ["Sales Manager", "Coordinates agents, balances workloads, reports"],
-  ["Recruiter", "Sources and screens sales candidates"],
-  ["Customer Success", "Onboards, retains, and expands accounts"],
-];
-const POSITION_SUGGESTIONS = ["Partnerships Manager", "Enterprise AE", "RevOps Analyst", "Lifecycle Marketer"];
-const INDUSTRIES = ["Healthcare", "SaaS", "Manufacturing", "Finance", "Retail", "Logistics"];
-const SIZES = ["1-50", "51-200", "201-1,000", "1,000-10,000", "20,000-50,000", "100,000+"];
+const STEPS = ["Identity", "Type", "Appearance", "Settings", "Goal"];
 
 const inputStyle = "width:100%;border:0.5px solid #f2f2f2;background:#f2f2f2;border-radius:12px;padding:16px;font-size:14px;color:#181d27;outline:none";
 const titleStyle = "font-family:'Poetsen One',sans-serif;font-size:24px;color:#000;letter-spacing:-.24px;line-height:32px";
@@ -54,11 +44,6 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
       <path d="M15 18 9 12l6-6" />
     </svg>
   );
-}
-
-function pill(selected: boolean): string {
-  return "font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;transition:all .12s;border:2px solid " +
-    (selected ? "#5122c1;background:#F1EDFD;color:#5122c1" : "#ECECF1;background:#fff;color:#3F3F46");
 }
 
 /* Horizontal stepper: circle per step + connecting trail. */
@@ -96,18 +81,19 @@ export default function CreatePage() {
   const step = s.wStep;
   const character = s.wCharacter;
 
-  const reset = () => set({ wStep: 0, wName: "", wGoals: "", wTitles: "", wGeo: "", wPosInput: "" });
+  const at = typeById(s.wType);
+  const caps: Capability[] = (at?.custom ? s.wCapabilities : (at?.capabilities ?? [])) as Capability[];
+  const setCap = (id: Capability) =>
+    set((p) => ({ wCapabilities: p.wCapabilities.includes(id) ? p.wCapabilities.filter((c) => c !== id) : p.wCapabilities.concat([id]) }));
+  const setSetting = (cap: string, key: string, val: unknown) =>
+    set((p) => ({ wSettings: { ...p.wSettings, [cap]: { ...(p.wSettings[cap] || {}), [key]: val } } }));
+  const sv = (cap: string, key: string) => (s.wSettings[cap]?.[key] ?? "") as string;
+
+  const reset = () => set({ wStep: 0, wName: "", wGoals: "", wTitles: "", wGeo: "", wPosInput: "", wType: "sdr", wCapabilities: [], wSettings: {} });
   const back = () => set((p) => ({ wStep: Math.max(0, p.wStep - 1) }));
   const next = () => set((p) => ({ wStep: Math.min(4, p.wStep + 1) }));
-  const submitPos = () => {
-    const v = s.wPosInput.trim();
-    if (!v) return;
-    set({ wPosition: v, wPosInput: "" });
-    showToast('Generating capabilities for "' + v + '"');
-  };
 
   const name = s.wName.trim() || "New Agent";
-  const knownPos = POSITIONS.find((p) => p[0] === s.wPosition);
 
   /* ---------- success screen (step 5) ---------- */
   if (step === 5) {
@@ -159,7 +145,7 @@ export default function CreatePage() {
       <div style={css("flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px 120px;overflow-y:auto")}>
         <Stepper step={step} />
 
-        <div style={css("background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(12,12,13,.05);padding:" + (step === 0 ? "40px" : "32px 40px") + ";display:flex;flex-direction:column;gap:32px;width:" + (step === 1 ? "100%" : step === 2 ? "800px" : step === 3 ? "708px" : "673px") + ";max-width:100%" + (step === 1 ? ";flex:1;min-height:0" : ""))}>
+        <div style={css("background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(12,12,13,.05);padding:" + (step === 0 ? "40px" : "32px 40px") + ";display:flex;flex-direction:column;gap:32px;width:" + (step === 1 ? "800px" : step === 2 ? "100%" : step === 3 ? "708px" : "673px") + ";max-width:100%" + (step === 2 ? ";flex:1;min-height:0" : ""))}>
 
           {/* ===== Step 1 — Identity ===== */}
           {step === 0 && (
@@ -172,8 +158,51 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 2 — Appearance ===== */}
+          {/* ===== Step 2 — Type ===== */}
           {step === 1 && (
+            <>
+              <div style={css("display:flex;flex-direction:column;gap:8px")}>
+                <div style={css(titleStyle)}>What will this agent do?</div>
+                <div style={css(subtitleStyle)}>Pick a type — its capabilities are preset. Choose Custom to hand-pick.</div>
+              </div>
+              <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:12px")}>
+                {AGENT_TYPES.map((t) => {
+                  const on = s.wType === t.id;
+                  const chips = t.custom ? (s.wCapabilities.length ? s.wCapabilities : ["pick capabilities"]) : t.capabilities;
+                  return (
+                    <Box key={t.id} onClick={() => set({ wType: t.id })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                      <div style={css("font-size:14px;font-weight:700;color:#181d27")}>{t.label}</div>
+                      <div style={css("font-size:12px;color:#606b79;margin-top:4px;line-height:1.4")}>{t.desc}</div>
+                      <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:8px")}>
+                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#5122c1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{c}</span>)}
+                      </div>
+                    </Box>
+                  );
+                })}
+              </div>
+              {at?.custom && (
+                <div style={css("border-top:1px solid #ECECF1;padding-top:16px")}>
+                  <div style={css("font-size:14px;font-weight:600;color:#414651;margin-bottom:10px")}>Capabilities</div>
+                  <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:10px")}>
+                    {CAPABILITIES.map((c) => {
+                      const on = s.wCapabilities.includes(c.id);
+                      return (
+                        <Box key={c.id} onClick={() => setCap(c.id)} style={"display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                          <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#5122c1" : "#D4D4D8") + ";background:" + (on ? "#5122c1" : "#fff"))}>
+                            {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                          </span>
+                          <div><div style={css("font-size:13px;font-weight:600")}>{c.label}</div><div style={css("font-size:11px;color:#606b79")}>{c.desc}</div></div>
+                        </Box>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ===== Step 3 — Appearance ===== */}
+          {step === 2 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
                 <div style={css(titleStyle)}>How should your agent look?</div>
@@ -197,68 +226,50 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 3 — Position ===== */}
-          {step === 2 && (
-            <>
-              <div style={css("display:flex;flex-direction:column;gap:8px")}>
-                <div style={css(titleStyle)}>What will they do?</div>
-                <div style={css(subtitleStyle)}>Pick a position — or describe your own and spark will generate its capabilities.</div>
-              </div>
-              <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:12px")}>
-                {POSITIONS.map((p) => {
-                  const on = s.wPosition === p[0];
-                  return (
-                    <Box key={p[0]} onClick={() => set({ wPosition: p[0], wPosInput: "" })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
-                      <div style={css("font-size:14px;font-weight:700;color:#181d27")}>{p[0]}</div>
-                      <div style={css("font-size:12px;color:#606b79;margin-top:4px;line-height:1.4")}>{p[1]}</div>
-                    </Box>
-                  );
-                })}
-              </div>
-              <div style={css("display:flex;flex-direction:column;gap:12px")}>
-                <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
-                  {POSITION_SUGGESTIONS.map((q) => (
-                    <Box key={q} onClick={() => set({ wPosInput: q })} style="font-size:12px;font-weight:600;color:#465668;background:#F4F4F5;border-radius:99px;padding:6px 14px;cursor:pointer" styleHover="background:#ECECF1">{q}</Box>
-                  ))}
-                </div>
-                <div style={css("display:flex;gap:8px;align-items:center;background:#FAFAFB;border:1px solid #E4E4E7;border-radius:99px;padding:6px 6px 6px 18px")}>
-                  <input aria-label="Describe a position" value={s.wPosInput} onChange={(e) => set({ wPosInput: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitPos(); }} placeholder="Describe a position — e.g. Partnerships Manager for EU agencies" style={css("flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#181d27;min-width:0")} />
-                  <Btn onClick={submitPos} aria-label="Generate role" style="background:#5122c1;color:#fff;border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none" styleHover="background:#42199E">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
-                  </Btn>
-                </div>
-                <div style={css("display:flex;gap:10px;align-items:center;background:#F6F3FE;border:1px solid #E9E3FA;border-radius:14px;padding:12px 16px")}>
-                  <div style={css("width:30px;height:30px;border-radius:10px;background:#5122c1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none")}>✦</div>
-                  <div><div style={css("font-size:13px;font-weight:700;color:#181d27")}>{s.wPosition}</div><div style={css("font-size:11.5px;color:#606b79;margin-top:1px")}>{knownPos ? knownPos[1] : "Custom position — spark will generate this role’s capabilities."}</div></div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ===== Step 4 — Prospect ===== */}
+          {/* ===== Step 4 — Settings ===== */}
           {step === 3 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
-                <div style={css(titleStyle)}>Prospect targets</div>
-                <div style={css(subtitleStyle)}>Tell your agent who to go after.</div>
+                <div style={css(titleStyle)}>Capability settings</div>
+                <div style={css(subtitleStyle)}>Tune how each capability behaves. You can change these later.</div>
               </div>
+              {caps.length === 0 && (
+                <div style={css("font-size:13px;color:#606b79;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:16px")}>This type coordinates the team and has no capability settings.</div>
+              )}
               <div style={css("display:flex;flex-direction:column;gap:20px")}>
-                <div>
-                  <div style={css("font-size:14px;font-weight:500;color:#414651;margin-bottom:8px")}>Target industry</div>
-                  <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>{INDUSTRIES.map((io) => <Box key={io} onClick={() => set({ wIndustry: io })} style={pill(s.wIndustry === io)} styleHover="border-color:#C9B8F5">{io}</Box>)}</div>
-                </div>
-                <div>
-                  <div style={css("font-size:14px;font-weight:500;color:#414651;margin-bottom:8px")}>Company size</div>
-                  <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>{SIZES.map((so) => <Box key={so} onClick={() => set({ wSize: so })} style={pill(s.wSize === so)} styleHover="border-color:#C9B8F5">{so}</Box>)}</div>
-                </div>
-                <div>
-                  <div style={css("font-size:14px;font-weight:500;color:#414651;margin-bottom:8px")}>Job titles</div>
-                  <input aria-label="Job titles" value={s.wTitles} onChange={(e) => set({ wTitles: e.target.value })} placeholder="e.g. CEO, CTO, CFO, Sales Manager" style={css("width:100%;border:1px solid #E4E4E7;background:#fff;border-radius:12px;padding:12px 16px;font-size:14px;color:#181d27;outline:none")} />
-                </div>
-                <div>
-                  <div style={css("font-size:14px;font-weight:500;color:#414651;margin-bottom:8px")}>Geography</div>
-                  <input aria-label="Geography" value={s.wGeo} onChange={(e) => set({ wGeo: e.target.value })} placeholder="e.g. North America, Philippines" style={css("width:100%;border:1px solid #E4E4E7;background:#fff;border-radius:12px;padding:12px 16px;font-size:14px;color:#181d27;outline:none")} />
-                </div>
+                {caps.includes("scrape") && (
+                  <div>
+                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Lead scraping — target</div>
+                    <div style={css("display:flex;flex-direction:column;gap:12px")}>
+                      <input value={sv("scrape", "industry")} onChange={(e) => setSetting("scrape", "industry", e.target.value)} placeholder="Target industry (e.g. Fintech)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                      <input value={sv("scrape", "titles")} onChange={(e) => setSetting("scrape", "titles", e.target.value)} placeholder="Job titles (e.g. CTO, VP Eng)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                      <input value={sv("scrape", "geo")} onChange={(e) => setSetting("scrape", "geo", e.target.value)} placeholder="Geography (e.g. North America)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                    </div>
+                  </div>
+                )}
+                {caps.includes("outreach") && (
+                  <div>
+                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Email drafting</div>
+                    <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
+                      {["Direct", "Warm", "Formal"].map((t) => {
+                        const on = sv("outreach", "tone") === t || (!sv("outreach", "tone") && t === "Warm");
+                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F1EDFD;color:#5122c1" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#C9B8F5">{t} tone</Box>;
+                      })}
+                    </div>
+                  </div>
+                )}
+                {caps.includes("follow-up") && (
+                  <div>
+                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Follow-ups</div>
+                    <input value={sv("follow-up", "touches")} onChange={(e) => setSetting("follow-up", "touches", e.target.value)} placeholder="Number of touches (e.g. 3)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                  </div>
+                )}
+                {caps.includes("book-meeting") && (
+                  <div>
+                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Meeting booking</div>
+                    <input value={sv("book-meeting", "length")} onChange={(e) => setSetting("book-meeting", "length", e.target.value)} placeholder="Meeting length (e.g. 30 min)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                  </div>
+                )}
               </div>
             </>
           )}

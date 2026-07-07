@@ -46,7 +46,9 @@ interface ResearchBrief {
 
 ### Research feeds outreach
 
-`draftOutreach` gains an optional `research?: ResearchBrief` on its lead argument; when present, the system prompt/turn includes the brief so the email is grounded in the prospect's priorities and hooks. The runner's outreach branch passes `lead.research` through (it's now on the `LeadRow`). So a **Research Agent** enriches leads and an **Outreach Writer** drafts from that enrichment — the researcher→writer pod is real, not cosmetic.
+`draftOutreach` gains an optional `research?: ResearchBrief` on its lead argument; when present, the system prompt/turn includes the brief so the email is grounded in the prospect's priorities and hooks. The runner's outreach branch passes `lead.research` through (it's now on the `LeadRow`).
+
+**Scope of the flow:** the brief lives on the *lead* (`leads.research`), and every lead is owned by a single `agentId`; outreach only ever consumes the brief of a lead it also owns. So research→outreach works **within one agent that has both capabilities** — e.g. an **SDR** (research + scrape + outreach): it researches its own leads, then drafts from those briefs. It does **not** span two separate agents: a standalone Research Agent and a separate Outreach Writer hold disjoint lead sets, so the Writer never sees the Research Agent's briefs. Making a genuine researcher→writer *pod* cooperate would require **team-shared leads** (a brief visible to any agent working the same lead) — a deliberate future item, not part of this spec.
 
 ### Later: browser-based deep research (seam, not built now)
 

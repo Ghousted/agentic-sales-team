@@ -11,6 +11,7 @@ export interface Lead {
 }
 export interface TimelineItem { type: string; subject: string; to: string; time: string; c: [string, string]; }
 export interface ReachItem { type: string; title: string; desc: string; time: string; c: [string, string]; }
+export interface MeetingItem { title: string; withWho: string; purpose: string; time: string; c: [string, string]; }
 export interface TaskItem { status: string; title: string; sub: string; time: string; bg: string; fg: string; dot: string; }
 export interface MemoryCard { icon: string; title: string; bg: string; items: string[]; }
 
@@ -26,6 +27,7 @@ export interface AgentDetailModel {
   emailStats: [string, string][];
   emailTimeline: TimelineItem[];
   reach: ReachItem[];
+  meetings: MeetingItem[];
   tasks: TaskItem[];
   kpis: [string, string, string][];
   weekVals: number[];
@@ -210,6 +212,25 @@ export function buildAgentDetail(agent: Agent, opts: { paused: boolean; userName
     return { type, title: l.company + " — " + l.name + " (" + l.title + ")", desc: reachDesc(seg, l, i), time: reachTimes[i], c: reachColors[i % reachColors.length] };
   });
 
+  // ---- meetings (upcoming; deterministic from leads) ----
+  const meetingTimes = ["Today 2:00p", "Tomorrow 10:30a", "Wed 3:15p", "Thu 11:00a", "Fri 9:30a"];
+  const meetingPurposes: Record<Segment, string[]> = {
+    recruiting: ["Phone screen", "Final panel", "Hiring debrief", "Offer chat"],
+    success: ["Quarterly review", "Renewal call", "Health check", "Expansion review"],
+    management: ["Team 1:1", "Pipeline review", "Forecast sync", "Coaching session"],
+    fintech: ["Discovery call", "Proposal walkthrough", "Technical deep-dive", "Follow-up sync"],
+    healthcare: ["Discovery call", "Proposal walkthrough", "Technical deep-dive", "Follow-up sync"],
+    enterprise: ["Discovery call", "Proposal walkthrough", "Technical deep-dive", "Follow-up sync"],
+    general: ["Discovery call", "Proposal walkthrough", "Technical deep-dive", "Follow-up sync"],
+  };
+  const meetings: MeetingItem[] = leads.slice(0, 4).map((l, i) => ({
+    title: l.company + " — " + l.name,
+    withWho: l.title,
+    purpose: meetingPurposes[seg][i % meetingPurposes[seg].length],
+    time: meetingTimes[(off + i) % meetingTimes.length],
+    c: STATUS_COLORS.Meeting,
+  }));
+
   // ---- tasks (first entry is the agent's real current task, colored by status) ----
   const tasks: TaskItem[] = [firstTask(agent, status)];
   const extra = taskPool(seg, meta);
@@ -247,7 +268,7 @@ export function buildAgentDetail(agent: Agent, opts: { paused: boolean; userName
   return {
     summary, overviewStats, accomplishments, nextActions, goals,
     leadTitle: meta.leadTitle, leads, leadStatusColors: STATUS_COLORS,
-    emailStats, emailTimeline, reach, tasks, kpis, weekVals, heat, memory,
+    emailStats, emailTimeline, reach, meetings, tasks, kpis, weekVals, heat, memory,
   };
 }
 

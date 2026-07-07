@@ -781,19 +781,52 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Verify it imports and starts polling.**
+- [ ] **Step 2: Verify it imports (module wiring) — macOS-safe, no infinite loop.**
 
-Run: `cd agentic-salesforce/worker && source .venv/bin/activate && timeout 8 python main.py`
-Expected: prints `[worker] scrape worker up — polling every 4 s` and exits after the timeout with no traceback. (No queued jobs ⇒ it just idles.)
+`main.py`'s top-level imports pull in `db`, `scraper` (browser-use), and `PIL`, so an import check exercises the whole wiring without entering the poll loop. Run from `worker/` with the venv active:
 
-- [ ] **Step 3: Live end-to-end run.**
+```bash
+cd agentic-salesforce/worker && source .venv/bin/activate && python -c "import main; print('import OK:', all(hasattr(main, n) for n in ('main','run_job','_save_screenshot')))"
+```
+Expected: an INFO telemetry line from browser-use (normal), then `import OK: True`. (Do NOT run `python main.py` bare — it loops forever; macOS has no `timeout`.)
+
+- [ ] **Step 3: Verify `_save_screenshot` (pure logic — downscale + path).**
+
+Generate a tiny PNG in-memory with Pillow, save it via the function, assert the returned public path and that the file was written under `public/runs/`:
+
+```bash
+cd agentic-salesforce/worker && source .venv/bin/activate && python -c "
+from io import BytesIO
+from PIL import Image
+import main
+buf = BytesIO(); Image.new('RGB', (1600, 900), 'white').save(buf, 'PNG')
+p = main._save_screenshot('smoketest-job', 0, buf.getvalue())
+assert p == '/runs/smoketest-job/step-0.png', p
+from pathlib import Path
+f = main.PUBLIC_RUNS / 'smoketest-job' / 'step-0.png'
+assert f.exists(), f
+print('save_screenshot OK ->', p, 'downscaled w=', Image.open(f).width)
+"
+```
+Expected: `save_screenshot OK -> /runs/smoketest-job/step-0.png downscaled w= 1000`. Afterward remove the throwaway dir: `rm -rf agentic-salesforce/public/runs/smoketest-job` (it's gitignored, but keep the tree clean).
+
+- [ ] **Step 4: Commit** (implementer — after the Step 2/3 static checks pass).
+
+```bash
+git add agentic-salesforce/worker/main.py
+git commit -m "Scrape worker poll loop: claim, run, persist leads + step screenshots"
+```
+
+- [ ] **Step 5: Live end-to-end run — RUN BY THE USER (headed browser + real job).**
+
+This step needs a headed browser, a running dev server, a signed-in session, and a click on **Find leads** — it is the user's to run on their machine; the implementer does NOT perform it. It is documented here for the handoff:
 
 1. Start the app (`cd agentic-salesforce && pnpm dev`) and sign in.
 2. Create (or open) a **Lead Scout** agent; in its Settings give it a scrape ICP (industry/titles/geo).
-3. Start the worker: `cd agentic-salesforce/worker && source .venv/bin/activate && python main.py`. On first launch, log into Facebook in the Chromium window if you want FB reachable (optional).
+3. Start the worker: `cd agentic-salesforce/worker && source .venv/bin/activate && python main.py`. On first launch, log into Facebook in the Chrome window if you want FB reachable (optional).
 4. On the agent's detail page, click **Find leads**.
 
-Expected: the worker logs `claimed job …`; a Chromium window navigates; within a couple minutes the button shows `Found N leads`; the Leads list refreshes with rows where `source='scrape'` and `profileUrl`/`platform` are set (email only where present). Confirm data:
+Expected: the worker logs `claimed job …`; a Chrome window navigates; within a couple minutes the button shows `Found N leads`; the Leads list refreshes with rows where `source='scrape'` and `profileUrl`/`platform` are set (email only where present). Confirm data:
 ```bash
 cd agentic-salesforce/worker && source .venv/bin/activate && python -c "
 import db; c=db.connect()
@@ -801,16 +834,7 @@ with c.cursor() as cur:
     cur.execute(\"SELECT count(*) FROM leads WHERE source='scrape'\"); print('scrape leads:', cur.fetchone()[0])
     cur.execute('SELECT count(*) FROM job_steps'); print('job_steps:', cur.fetchone()[0])
 "```
-Also confirm PNGs exist under `agentic-salesforce/public/runs/<jobId>/`.
-
-- [ ] **Step 4: Verify dedup.** Click **Find leads** again on the same agent with the same ICP. Expected: the worker skips already-seen `profileUrl`s (`leadsFound` counts only new ones); no duplicate rows for the same profile.
-
-- [ ] **Step 5: Commit.**
-
-```bash
-git add agentic-salesforce/worker/main.py
-git commit -m "Scrape worker poll loop: claim, run, persist leads + step screenshots"
-```
+Also confirm PNGs exist under `agentic-salesforce/public/runs/<jobId>/`. **Dedup check:** click **Find leads** again with the same ICP — the worker skips already-seen `profileUrl`s (`leadsFound` counts only new ones); no duplicate rows for the same profile.
 
 ---
 

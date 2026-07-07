@@ -13,7 +13,15 @@ export default function CalendarPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
 
-  const dayNums = cal.dayLabels.map((_, i) => String(i + 1 + weekOffset * 7));
+  const dayNums = (() => {
+    const base = new Date();
+    const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7) + weekOffset * 7);
+    return cal.dayLabels.map((_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return String(d.getDate());
+    });
+  })();
   const weekLabel = WEEK_LABELS[Math.min(Math.max(weekOffset + 1, 0), WEEK_LABELS.length - 1)];
 
   const now = new Date();

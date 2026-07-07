@@ -64,6 +64,7 @@ export default function AgentDetail() {
   const [cfgPerms, setCfgPerms] = useState<Record<string, boolean>>(() => permsFrom(selId ? s.agentConfig[selId]?.permissions : undefined));
   useEffect(() => {
     if (!selId) return;
+    setTab("overview");
     setCfgRole(sel.role);
     setCfgGoal(sel.goal);
     setCfgPerms(permsFrom(s.agentConfig[selId]?.permissions));

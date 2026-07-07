@@ -251,7 +251,10 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
   }, [agents, set, showToast]);
 
   const saveConfig = useCallback((id: string, cfg: AgentConfig) => {
-    set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: cfg } }));
+    // Merge (don't overwrite) so saving one facet — role/goal/permissions from the
+    // Config tab, or settings — never drops the others from the in-memory store,
+    // mirroring saveAgentConfig's partial upsert on the DB side.
+    set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: { ...prev.agentConfig[id], ...cfg } } }));
     showToast("Configuration saved");
     saveAgentConfigAction(id, cfg).catch((e) => console.error("[saveConfig] persist failed:", e));
   }, [set, showToast]);

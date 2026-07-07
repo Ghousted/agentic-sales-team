@@ -6,7 +6,7 @@ import { statusMeta } from "@/lib/data";
 import { buildAgentDetail } from "@/lib/agentDetail";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
-import { listLeads, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
+import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
 import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import Link from "next/link";
@@ -82,7 +82,7 @@ export default function AgentDetail() {
 
   const [agentLeads, setAgentLeads] = useState<LeadDTO[]>([]);
   useEffect(() => {
-    if (selId) listLeads({ agentId: selId }).then(setAgentLeads);
+    if (selId) listWorkbook(selId).then(setAgentLeads);
   }, [selId]);
 
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
@@ -126,9 +126,9 @@ export default function AgentDetail() {
       if (!job) { setScrapeNote("Job not found."); setRunningScrape(false); return; }
       const r = (job.result ?? {}) as { leadsFound?: number; steps?: number };
       if (job.status === "done") {
-        setScrapeNote(`Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}.`);
+        setScrapeNote(`Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"} to review — open the Leads module’s Pending tab.`);
         setRunningScrape(false);
-        listLeads({ agentId: sel.id }).then(setAgentLeads);
+        listWorkbook(sel.id).then(setAgentLeads);
         return;
       }
       if (job.status === "failed") { setScrapeNote("Scrape failed: " + (job.error ?? "unknown")); setRunningScrape(false); return; }
@@ -158,7 +158,7 @@ export default function AgentDetail() {
       try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
     } else { showToast(res.error); }
     setRunningResearch(false);
-    listLeads({ agentId: sel.id }).then(setAgentLeads);
+    listWorkbook(sel.id).then(setAgentLeads);
   }, [sel]);
 
   const sendDraft = useCallback((d: DraftDTO) => {
@@ -286,13 +286,14 @@ export default function AgentDetail() {
           <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads assigned to {sel.name} yet. Add one in the Leads module.</div>
         ) : (
           <>
-            <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr .9fr .6fr .9fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;gap:10px")}>
-              <div>Name</div><div>Company</div><div>Status</div><div>Score</div><div>Added</div>
+            <div style={css("display:grid;grid-template-columns:.9fr 1.4fr 1.2fr .9fr .6fr .9fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;gap:10px")}>
+              <div>Agent</div><div>Name</div><div>Company</div><div>Status</div><div>Score</div><div>Added</div>
             </div>
             {agentLeads.map((l) => {
               const sc = LEAD_STAGE_COLORS[l.status] || LEAD_STAGE_COLORS.new;
               return (
-                <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr .9fr .6fr .9fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                <div key={l.id} style={css("display:grid;grid-template-columns:.9fr 1.4fr 1.2fr .9fr .6fr .9fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                  <div style={css("display:flex;align-items:center;gap:6px;min-width:0")}>{(() => { const a = byId(l.agentId); return a ? <><div style={css(av(a, 18))}>{a.initials}</div><span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a.name.split(" ")[0]}</span></> : <span>{l.agentId}</span>; })()}</div>
                   <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
                   <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
                   <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>

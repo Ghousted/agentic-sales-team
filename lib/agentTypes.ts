@@ -5,7 +5,7 @@
 export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting";
 
 export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKind: string; engineReady: boolean }[] = [
-  { id: "scrape", label: "Lead scraping", desc: "Find & import prospects matching an ICP", jobKind: "scrape", engineReady: false },
+  { id: "scrape", label: "Lead scraping", desc: "Find & import prospects matching an ICP", jobKind: "scrape", engineReady: true },
   { id: "outreach", label: "Email drafting", desc: "Qualify leads and draft personalized emails", jobKind: "outreach", engineReady: true },
   { id: "follow-up", label: "Follow-ups", desc: "Re-engage non-repliers and cold leads", jobKind: "follow-up", engineReady: false },
   { id: "book-meeting", label: "Meeting booking", desc: "Propose times and book on positive replies", jobKind: "book-meeting", engineReady: false },

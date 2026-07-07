@@ -7,7 +7,7 @@ import { buildAgentDetail } from "@/lib/agentDetail";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listLeads, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
-import { enqueueOutreachJob } from "@/lib/jobs/actions";
+import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import Link from "next/link";
 
@@ -77,6 +77,8 @@ export default function AgentDetail() {
 
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
   const [runningOutreach, setRunningOutreach] = useState(false);
+  const [runningScrape, setRunningScrape] = useState(false);
+  const [scrapeNote, setScrapeNote] = useState("");
 
   const refetchDrafts = useCallback(async (id: string) => {
     setDrafts(await listDraftsForAgent(id));
@@ -95,6 +97,37 @@ export default function AgentDetail() {
     setRunningOutreach(false);
     refetchDrafts(sel.id);
   }, [sel, refetchDrafts]);
+
+  const runScrape = useCallback(async () => {
+    if (!sel) return;
+    setRunningScrape(true);
+    setScrapeNote("");
+    const res = await enqueueJob({
+      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+      kind: "scrape", capabilities: sel.capabilities, target: 10,
+    });
+    if ("error" in res) { setScrapeNote(res.error); setRunningScrape(false); return; }
+    // Poll the worker's progress. The Python worker (not this browser) runs it.
+    const jobId = res.jobId;
+    let waited = 0;
+    const poll = async (): Promise<void> => {
+      const job = await getJob(jobId);
+      if (!job) { setScrapeNote("Job not found."); setRunningScrape(false); return; }
+      const r = (job.result ?? {}) as { leadsFound?: number; steps?: number };
+      if (job.status === "done") {
+        setScrapeNote(`Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}.`);
+        setRunningScrape(false);
+        listLeads({ agentId: sel.id }).then(setAgentLeads);
+        return;
+      }
+      if (job.status === "failed") { setScrapeNote("Scrape failed: " + (job.error ?? "unknown")); setRunningScrape(false); return; }
+      if (job.status === "queued" && waited > 12) setScrapeNote("Waiting for the scraper worker to start…");
+      else setScrapeNote(`Working… ${r.steps ?? 0} steps, ${r.leadsFound ?? 0} found`);
+      waited++;
+      setTimeout(poll, 2500);
+    };
+    poll();
+  }, [sel]);
 
   const sendDraft = useCallback((d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
@@ -201,8 +234,12 @@ export default function AgentDetail() {
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden;animation:fadeUp .25s ease")}>
         <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
           <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>{agentLeads.length} lead{agentLeads.length === 1 ? "" : "s"}</div>
-          <Link href="/leads" style={{ ...css("margin-left:auto;font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
+          {sel.capabilities?.includes("scrape") && (
+            <Btn onClick={runScrape} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningScrape ? "opacity:.6" : "")} styleHover="background:#42199E">{runningScrape ? "Finding…" : "Find leads"}</Btn>
+          )}
+          <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
         </div>
+        {scrapeNote && <div style={css("padding:9px 18px;font-size:12px;color:#71717A;border-bottom:1px solid #ECECF1")}>{scrapeNote}</div>}
         {agentLeads.length === 0 ? (
           <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads assigned to {sel.name} yet. Add one in the Leads module.</div>
         ) : (
@@ -231,7 +268,9 @@ export default function AgentDetail() {
       <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
         <div style={css("display:flex;align-items:center;gap:10px")}>
           <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
-          <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
+          {sel.capabilities?.includes("outreach") && (
+            <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
+          )}
         </div>
         {drafts.length === 0 ? (
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet. Add leads in the Leads tab, then hit “Run outreach”.</div>

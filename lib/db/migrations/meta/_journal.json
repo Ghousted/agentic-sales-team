@@ -71,6 +71,13 @@
       "when": 1783422387451,
       "tag": "0009_large_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783434223391,
+      "tag": "0010_overjoyed_vapor",
+      "breakpoints": true
     }
   ]
 }

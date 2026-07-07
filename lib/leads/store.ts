@@ -17,7 +17,7 @@ async function uid(): Promise<string | null> {
 function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
-    email: r.email, status: r.status, score: r.score, source: r.source, profileUrl: r.profileUrl, platform: r.platform,
+    email: r.email, status: r.status, score: r.score, source: r.source, profileUrl: r.profileUrl, platform: r.platform, research: r.research ?? null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
 }
@@ -74,14 +74,15 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   if (!userId) return [];
   const rows = await getDb().select({
     d: outreachDrafts, leadName: leads.name, leadCompany: leads.company, leadEmail: leads.email,
+    leadProfileUrl: leads.profileUrl, leadPlatform: leads.platform,
   }).from(outreachDrafts)
     .innerJoin(leads, eq(outreachDrafts.leadId, leads.id))
     .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.agentId, agentId)))
     .orderBy(desc(outreachDrafts.createdAt));
-  return rows.map(({ d, leadName, leadCompany, leadEmail }) => ({
+  return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
     rationale: d.rationale, status: d.status, createdAt: d.createdAt.toISOString(),
-    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail,
+    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform,
   }));
 }
 

@@ -131,6 +131,7 @@ export const leads = pgTable("leads", {
   source: text("source").notNull().default("manual"),
   profileUrl: text("profile_url"),
   platform: text("platform"),
+  research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

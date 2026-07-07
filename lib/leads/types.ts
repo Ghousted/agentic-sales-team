@@ -4,6 +4,13 @@
 export const LEAD_STAGES = ["new", "contacted", "engaged", "replied", "meeting"] as const;
 export type LeadStage = (typeof LEAD_STAGES)[number];
 
+export interface ResearchBrief {
+  summary: string;
+  priorities: string[];
+  hooks: string[];
+  angle: string;
+}
+
 export interface LeadDTO {
   id: string;
   agentId: string;
@@ -16,6 +23,7 @@ export interface LeadDTO {
   source: string;
   profileUrl: string | null;
   platform: string | null;
+  research: ResearchBrief | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +41,8 @@ export interface DraftDTO {
   leadName: string;
   leadCompany: string;
   leadEmail: string;
+  leadProfileUrl: string | null;
+  leadPlatform: string | null;
 }
 
 // A snapshot of the agent captured at enqueue time and stored in the job params,

@@ -14,6 +14,8 @@ export interface LeadDTO {
   status: string;
   score: number;
   source: string;
+  profileUrl: string | null;
+  platform: string | null;
   createdAt: string;
   updatedAt: string;
 }

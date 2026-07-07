@@ -129,6 +129,8 @@ export const leads = pgTable("leads", {
   status: text("status").notNull().default("new"), // new|contacted|engaged|replied|meeting
   score: integer("score").notNull().default(0),
   source: text("source").notNull().default("manual"),
+  profileUrl: text("profile_url"),
+  platform: text("platform"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -171,6 +173,19 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+// Per-step trace of a scrape run (Milestone 2): one row + one screenshot per
+// browser-use action, so the run can be watched/replayed. Written by the worker.
+export const jobSteps = pgTable("job_steps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  jobId: uuid("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  idx: integer("idx").notNull(),
+  caption: text("caption").notNull().default(""),
+  url: text("url").notNull().default(""),
+  screenshotPath: text("screenshot_path").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type User = typeof users.$inferSelect;

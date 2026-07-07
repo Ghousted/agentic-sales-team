@@ -144,18 +144,22 @@ export async function saveTeamMembers(teamId: string, members: string[]): Promis
     .onConflictDoUpdate({ target: [teamMembers.userId, teamMembers.teamId], set: { members } });
 }
 
-/** Save per-agent config overrides (role, goal, permissions). */
+/** Save per-agent config overrides (role, goal, permissions, settings). Partial:
+ *  only the provided fields are overwritten on conflict, so a settings-only save
+ *  doesn't wipe role/goal/permissions (and vice versa). */
 export async function saveAgentConfig(agentId: string, cfg: AgentConfig): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
   if (!userId) return;
+  const set: Record<string, unknown> = {};
+  if (cfg.role !== undefined) set.role = cfg.role;
+  if (cfg.goal !== undefined) set.goal = cfg.goal;
+  if (cfg.permissions !== undefined) set.permissions = cfg.permissions;
+  if (cfg.settings !== undefined) set.settings = cfg.settings;
   await getDb()
     .insert(agentConfig)
     .values({ userId, agentId, role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null, settings: cfg.settings ?? null })
-    .onConflictDoUpdate({
-      target: [agentConfig.userId, agentConfig.agentId],
-      set: { role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null, settings: cfg.settings ?? null },
-    });
+    .onConflictDoUpdate({ target: [agentConfig.userId, agentConfig.agentId], set });
 }
 
 /** Append chat turns (user and/or AI) for a conversation, in order. */

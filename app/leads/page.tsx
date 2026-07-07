@@ -5,7 +5,7 @@ import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as set
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
-import { css, Box, Btn } from "@/components/primitives";
+import { css, Btn } from "@/components/primitives";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],

@@ -36,6 +36,7 @@ interface WizardState {
   wCreatedId: string | null;
   wType: string;
   wCapabilities: string[];
+  wSettings: Record<string, Record<string, unknown>>;
 }
 
 interface State extends WizardState {
@@ -76,6 +77,7 @@ const initialWizard: WizardState = {
   wPosition: "SDR", wIndustry: "SaaS", wSize: "51-200", wTitles: "", wGeo: "", wGoals: "",
   wChannels: { Email: true, LinkedIn: true }, wPosInput: "", wCharacter: 2, wCreatedId: null,
   wType: "sdr", wCapabilities: [],
+  wSettings: {},
 };
 
 const initialState: State = {
@@ -326,6 +328,10 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     // 5 input steps (0-4); step 5 is the "agent is live" success screen.
     set((prev) => ({ extraAgents: prev.extraAgents.concat([agent]), wStep: 5, wCreatedId: id }));
     saveAgent(agent).catch((e) => console.error("[createAgent] persist failed:", e));
+    if (Object.keys(cur.wSettings).length) {
+      saveAgentConfigAction(id, { settings: cur.wSettings }).catch((e) => console.error("[createAgent] settings persist failed:", e));
+      set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: { ...prev.agentConfig[id], settings: cur.wSettings } } }));
+    }
   }, [set]);
 
   // Lifecycle: count-up + hub tick + live activity, running once authenticated.

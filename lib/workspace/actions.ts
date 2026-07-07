@@ -11,6 +11,7 @@ export interface AgentConfig {
   role?: string;
   goal?: string;
   permissions?: Record<string, boolean>;
+  settings?: Record<string, Record<string, unknown>>;
 }
 
 export interface WorkspaceData {
@@ -58,6 +59,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       role: c.role ?? undefined,
       goal: c.goal ?? undefined,
       permissions: c.permissions ?? undefined,
+      settings: c.settings ?? undefined,
     };
   }
 
@@ -149,10 +151,10 @@ export async function saveAgentConfig(agentId: string, cfg: AgentConfig): Promis
   if (!userId) return;
   await getDb()
     .insert(agentConfig)
-    .values({ userId, agentId, role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null })
+    .values({ userId, agentId, role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null, settings: cfg.settings ?? null })
     .onConflictDoUpdate({
       target: [agentConfig.userId, agentConfig.agentId],
-      set: { role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null },
+      set: { role: cfg.role ?? null, goal: cfg.goal ?? null, permissions: cfg.permissions ?? null, settings: cfg.settings ?? null },
     });
 }
 

@@ -6,6 +6,7 @@ import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResear
 import { draftOutreach } from "@/lib/ai/outreach";
 import { draftResearch } from "@/lib/ai/research";
 import type { AgentSnapshot } from "@/lib/leads/types";
+import { chainNext } from "@/lib/pod/orchestrate";
 
 // Needs the Node runtime (raw fetch to Gemini, no edge constraints) and room to
 // run a small batch of Gemini calls.
@@ -36,7 +37,7 @@ export async function POST() {
     if (!claimed.length) continue;
     processed++;
 
-    const params = candidate.params as { agent: AgentSnapshot; leadIds: string[] | null; batchSize: number };
+    const params = candidate.params as { agent: AgentSnapshot; leadIds: string[] | null; batchSize: number; pod?: boolean; teamId?: string };
     let created = 0;
     let failed = 0;
     try {
@@ -73,6 +74,10 @@ export async function POST() {
       } else {
         await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "Unknown job kind: " + candidate.kind })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      }
+
+      if (params.pod && params.teamId && (candidate.kind === "outreach" || candidate.kind === "research")) {
+        await chainNext(userId, params.teamId, candidate.kind);
       }
     } catch (e) {
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })

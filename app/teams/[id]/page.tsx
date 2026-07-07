@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { templateById, type Capability } from "@/lib/agentTypes";
+import { listLeadsForAgents } from "@/lib/leads/actions";
+import type { LeadDTO } from "@/lib/leads/types";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -30,8 +32,17 @@ export default function TeamDetail() {
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
   const [pick, setPick] = useState<Record<string, boolean>>({});
+  const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
+
+  const memberIds = team ? team.members : [];
+  useEffect(() => {
+    if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
+    else setTeamLeads([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberIds.join(",")]);
+
   if (!team) return null;
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
@@ -51,7 +62,7 @@ export default function TeamDetail() {
   };
 
   const kpis: [string, string][] = [
-    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", team.leads.toLocaleString()], ["Avg score", avgScore ? String(avgScore) : "—"],
+    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", String(teamLeads.length)], ["Avg score", avgScore ? String(avgScore) : "—"],
   ];
 
   return (
@@ -113,6 +124,24 @@ export default function TeamDetail() {
                 );
               })}
             </div>
+          </div>
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Team leads <span style={css("font-size:12px;font-weight:400;color:#A1A1AA")}>· {teamLeads.length}</span></div>
+            {teamLeads.length === 0 ? (
+              <div style={css("font-size:12.5px;color:#A1A1AA;padding:6px 2px")}>No leads in this team’s book yet.</div>
+            ) : (
+              <div style={css("display:flex;flex-direction:column")}>
+                {teamLeads.slice(0, 12).map((l) => {
+                  const a = byId(l.agentId);
+                  return (
+                    <div key={l.id} style={css("display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #F4F4F6")}>
+                      <div style={css("font-size:12.5px;font-weight:600;min-width:0;flex:1")}>{l.name}<span style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.company ? " · " + l.company : ""}</span></div>
+                      {a && <div style={css("display:flex;align-items:center;gap:5px;flex:none")}><div style={css(av(a, 18))}>{a.initials}</div><span style={css("font-size:11px;color:#71717A")}>{a.name.split(" ")[0]}</span></div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Team performance</div>

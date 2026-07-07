@@ -2,7 +2,7 @@ import "server-only";
 // All persistence for the leads/outreach domain. Plain async functions so the
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
-import { and, desc, eq, inArray, asc, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, asc } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief } from "./types";
@@ -109,14 +109,14 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
   const db = getDb();
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
-      .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId), inArray(leads.id, leadIds), ne(leads.email, "")))
+      .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId), inArray(leads.id, leadIds)))
       .limit(batchSize);
   }
   const drafted = await db.select({ leadId: outreachDrafts.leadId }).from(outreachDrafts)
     .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.agentId, agentId)));
   const draftedIds = new Set(drafted.map((r) => r.leadId));
   const all = await db.select().from(leads)
-    .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId), ne(leads.email, ""))).orderBy(asc(leads.createdAt));
+    .where(and(eq(leads.userId, userId), eq(leads.agentId, agentId))).orderBy(asc(leads.createdAt));
   return all.filter((l) => !draftedIds.has(l.id)).slice(0, batchSize);
 }
 

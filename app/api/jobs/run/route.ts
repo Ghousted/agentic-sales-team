@@ -44,7 +44,7 @@ export async function POST() {
         const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
         for (const lead of batch) {
           try {
-            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email });
+            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, platform: lead.platform, research: lead.research });
             await applyOutreachResult(userId, params.agent.id, lead, result);
             created++;
             drafts++;

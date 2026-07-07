@@ -13,6 +13,8 @@ export interface Agent {
   score: number;
   goal: string;
   char?: number; // index into the character sprite (chosen in the create wizard)
+  type: string;              // AGENT_TYPES id (e.g. "sdr", "scout", "custom")
+  capabilities: string[];    // resolved capability ids this agent can run
 }
 
 export interface Team {
@@ -27,6 +29,7 @@ export interface Team {
   leads: number;
   goal: string;
   activity: string[];
+  template: string;          // TEAM_TEMPLATES id
 }
 
 export interface ChatMsg {

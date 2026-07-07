@@ -71,12 +71,12 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     extraAgents: agentRows.map((r) => ({
       id: r.id, name: r.name, initials: r.initials, role: r.role, color: r.color,
       status: r.status as StatusKey, task: r.task, score: r.score, goal: r.goal,
-      char: r.char ?? undefined,
+      char: r.char ?? undefined, type: r.type, capabilities: r.capabilities,
     })),
     extraTeams: teamRows.map((r) => ({
       id: r.id, name: r.name, icon: r.icon, iconBg: r.iconBg, desc: r.description,
       goal: r.goal, members: r.members, activity: r.activity,
-      meetings: r.meetings, pipeline: r.pipeline, leads: r.leads,
+      meetings: r.meetings, pipeline: r.pipeline, leads: r.leads, template: r.template,
     })),
     removed: stateRows.filter((r) => r.removed).map((r) => r.agentId),
     paused: stateRows.filter((r) => r.paused).map((r) => r.agentId),
@@ -92,6 +92,7 @@ export async function saveAgent(agent: Agent): Promise<void> {
     userId, id: agent.id, name: agent.name, initials: agent.initials, role: agent.role,
     color: agent.color, status: agent.status, task: agent.task, score: agent.score,
     goal: agent.goal, char: agent.char ?? null,
+    type: agent.type, capabilities: agent.capabilities,
   });
 }
 
@@ -104,6 +105,7 @@ export async function saveTeam(team: Team): Promise<void> {
     userId, id: team.id, name: team.name, icon: team.icon, iconBg: team.iconBg,
     description: team.desc, goal: team.goal, members: team.members, activity: team.activity,
     meetings: team.meetings, pipeline: team.pipeline, leads: team.leads,
+    template: team.template,
   });
 }
 

@@ -2,21 +2,21 @@
 import type { Agent, Team, StatusKey, StatusMeta, Chats } from "./types";
 
 export const AGENTS_BASE: Agent[] = [
-  { id: "sk", name: "Sarah Kim", initials: "SK", role: "SDR", color: "#5122C1", status: "working", task: "Booking meetings with Fintech CTOs", score: 94, goal: "Book 30 meetings / month" },
-  { id: "mt", name: "Michael Torres", initials: "MT", role: "BDR", color: "#0EA5E9", status: "working", task: "Sending personalized outreach — Fintech segment", score: 88, goal: "120 personalized emails / week" },
-  { id: "ew", name: "Emily Watson", initials: "EW", role: "SDR", color: "#2FA45C", status: "working", task: "Discovering Healthcare ICP leads", score: 91, goal: "200 qualified leads / month" },
-  { id: "rp", name: "Ryan Patel", initials: "RP", role: "Account Executive", color: "#F43F7E", status: "waiting", task: "Awaiting approval on Snowflake proposal", score: 86, goal: "$500K pipeline / quarter" },
-  { id: "al", name: "Ava Lindqvist", initials: "AL", role: "SDR", color: "#F59E0B", status: "working", task: "Following up with Snowflake reply", score: 90, goal: "25% reply rate" },
-  { id: "nc", name: "Noah Chen", initials: "NC", role: "Sales Manager", color: "#8B5CF6", status: "working", task: "Reviewing team pipeline for Q3", score: 83, goal: "Keep team above 85 score" },
-  { id: "ps", name: "Priya Sharma", initials: "PS", role: "Customer Success", color: "#14B8A6", status: "offline", task: "Idle — next shift at 6:00pm", score: 79, goal: "NPS 60+ across accounts" },
-  { id: "lm", name: "Leo Martins", initials: "LM", role: "Recruiter", color: "#EF4444", status: "error", task: "LinkedIn connection failed — needs reauth", score: 72, goal: "15 qualified candidates / month" },
+  { id: "sk", name: "Sarah Kim", initials: "SK", role: "SDR", color: "#5122C1", status: "working", task: "Booking meetings with Fintech CTOs", score: 94, goal: "Book 30 meetings / month", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
+  { id: "mt", name: "Michael Torres", initials: "MT", role: "BDR", color: "#0EA5E9", status: "working", task: "Sending personalized outreach — Fintech segment", score: 88, goal: "120 personalized emails / week", type: "bdr", capabilities: ["outreach", "follow-up"] },
+  { id: "ew", name: "Emily Watson", initials: "EW", role: "SDR", color: "#2FA45C", status: "working", task: "Discovering Healthcare ICP leads", score: 91, goal: "200 qualified leads / month", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
+  { id: "rp", name: "Ryan Patel", initials: "RP", role: "Account Executive", color: "#F43F7E", status: "waiting", task: "Awaiting approval on Snowflake proposal", score: 86, goal: "$500K pipeline / quarter", type: "ae", capabilities: ["outreach", "book-meeting"] },
+  { id: "al", name: "Ava Lindqvist", initials: "AL", role: "SDR", color: "#F59E0B", status: "working", task: "Following up with Snowflake reply", score: 90, goal: "25% reply rate", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
+  { id: "nc", name: "Noah Chen", initials: "NC", role: "Sales Manager", color: "#8B5CF6", status: "working", task: "Reviewing team pipeline for Q3", score: 83, goal: "Keep team above 85 score", type: "manager", capabilities: [] },
+  { id: "ps", name: "Priya Sharma", initials: "PS", role: "Customer Success", color: "#14B8A6", status: "offline", task: "Idle — next shift at 6:00pm", score: 79, goal: "NPS 60+ across accounts", type: "csm", capabilities: ["follow-up"] },
+  { id: "lm", name: "Leo Martins", initials: "LM", role: "Recruiter", color: "#EF4444", status: "error", task: "LinkedIn connection failed — needs reauth", score: 72, goal: "15 qualified candidates / month", type: "recruiter", capabilities: ["scrape", "outreach"] },
 ];
 
 export const TEAMS_BASE: Team[] = [
-  { id: "t1", name: "North America SDR", icon: "🌎", iconBg: "#F1EDFD", desc: "Outbound prospecting · US & Canada", members: ["sk", "ew", "al"], meetings: 28, pipeline: "$1.1M", leads: 412, goal: "Book 90 meetings this quarter across the NA territory, prioritizing companies on AWS.", activity: ["Sarah booked Datadog — VP Eng", "Ava flagged Snowflake as hot", "Emily added 35 Healthcare leads"] },
-  { id: "t2", name: "Enterprise Team", icon: "🏛", iconBg: "#FDF0F5", desc: "Named accounts · $100K+ deals", members: ["rp", "nc"], meetings: 9, pipeline: "$860K", leads: 64, goal: "Land 3 enterprise logos this quarter with multi-threaded outreach.", activity: ["Ryan drafted Snowflake proposal", "Noah reviewed Q3 pipeline"] },
-  { id: "t3", name: "Outbound Team", icon: "📣", iconBg: "#FEF6E8", desc: "High-volume sequences", members: ["mt", "sk", "al"], meetings: 19, pipeline: "$390K", leads: 1230, goal: "Maintain 25%+ reply rate while scaling to 600 emails/week.", activity: ["Michael sent 12 emails to Fintech CTOs", "Sequence B reply rate hit 27%"] },
-  { id: "t4", name: "Recruitment Team", icon: "🎯", iconBg: "#E9F5FE", desc: "Sourcing sales talent", members: ["lm"], meetings: 6, pipeline: "—", leads: 88, goal: "15 qualified AE candidates per month.", activity: ["Leo needs LinkedIn reauth", "4 candidate screens scheduled"] },
+  { id: "t1", name: "North America SDR", icon: "🌎", iconBg: "#F1EDFD", desc: "Outbound prospecting · US & Canada", members: ["sk", "ew", "al"], meetings: 28, pipeline: "$1.1M", leads: 412, goal: "Book 90 meetings this quarter across the NA territory, prioritizing companies on AWS.", activity: ["Sarah booked Datadog — VP Eng", "Ava flagged Snowflake as hot", "Emily added 35 Healthcare leads"], template: "outbound" },
+  { id: "t2", name: "Enterprise Team", icon: "🏛", iconBg: "#FDF0F5", desc: "Named accounts · $100K+ deals", members: ["rp", "nc"], meetings: 9, pipeline: "$860K", leads: 64, goal: "Land 3 enterprise logos this quarter with multi-threaded outreach.", activity: ["Ryan drafted Snowflake proposal", "Noah reviewed Q3 pipeline"], template: "enterprise" },
+  { id: "t3", name: "Outbound Team", icon: "📣", iconBg: "#FEF6E8", desc: "High-volume sequences", members: ["mt", "sk", "al"], meetings: 19, pipeline: "$390K", leads: 1230, goal: "Maintain 25%+ reply rate while scaling to 600 emails/week.", activity: ["Michael sent 12 emails to Fintech CTOs", "Sequence B reply rate hit 27%"], template: "outbound" },
+  { id: "t4", name: "Recruitment Team", icon: "🎯", iconBg: "#E9F5FE", desc: "Sourcing sales talent", members: ["lm"], meetings: 6, pipeline: "—", leads: 88, goal: "15 qualified AE candidates per month.", activity: ["Leo needs LinkedIn reauth", "4 candidate screens scheduled"], template: "recruitment" },
 ];
 
 const STATUS_META: Record<StatusKey, StatusMeta> = {

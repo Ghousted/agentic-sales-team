@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
+import { typeById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
 import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
@@ -33,6 +34,8 @@ interface WizardState {
   wPosInput: string;
   wCharacter: number;
   wCreatedId: string | null;
+  wType: string;
+  wCapabilities: string[];
 }
 
 interface State extends WizardState {
@@ -72,6 +75,7 @@ const initialWizard: WizardState = {
   wStep: 0, wName: "", wNick: "", wAvatar: "Professional", wColor: "#5122C1",
   wPosition: "SDR", wIndustry: "SaaS", wSize: "51-200", wTitles: "", wGeo: "", wGoals: "",
   wChannels: { Email: true, LinkedIn: true }, wPosInput: "", wCharacter: 2, wCreatedId: null,
+  wType: "sdr", wCapabilities: [],
 };
 
 const initialState: State = {
@@ -297,6 +301,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
       activity: ["Team created — agents onboarding", "Shared goal set"],
+      template: "custom",
     };
     set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {} }));
     showToast(name + " created");
@@ -309,11 +314,14 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const name = cur.wName.trim() || "New Agent";
     const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const id = "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const at = typeById(cur.wType) ;
+    const capabilities = at?.custom ? cur.wCapabilities : (at?.capabilities ?? []);
     const agent: Agent = {
-      id, name, initials, role: cur.wPosition, color: cur.wColor, status: "working",
-      task: "Onboarding — building prospect list for " + cur.wIndustry, score: 75,
+      id, name, initials, role: at?.label ?? "Custom", color: cur.wColor, status: "working",
+      task: "Onboarding — configuring capabilities", score: 75,
       goal: cur.wGoals.split(".")[0] || "Ramp up in week 1",
-      char: cur.wCharacter, // the illustrated character chosen in the wizard
+      char: cur.wCharacter,
+      type: cur.wType, capabilities,
     };
     // 5 input steps (0-4); step 5 is the "agent is live" success screen.
     set((prev) => ({ extraAgents: prev.extraAgents.concat([agent]), wStep: 5, wCreatedId: id }));

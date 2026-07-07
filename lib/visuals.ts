@@ -86,6 +86,7 @@ const NAV_PATHS: Record<string, string> = {
   gear: '<path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm8.6 5-1.9 1.1.1 2.2-2.2 1.3-1.9-1.2-2 .8-.7 2.1h-2.6l-.7-2.1-2-.8-1.9 1.2-2.2-1.3.1-2.2L1 13.5v-2.6l1.9-1.1-.1-2.2L5 6.3l1.9 1.2 2-.8.7-2.1h2.6l.7 2.1 2 .8L16.8 6.3 19 7.6l-.1 2.2 1.9 1.1Z"/>',
   logout: '<rect x="3" y="3" width="18" height="18" rx="4.5"/><path d="M11.2 7.6l4.4 4.4-4.4 4.4v-3.2H5.8v-2.4h5.4V7.6Z" fill="#fff"/>',
   panel: '<rect x="3.75" y="4.75" width="16.5" height="14.5" rx="2.5" fill="none" stroke="#667085" stroke-width="1.6"/><line x1="10" y1="4.75" x2="10" y2="19.25" stroke="#667085" stroke-width="1.6"/>',
+  leads: '<path d="M8.5 11.2a3.1 3.1 0 1 0 0-6.2 3.1 3.1 0 0 0 0 6.2Zm0 1.7c-2.7 0-5.7 1.35-5.7 3.5V19h11.4v-2.6c0-2.15-3-3.5-5.7-3.5Zm7.3-1.7a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Zm.5 1.75c-.35 0-.7.02-1.03.07 1 .77 1.63 1.83 1.63 3.18V19h4.3v-2.4c0-1.95-2.5-3.15-4.9-3.15Z"/>',
 };
 export function navIcon(key: string, color: string): string {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="' + color + '">' + (NAV_PATHS[key] || "") + "</svg>";

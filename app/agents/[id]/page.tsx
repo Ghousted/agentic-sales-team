@@ -10,13 +10,6 @@ import { listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import type { DraftDTO } from "@/lib/leads/types";
 
-const pastel = [
-  { bg: "#F1EDFD", bd: "#E3DBF9", fg: "#5122C1" },
-  { bg: "#FDF0F5", bd: "#F9DCE8", fg: "#DB2777" },
-  { bg: "#FEF6E8", bd: "#FBE8C5", fg: "#B45309" },
-  { bg: "#E9F5FE", bd: "#CBE7FB", fg: "#0369A1" },
-];
-
 const TABS: [string, string][] = [
   ["overview", "Overview"], ["leads", "Leads"], ["emails", "Emails"], ["reach", "Reach Outs"],
   ["tasks", "Tasks"], ["analytics", "Performance"], ["memory", "Memory"], ["settings", "Configuration"],

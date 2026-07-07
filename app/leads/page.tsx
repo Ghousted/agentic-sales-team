@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
-import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction } from "@/lib/leads/actions";
+import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads } from "@/lib/leads/actions";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
-import { css, Btn } from "@/components/primitives";
+import { css, Box, Btn } from "@/components/primitives";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
@@ -18,6 +18,8 @@ const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9p
 export default function LeadsPage() {
   const { agents, byId, showToast } = useApp();
   const [leads, setLeads] = useState<LeadDTO[]>([]);
+  const [candidates, setCandidates] = useState<LeadDTO[]>([]);
+  const [view, setView] = useState<"active" | "pending">("active");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null); // agentId being run, or "all"
   const [fAgent, setFAgent] = useState("");
@@ -27,8 +29,9 @@ export default function LeadsPage() {
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const rows = await listLeadsAction();
+    const [rows, cands] = await Promise.all([listLeadsAction(), listCandidates()]);
     setLeads(rows);
+    setCandidates(cands);
     setLoading(false);
   }, []);
 
@@ -46,6 +49,13 @@ export default function LeadsPage() {
     setForm({ name: "", title: "", company: "", email: "", agentId: "" });
     setShowAdd(false);
     showToast("Lead added");
+    refetch();
+  };
+
+  const review = async (ids: string[], accept: boolean) => {
+    if (!ids.length) return;
+    if (accept) await acceptLeads(ids); else await dismissLeads(ids);
+    showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
     refetch();
   };
 
@@ -80,7 +90,11 @@ export default function LeadsPage() {
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        <div style={css("font-size:13px;color:#71717A")}>{leads.length} lead{leads.length === 1 ? "" : "s"} across {agents.length} agents</div>
+        <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
+          <Box onClick={() => setView("active")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (view === "active" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Active</Box>
+          <Box onClick={() => setView("pending")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;" + (view === "pending" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Pending{candidates.length > 0 && <span style={css("background:#5122C1;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{candidates.length}</span>}</Box>
+        </div>
+        <div style={css("font-size:13px;color:#71717A")}>{view === "active" ? leads.length + " lead" + (leads.length === 1 ? "" : "s") : candidates.length + " to review"}</div>
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           <select value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
             <option value="">All agents</option>
@@ -136,32 +150,63 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-        <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-          <div>Lead</div><div>Company</div><div>Agent</div><div>Stage</div><div>Score</div><div>Actions</div>
-        </div>
-        {loading ? (
-          <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No leads yet. Use “Add lead” to create one.</div>
-        ) : filtered.map((l) => {
-          const a = byId(l.agentId);
-          const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
-          return (
-            <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-              <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
-              <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
-              <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
-              <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-              <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>
-              <div style={css("display:flex;gap:6px")}>
-                <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#EEE9F8;color:#5122C1;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#E3DBF9">{running === l.id ? "Running…" : "Run outreach"}</Btn>
-                <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
+      {view === "active" ? (
+        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+          <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+            <div>Lead</div><div>Company</div><div>Agent</div><div>Stage</div><div>Score</div><div>Actions</div>
+          </div>
+          {loading ? (
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No leads yet. Use “Add lead” to create one.</div>
+          ) : filtered.map((l) => {
+            const a = byId(l.agentId);
+            const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
+            return (
+              <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
+                <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
+                <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
+                <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
+                <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>
+                <div style={css("display:flex;gap:6px")}>
+                  <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#EEE9F8;color:#5122C1;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#E3DBF9">{running === l.id ? "Running…" : "Run outreach"}</Btn>
+                  <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+          <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+            <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates — accept the good ones</div>
+            {candidates.length > 0 && (<>
+              <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Accept all</Btn>
+              <Btn onClick={() => review(candidates.map((c) => c.id), false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Dismiss all</Btn>
+            </>)}
+          </div>
+          {loading ? (
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+          ) : candidates.length === 0 ? (
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No candidates awaiting review. Run “Find leads” on a scraping agent.</div>
+          ) : candidates.map((c) => {
+            const a = byId(c.agentId);
+            return (
+              <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                <div style={css("font-weight:600")}>{c.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
+                <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
+                <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
+                <div style={css("display:flex;gap:6px;align-items:center")}>
+                  {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#5122C1;cursor:pointer" styleHover="text-decoration:underline">Profile ↗</Box>}
+                  <Btn onClick={() => review([c.id], true)} style="margin-left:auto;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Accept</Btn>
+                  <Btn onClick={() => review([c.id], false)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Dismiss</Btn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

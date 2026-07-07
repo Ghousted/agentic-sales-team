@@ -50,6 +50,13 @@
       "when": 1783364060893,
       "tag": "0006_magical_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783395168559,
+      "tag": "0007_bouncy_ender_wiggin",
+      "breakpoints": true
     }
   ]
 }

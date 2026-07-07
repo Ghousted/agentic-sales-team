@@ -111,6 +111,64 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ── Agent execution (Milestone 1: outreach engine) ──────────────────────────
+
+// Real prospects an agent works. `source` is 'manual' now, 'scrape' in milestone 2.
+export const leads = pgTable("leads", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  name: text("name").notNull(),
+  title: text("title").notNull().default(""),
+  company: text("company").notNull().default(""),
+  email: text("email").notNull(),
+  status: text("status").notNull().default("new"), // new|contacted|engaged|replied|meeting
+  score: integer("score").notNull().default(0),
+  source: text("source").notNull().default("manual"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Agent-written outreach emails.
+export const outreachDrafts = pgTable("outreach_drafts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  rationale: text("rationale").notNull().default(""),
+  status: text("status").notNull().default("draft"), // draft|sent
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+});
+
+// Real event log (feeds notifications + dashboard/analytics in a later milestone).
+export const activity = pgTable("activity", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  type: text("type").notNull(), // lead_added|lead_qualified|email_drafted|email_sent
+  leadId: uuid("lead_id"),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Run queue. `kind` is 'outreach' now, 'scrape' in milestone 2.
+export const jobs = pgTable("jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("queued"), // queued|running|done|failed
+  params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AgentRow = typeof agents.$inferSelect;

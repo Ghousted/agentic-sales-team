@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
+import { TEAM_TEMPLATES, templateById, type Capability } from "@/lib/agentTypes";
 
 const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 
@@ -50,6 +51,21 @@ export default function TeamModal() {
           </div>
 
           <div>
+            <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Template</div>
+            <div style={css("display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px")}>
+              {TEAM_TEMPLATES.map((t) => {
+                const on = s.tTemplate === t.id;
+                return (
+                  <Box key={t.id} onClick={() => set({ tTemplate: t.id })} style={"border-radius:12px;padding:10px 12px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                    <div style={css("font-size:12.5px;font-weight:700")}>{t.label}</div>
+                    <div style={css("font-size:10.5px;color:#71717A;margin-top:3px")}>{t.requiredCapabilities.length ? t.requiredCapabilities.join(" · ") : "freeform"}</div>
+                  </Box>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
             <div style={css("display:flex;align-items:baseline;margin-bottom:8px")}>
               <div style={css("font-size:12px;font-weight:600;color:#3F3F46")}>Members</div>
               <div style={css("margin-left:auto;font-size:11px;color:#5122C1;font-weight:600")}>{selCount} selected</div>
@@ -70,6 +86,25 @@ export default function TeamModal() {
               })}
             </div>
           </div>
+
+          {(() => {
+            const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
+            if (!req.length) return null;
+            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
+            const covered = new Set<string>();
+            for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
+            return (
+              <div>
+                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Coverage</div>
+                <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
+                  {req.map((c) => {
+                    const ok = covered.has(c);
+                    return <span key={c} style={css("font-size:11px;font-weight:600;border-radius:99px;padding:4px 11px;" + (ok ? "color:#1B7A3D;background:#E7F7EC" : "color:#B45309;background:#FDEBCB"))}>{ok ? "✓ " : "○ "}{c}</span>;
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           <div>
             <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Shared goal</div>

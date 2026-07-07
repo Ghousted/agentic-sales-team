@@ -65,6 +65,7 @@ interface State extends WizardState {
   tIcon: string;
   tGoal: string;
   tSel: Record<string, boolean>;
+  tTemplate: string;
   // settings
   toggles: Record<string, boolean>;
   workspaceName: string;
@@ -87,7 +88,7 @@ const initialState: State = {
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
-  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true },
+  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom",
   toggles: { t0: true, t1: true, t2: false },
   workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
@@ -303,9 +304,9 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
       activity: ["Team created — agents onboarding", "Shared goal set"],
-      template: "custom",
+      template: cur.tTemplate || "custom",
     };
-    set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {} }));
+    set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {}, tTemplate: "custom" }));
     showToast(name + " created");
     saveTeam(team).catch((e) => console.error("[createTeam] persist failed:", e));
     return id;

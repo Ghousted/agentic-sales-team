@@ -27,6 +27,8 @@ export const agents = pgTable(
     score: integer("score").notNull(),
     goal: text("goal").notNull(),
     char: integer("char"),
+    type: text("type").notNull().default("custom"),
+    capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.id] }) })
@@ -48,6 +50,7 @@ export const teams = pgTable(
     meetings: integer("meetings").notNull().default(0),
     pipeline: text("pipeline").notNull().default("—"),
     leads: integer("leads").notNull().default(0),
+    template: text("template").notNull().default("custom"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.id] }) })
@@ -63,6 +66,7 @@ export const agentConfig = pgTable(
     role: text("role"),
     goal: text("goal"),
     permissions: jsonb("permissions").$type<Record<string, boolean>>(),
+    settings: jsonb("settings").$type<Record<string, Record<string, unknown>>>(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.agentId] }) })
 );

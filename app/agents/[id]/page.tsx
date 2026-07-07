@@ -1,11 +1,14 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
 import { buildAgentDetail } from "@/lib/agentDetail";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
+import { enqueueOutreachJob } from "@/lib/jobs/actions";
+import type { DraftDTO } from "@/lib/leads/types";
 
 const pastel = [
   { bg: "#F1EDFD", bd: "#E3DBF9", fg: "#5122C1" },
@@ -68,6 +71,37 @@ export default function AgentDetail() {
     () => (sel ? buildAgentDetail(sel, { paused, userName: s.userName, roster: agents }) : null),
     [sel, paused, s.userName, agents]
   );
+
+  const [drafts, setDrafts] = useState<DraftDTO[]>([]);
+  const [runningOutreach, setRunningOutreach] = useState(false);
+
+  const refetchDrafts = useCallback(async (id: string) => {
+    setDrafts(await listDraftsForAgent(id));
+  }, []);
+  useEffect(() => {
+    if (selId) refetchDrafts(selId);
+  }, [selId, refetchDrafts]);
+
+  const runOutreachForAgent = useCallback(async () => {
+    if (!sel) return;
+    setRunningOutreach(true);
+    const res = await enqueueOutreachJob({ agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task } });
+    if (!("error" in res)) {
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* surfaced below */ }
+    }
+    setRunningOutreach(false);
+    refetchDrafts(sel.id);
+  }, [sel, refetchDrafts]);
+
+  const sendDraft = useCallback(async (d: DraftDTO) => {
+    const url = "mailto:" + encodeURIComponent(d.leadEmail) + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
+    window.open(url, "_blank");
+  }, []);
+
+  const confirmSent = useCallback(async (d: DraftDTO) => {
+    await markDraftSent(d.id);
+    if (selId) refetchDrafts(selId);
+  }, [selId, refetchDrafts]);
 
   if (!sel || !detail) return null;
   const selM = statusMeta(paused ? "waiting" : sel.status);
@@ -182,29 +216,26 @@ export default function AgentDetail() {
       {/* Emails */}
       <SectionTitle id="sec-emails">Emails</SectionTitle>
       <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
-        <div style={css("display:grid;grid-template-columns:repeat(5,1fr);gap:14px")}>
-          {detail.emailStats.map((d, i) => {
-            const p = pastel[i % 4];
-            return (
-              <div key={d[0]} style={css("background:" + p.bg + ";border:1px solid " + p.bd + ";border-radius:14px;padding:20px 16px;text-align:center")}>
-                <div style={css("font-size:13px;font-weight:600;color:" + p.fg)}>{d[0]}</div>
-                <div style={css("font-size:34px;font-weight:700;margin-top:6px;color:#18181B")}>{d[1]}</div>
-              </div>
-            );
-          })}
+        <div style={css("display:flex;align-items:center;gap:10px")}>
+          <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
+          <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
         </div>
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-          <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Email timeline</div>
-          <div style={css("display:flex;flex-direction:column")}>
-            {detail.emailTimeline.map((et, i) => (
-              <div key={i} style={css("display:flex;gap:14px;padding:10px 0;border-bottom:1px solid #F4F4F6;align-items:center")}>
-                <span style={css(chip(et.c[0], et.c[1]))}>{et.type}</span>
-                <div style={css("font-size:12.5px;color:#3F3F46;font-weight:500")}>{et.subject}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>to {et.to}</div></div>
-                <div style={css("margin-left:auto;font-size:11px;color:#A1A1AA")}>{et.time}</div>
-              </div>
-            ))}
+        {drafts.length === 0 ? (
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet. Add leads in the Leads tab, then hit “Run outreach”.</div>
+        ) : drafts.map((d) => (
+          <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+            <div style={css("display:flex;align-items:center;gap:8px")}>
+              <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#F1EDFD", d.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
+              <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail}</div>
+            </div>
+            <div style={css("font-size:13.5px;font-weight:700;margin-top:10px")}>{d.subject}</div>
+            <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px;white-space:pre-wrap")}>{d.body}</div>
+            <div style={css("display:flex;gap:8px;margin-top:12px")}>
+              <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+              {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Reach Outs */}

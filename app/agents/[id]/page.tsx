@@ -90,14 +90,15 @@ export default function AgentDetail() {
     setRunningOutreach(true);
     const res = await enqueueOutreachJob({ agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task } });
     if (!("error" in res)) {
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* surfaced below */ }
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort trigger; drafts are refetched below regardless */ }
     }
     setRunningOutreach(false);
     refetchDrafts(sel.id);
   }, [sel, refetchDrafts]);
 
-  const sendDraft = useCallback(async (d: DraftDTO) => {
-    const url = "mailto:" + encodeURIComponent(d.leadEmail) + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
+  const sendDraft = useCallback((d: DraftDTO) => {
+    // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
+    const url = "mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
     window.open(url, "_blank");
   }, []);
 

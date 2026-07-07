@@ -53,10 +53,10 @@ export async function POST() {
         }
       }
       await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
-        .where(eq(jobs.id, candidate.id));
+        .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     } catch (e) {
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })
-        .where(eq(jobs.id, candidate.id));
+        .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     }
   }
 

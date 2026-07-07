@@ -6,9 +6,10 @@ import { statusMeta } from "@/lib/data";
 import { buildAgentDetail } from "@/lib/agentDetail";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
-import { listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
+import { listLeads, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
-import type { DraftDTO } from "@/lib/leads/types";
+import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
+import Link from "next/link";
 
 const TABS: [string, string][] = [
   ["overview", "Overview"], ["leads", "Leads"], ["emails", "Emails"], ["reach", "Reach Outs"],
@@ -24,6 +25,10 @@ const PERM_DEFS: [string, string, boolean][] = [
   ["calls", "Make phone calls", false],
 ];
 const ROLE_OPTIONS = ["SDR", "BDR", "Account Executive", "Sales Manager", "Customer Success", "Recruiter"];
+const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
+  new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
+  replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
+};
 
 function permsFrom(saved?: Record<string, boolean>): Record<string, boolean> {
   const base: Record<string, boolean> = {};
@@ -64,6 +69,11 @@ export default function AgentDetail() {
     () => (sel ? buildAgentDetail(sel, { paused, userName: s.userName, roster: agents }) : null),
     [sel, paused, s.userName, agents]
   );
+
+  const [agentLeads, setAgentLeads] = useState<LeadDTO[]>([]);
+  useEffect(() => {
+    if (selId) listLeads({ agentId: selId }).then(setAgentLeads);
+  }, [selId]);
 
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
   const [runningOutreach, setRunningOutreach] = useState(false);
@@ -186,24 +196,33 @@ export default function AgentDetail() {
       </div>
 
       {/* Leads */}
-      <SectionTitle id="sec-leads">{detail.leadTitle}</SectionTitle>
+      <SectionTitle id="sec-leads">Leads</SectionTitle>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden;animation:fadeUp .25s ease")}>
-        <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr .8fr .6fr .9fr 1fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-          <div>Name</div><div>Company</div><div>Status</div><div>Score</div><div>Last contact</div><div>Campaign</div>
+        <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
+          <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>{agentLeads.length} lead{agentLeads.length === 1 ? "" : "s"}</div>
+          <Link href="/leads" style={{ ...css("margin-left:auto;font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
         </div>
-        {detail.leads.map((l) => {
-          const sc = detail.leadStatusColors[l.status] || ["#F4F4F5", "#71717A"];
-          return (
-            <div key={l.name} style={css("display:grid;grid-template-columns:1.4fr 1.2fr .8fr .6fr .9fr 1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-              <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title}</div></div>
-              <div style={css("color:#3F3F46")}>{l.company}</div>
-              <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-              <div style={css("font-weight:700;color:#5122C1")}>{l.score}</div>
-              <div style={css("color:#71717A")}>{l.last}</div>
-              <div style={css("color:#71717A;font-size:12px")}>{l.campaign}</div>
+        {agentLeads.length === 0 ? (
+          <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads assigned to {sel.name} yet. Add one in the Leads module.</div>
+        ) : (
+          <>
+            <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr .9fr .6fr .9fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;gap:10px")}>
+              <div>Name</div><div>Company</div><div>Status</div><div>Score</div><div>Added</div>
             </div>
-          );
-        })}
+            {agentLeads.map((l) => {
+              const sc = LEAD_STAGE_COLORS[l.status] || LEAD_STAGE_COLORS.new;
+              return (
+                <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr .9fr .6fr .9fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                  <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
+                  <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
+                  <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
+                  <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>
+                  <div style={css("color:#71717A")}>{new Date(l.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Emails */}

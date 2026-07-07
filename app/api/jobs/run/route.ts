@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { pickLeadsForRun, applyOutreachResult } from "@/lib/leads/store";
@@ -25,12 +25,12 @@ export async function POST() {
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"))).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
     const claimed = await db.update(jobs).set({ status: "running", startedAt: new Date() })
-      .where(and(eq(jobs.id, candidate.id), eq(jobs.status, "queued"))).returning({ id: jobs.id });
+      .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId), eq(jobs.status, "queued"))).returning({ id: jobs.id });
     if (!claimed.length) continue;
     processed++;
 

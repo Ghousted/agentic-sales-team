@@ -12,6 +12,8 @@ const STAGE_COLORS: Record<string, [string, string]> = {
   replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
 };
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
+const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
+const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
 
 export default function LeadsPage() {
   const { agents, byId, showToast } = useApp();
@@ -88,21 +90,49 @@ export default function LeadsPage() {
             <option value="">All stages</option>
             {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <Btn onClick={() => setShowAdd((v) => !v)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add lead</Btn>
+          <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add lead</Btn>
         </div>
       </div>
 
       {showAdd && (
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end")}>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name" style={css(INPUT + ";flex:1;min-width:140px")} />
-          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" style={css(INPUT + ";flex:1;min-width:120px")} />
-          <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company" style={css(INPUT + ";flex:1;min-width:120px")} />
-          <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" style={css(INPUT + ";flex:1;min-width:160px")} />
-          <select value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} style={css(INPUT + ";cursor:pointer")}>
-            <option value="">{agents[0] ? "Assign: " + agents[0].name : "No agents"}</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <Btn onClick={submitAdd} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Add</Btn>
+        <div onClick={() => setShowAdd(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
+          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+            <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
+              <div style={css("font-size:15px;font-weight:700")}>Add a lead</div>
+              <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Create a prospect and assign it to an agent.</div>
+            </div>
+            <div style={css("padding:18px 20px;display:flex;flex-direction:column;gap:14px")}>
+              <div>
+                <div style={css(LABEL)}>Name</div>
+                <input autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="Full name" style={css(FIELD)} />
+              </div>
+              <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:12px")}>
+                <div>
+                  <div style={css(LABEL)}>Title</div>
+                  <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. VP Data" style={css(FIELD)} />
+                </div>
+                <div>
+                  <div style={css(LABEL)}>Company</div>
+                  <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Ramp" style={css(FIELD)} />
+                </div>
+              </div>
+              <div>
+                <div style={css(LABEL)}>Email</div>
+                <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="name@company.com" style={css(FIELD)} />
+              </div>
+              <div>
+                <div style={css(LABEL)}>Assign to agent</div>
+                <select value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} style={css(FIELD + ";cursor:pointer;appearance:none;background:#fff")}>
+                  <option value="">{agents[0] ? agents[0].name : "No agents"}</option>
+                  {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
+              <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
+              <Btn onClick={submitAdd} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Add lead</Btn>
+            </div>
+          </div>
         </div>
       )}
 

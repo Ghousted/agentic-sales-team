@@ -9,6 +9,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
 import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
+import { CAPABILITIES } from "@/lib/agentTypes";
 import Link from "next/link";
 
 // [key, label, requiredCapability?] — no capability ⇒ always shown.
@@ -184,6 +185,13 @@ export default function AgentDetail() {
   const visibleSections = SECTIONS.filter(([, , cap]) => !cap || caps.includes(cap));
   const isVisible = (key: string) => visibleSections.some(([k]) => k === key);
   const researchedLeads = agentLeads.filter((l) => l.research);
+
+  const capMode = (cap: string): "auto" | "ask" =>
+    ((s.agentConfig[sel.id]?.settings?.[cap] as { mode?: string } | undefined)?.mode === "ask" ? "ask" : "auto");
+  const setCapMode = (cap: string, mode: "auto" | "ask") => {
+    const cur = s.agentConfig[sel.id]?.settings ?? {};
+    saveConfig(sel.id, { settings: { ...cur, [cap]: { ...(cur[cap] ?? {}), mode } } });
+  };
 
   const gotoTab = (key: string) => {
     setTab(key);
@@ -509,6 +517,26 @@ export default function AgentDetail() {
             })}
           </div>
         </div>
+        {sel.capabilities && sel.capabilities.length > 0 && (
+          <div>
+            <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Autonomy</div>
+            <div style={css("font-size:11px;color:#A1A1AA;margin-bottom:8px")}>How this agent runs each capability inside a team pod.</div>
+            <div style={css("display:flex;flex-direction:column;gap:8px")}>
+              {sel.capabilities.map((cap) => {
+                const mode = capMode(cap);
+                const label = CAPABILITIES.find((c) => c.id === cap)?.label ?? cap;
+                return (
+                  <div key={cap} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
+                    <div style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px")}>
+                      <Box onClick={() => setCapMode(cap, "auto")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
+                      <Box onClick={() => setCapMode(cap, "ask")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#5122C1;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal, permissions: cfgPerms })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
       </div>
     </div>

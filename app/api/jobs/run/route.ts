@@ -55,8 +55,7 @@ export async function POST() {
         }
         await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
-      } else {
-        // research
+      } else if (candidate.kind === "research") {
         const batch = await pickLeadsForResearch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
         for (const lead of batch) {
           try {
@@ -70,6 +69,9 @@ export async function POST() {
           }
         }
         await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { briefed: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else {
+        await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "Unknown job kind: " + candidate.kind })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       }
     } catch (e) {

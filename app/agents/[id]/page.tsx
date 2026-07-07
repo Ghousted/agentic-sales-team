@@ -156,7 +156,7 @@ export default function AgentDetail() {
     });
     if (!("error" in res)) {
       try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
-    }
+    } else { showToast(res.error); }
     setRunningResearch(false);
     listLeads({ agentId: sel.id }).then(setAgentLeads);
   }, [sel]);
@@ -183,6 +183,7 @@ export default function AgentDetail() {
   const caps = sel.capabilities ?? [];
   const visibleSections = SECTIONS.filter(([, , cap]) => !cap || caps.includes(cap));
   const isVisible = (key: string) => visibleSections.some(([k]) => k === key);
+  const researchedLeads = agentLeads.filter((l) => l.research);
 
   const gotoTab = (key: string) => {
     setTab(key);
@@ -309,12 +310,12 @@ export default function AgentDetail() {
         <SectionTitle id="sec-research">Research</SectionTitle>
         <div style={css("display:flex;flex-direction:column;gap:12px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
-            <div style={css("font-size:12.5px;color:#71717A")}>{agentLeads.filter((l) => l.research).length} of {agentLeads.length} researched</div>
+            <div style={css("font-size:12.5px;color:#71717A")}>{researchedLeads.length} of {agentLeads.length} researched</div>
             <Btn onClick={runResearch} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#42199E">{runningResearch ? "Researching…" : "Research leads"}</Btn>
           </div>
-          {agentLeads.filter((l) => l.research).length === 0 ? (
+          {researchedLeads.length === 0 ? (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet. Hit “Research leads” to enrich this agent&rsquo;s leads.</div>
-          ) : agentLeads.filter((l) => l.research).map((l) => (
+          ) : researchedLeads.map((l) => (
             <div key={l.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("font-size:13.5px;font-weight:700")}>{l.name}{l.company ? " · " + l.company : ""}</div>
               <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px")}>{l.research!.summary}</div>

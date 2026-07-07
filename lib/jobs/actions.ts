@@ -11,15 +11,23 @@ async function uid(): Promise<string | null> {
   return s?.userId ?? null;
 }
 
-export async function enqueueOutreachJob(input: { agent: AgentSnapshot; leadIds?: string[]; batchSize?: number }): Promise<{ jobId: string } | { error: string }> {
+export async function enqueueJob(input: { agent: AgentSnapshot; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number }): Promise<{ jobId: string } | { error: string }> {
   if (!isDbConfigured()) return { error: "Server not configured." };
   const userId = await uid();
   if (!userId) return { error: "Not signed in." };
+  // Capability gating: an agent can only run a kind its capabilities include.
+  if (input.capabilities && !input.capabilities.includes(input.kind)) {
+    return { error: "This agent can't run " + input.kind + "." };
+  }
   const [row] = await getDb().insert(jobs).values({
-    userId, agentId: input.agent.id, kind: "outreach", status: "queued",
+    userId, agentId: input.agent.id, kind: input.kind, status: "queued",
     params: { agent: input.agent, leadIds: input.leadIds ?? null, batchSize: input.batchSize ?? 5 },
   }).returning({ id: jobs.id });
   return { jobId: row.id };
+}
+
+export async function enqueueOutreachJob(input: { agent: AgentSnapshot; leadIds?: string[]; batchSize?: number }): Promise<{ jobId: string } | { error: string }> {
+  return enqueueJob({ agent: input.agent, kind: "outreach", leadIds: input.leadIds, batchSize: input.batchSize });
 }
 
 export async function getJob(id: string): Promise<{ status: string; result: unknown; error: string | null } | null> {

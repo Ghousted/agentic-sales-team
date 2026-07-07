@@ -93,7 +93,7 @@ export async function markDraftSent(draftId: string): Promise<void> {
   const [d] = await db.select().from(outreachDrafts)
     .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId))).limit(1);
   if (!d) return;
-  await db.update(outreachDrafts).set({ status: "sent", sentAt: new Date() }).where(eq(outreachDrafts.id, draftId));
+  await db.update(outreachDrafts).set({ status: "sent", sentAt: new Date() }).where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId)));
   // Advance the lead new → contacted (only if still 'new', so we never rewind a stage).
   await db.update(leads).set({ status: "contacted", updatedAt: new Date() })
     .where(and(eq(leads.id, d.leadId), eq(leads.userId, userId), eq(leads.status, "new")));
@@ -128,6 +128,6 @@ export async function applyOutreachResult(userId: string, agentId: string, lead:
   const stage = LEAD_STAGES.includes(result.stage as (typeof LEAD_STAGES)[number]) ? result.stage : lead.status;
   await db.update(leads).set({
     score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
-  }).where(eq(leads.id, lead.id));
+  }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "email_drafted", leadId: lead.id, text: `Drafted "${result.subject}" for ${lead.name}` });
 }

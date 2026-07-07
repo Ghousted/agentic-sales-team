@@ -121,6 +121,13 @@ export default function AgentDetail() {
         return;
       }
       if (job.status === "failed") { setScrapeNote("Scrape failed: " + (job.error ?? "unknown")); setRunningScrape(false); return; }
+      if (waited >= 40) {
+        setScrapeNote(job.status === "queued"
+          ? "Still queued — the scraper worker doesn't seem to be running."
+          : "Stopped watching — check the worker; the job may still finish in the background.");
+        setRunningScrape(false);
+        return;
+      }
       if (job.status === "queued" && waited > 12) setScrapeNote("Waiting for the scraper worker to start…");
       else setScrapeNote(`Working… ${r.steps ?? 0} steps, ${r.leadsFound ?? 0} found`);
       waited++;

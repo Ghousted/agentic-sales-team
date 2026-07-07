@@ -11,6 +11,16 @@ from browser_use import Agent, ChatGoogle, BrowserProfile, BrowserSession
 
 PROFILE_DIR = str(Path(__file__).resolve().parent / ".browser-profile")
 
+READ_ONLY_GUARD = (
+    "You are in STRICT READ-ONLY research mode. You may ONLY navigate, scroll, "
+    "open pages, and read/extract information. You must NEVER interact with any "
+    "account or content: do not post, comment, reply, message, DM, react, like, "
+    "follow, friend, connect, join, submit any form, sign in, change any setting, "
+    "or click any button that writes, sends, or publishes. If a step seems to "
+    "require any such action, skip it and try a different source instead. Never "
+    "take an action that modifies state on any site, especially logged-in accounts."
+)
+
 
 class Prospect(BaseModel):
     name: str
@@ -86,6 +96,7 @@ async def run_scrape(task: str, target: int, on_step) -> list[Prospect]:
         browser_session=session,
         output_model_schema=Prospects,
         register_new_step_callback=_on_step,
+        extend_system_message=READ_ONLY_GUARD,
     )
     history = await agent.run(max_steps=max_steps)
     result = history.structured_output  # property → Prospects | None

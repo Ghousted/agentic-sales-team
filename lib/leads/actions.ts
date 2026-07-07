@@ -7,8 +7,23 @@ import type { LeadDTO, DraftDTO } from "./types";
 export async function addLead(input: { agentId: string; name: string; title?: string; company?: string; email: string }): Promise<LeadDTO | null> {
   return store.addLead(input);
 }
-export async function listLeads(filter?: { agentId?: string; status?: string; source?: string }): Promise<LeadDTO[]> {
+export async function listLeads(filter?: { agentId?: string; status?: string; source?: string; review?: string }): Promise<LeadDTO[]> {
   return store.listLeads(filter);
+}
+export async function listWorkbook(agentId: string): Promise<LeadDTO[]> {
+  return store.listWorkbook(agentId);
+}
+export async function listLeadsForAgents(agentIds: string[]): Promise<LeadDTO[]> {
+  return store.listLeadsForAgents(agentIds);
+}
+export async function listCandidates(filter?: { agentId?: string }): Promise<LeadDTO[]> {
+  return store.listCandidates(filter);
+}
+export async function acceptLeads(ids: string[]): Promise<void> {
+  return store.setLeadReview(ids, "accepted");
+}
+export async function dismissLeads(ids: string[]): Promise<void> {
+  return store.setLeadReview(ids, "dismissed");
 }
 export async function getLead(id: string): Promise<LeadDTO | null> {
   return store.getLead(id);

@@ -28,3 +28,9 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# Scrape worker (Milestone 2)
+worker/.venv/
+worker/.browser-profile/
+worker/__pycache__/
+public/runs/

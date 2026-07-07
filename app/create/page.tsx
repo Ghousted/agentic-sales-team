@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
-import { AGENT_TYPES, CAPABILITIES, typeById, capabilitiesForType, type Capability } from "@/lib/agentTypes";
+import { AGENT_TYPES, CAPABILITIES, typeById, type Capability } from "@/lib/agentTypes";
 
 /* ---------- character sprite (public/agents-sprite.png, 980x980) ----------
    The design crops individual business-character illustrations out of one
@@ -76,7 +76,7 @@ function Stepper({ step }: { step: number }) {
 }
 
 export default function CreatePage() {
-  const { s, set, showToast, createAgent } = useApp();
+  const { s, set, createAgent } = useApp();
   const router = useRouter();
   const step = s.wStep;
   const character = s.wCharacter;
@@ -107,7 +107,7 @@ export default function CreatePage() {
             </div>
             <div>
               <div style={css("font-size:18px;font-weight:700;color:#181d27")}>{name}</div>
-              <div style={css("font-size:13px;color:#606b79")}>{s.wPosition}</div>
+              <div style={css("font-size:13px;color:#606b79")}>{at?.label ?? "Custom"}</div>
             </div>
           </div>
           <div>

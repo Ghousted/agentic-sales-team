@@ -48,3 +48,38 @@ export async function geminiGenerate(system: string, turns: Turn[], opts?: { max
   if (!text) throw new Error("Gemini returned no text.");
   return text.trim();
 }
+
+/** Call Gemini in JSON mode against a response schema. Returns the parsed object. Throws on failure. */
+export async function geminiJSON<T>(system: string, turns: Turn[], schema: Record<string, unknown>, opts?: { maxTokens?: number; temperature?: number }): Promise<T> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY is not set.");
+  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+  const body = {
+    system_instruction: { parts: [{ text: system }] },
+    contents: turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+    generationConfig: {
+      temperature: opts?.temperature ?? 0.6,
+      maxOutputTokens: opts?.maxTokens ?? 700,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json",
+      responseSchema: schema,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gemini ${res.status}: ${detail.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("");
+  if (!text) throw new Error("Gemini returned no JSON text.");
+  return JSON.parse(text) as T;
+}

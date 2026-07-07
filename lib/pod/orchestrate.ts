@@ -2,7 +2,7 @@ import "server-only";
 // Pod orchestration: resolve a team's members/capabilities/approval-modes and
 // enqueue or chain pod-stage jobs. Server-only. No engine work here — it wires
 // the existing research/outreach jobs into an auto-handed-off pipeline.
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
@@ -45,6 +45,10 @@ export async function countPending(userId: string, agentId: string, capability: 
 }
 
 export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<void> {
+  // Don't stack duplicates: skip if this team already has an active job for this capability.
+  const active = await getDb().select().from(jobs)
+    .where(and(eq(jobs.userId, userId), eq(jobs.kind, capability), inArray(jobs.status, ["queued", "running", "needs_approval"])));
+  if (active.some((j) => (j.params as { teamId?: string })?.teamId === teamId)) return;
   const info = await agentInfo(userId, agentId);
   if (!info) return;
   const mode = await approvalMode(userId, agentId, capability);

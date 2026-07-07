@@ -71,7 +71,7 @@ export default function TeamDetail() {
     if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
   };
   const runBook = async () => {
-    if (!team) return;
+    if (!team || working) return;
     setWorking(true);
     const res = await workTheBook(team.id);
     if (res.error) showToast(res.error);

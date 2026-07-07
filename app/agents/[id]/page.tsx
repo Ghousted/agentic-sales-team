@@ -15,6 +15,7 @@ import Link from "next/link";
 const SECTIONS: [string, string, string?][] = [
   ["overview", "Overview"],
   ["leads", "Leads"],
+  ["research", "Research", "research"],
   ["emails", "Emails", "outreach"],
   ["reach", "Reach Outs", "follow-up"],
   ["meetings", "Meetings", "book-meeting"],
@@ -49,7 +50,7 @@ function SectionTitle({ id, children }: { id: string; children: React.ReactNode 
 }
 
 export default function AgentDetail() {
-  const { s, agents, byId, togglePause, deleteAgent, saveConfig } = useApp();
+  const { s, agents, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
@@ -87,6 +88,7 @@ export default function AgentDetail() {
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
   const [runningOutreach, setRunningOutreach] = useState(false);
   const [runningScrape, setRunningScrape] = useState(false);
+  const [runningResearch, setRunningResearch] = useState(false);
   const [scrapeNote, setScrapeNote] = useState("");
 
   const refetchDrafts = useCallback(async (id: string) => {
@@ -145,11 +147,30 @@ export default function AgentDetail() {
     poll();
   }, [sel]);
 
+  const runResearch = useCallback(async () => {
+    if (!sel) return;
+    setRunningResearch(true);
+    const res = await enqueueJob({
+      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+      kind: "research", capabilities: sel.capabilities,
+    });
+    if (!("error" in res)) {
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
+    }
+    setRunningResearch(false);
+    listLeads({ agentId: sel.id }).then(setAgentLeads);
+  }, [sel]);
+
   const sendDraft = useCallback((d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
     const url = "mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
     window.open(url, "_blank");
   }, []);
+
+  const copyMessage = useCallback((d: DraftDTO) => {
+    navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"));
+  }, [showToast]);
+  const openProfile = useCallback((url: string) => { window.open(url, "_blank"); }, []);
 
   const confirmSent = useCallback(async (d: DraftDTO) => {
     await markDraftSent(d.id);
@@ -283,6 +304,32 @@ export default function AgentDetail() {
         )}
       </div>
 
+      {/* Research */}
+      {isVisible("research") && (<>
+        <SectionTitle id="sec-research">Research</SectionTitle>
+        <div style={css("display:flex;flex-direction:column;gap:12px;animation:fadeUp .25s ease")}>
+          <div style={css("display:flex;align-items:center;gap:10px")}>
+            <div style={css("font-size:12.5px;color:#71717A")}>{agentLeads.filter((l) => l.research).length} of {agentLeads.length} researched</div>
+            <Btn onClick={runResearch} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#42199E">{runningResearch ? "Researching…" : "Research leads"}</Btn>
+          </div>
+          {agentLeads.filter((l) => l.research).length === 0 ? (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet. Hit “Research leads” to enrich this agent&rsquo;s leads.</div>
+          ) : agentLeads.filter((l) => l.research).map((l) => (
+            <div key={l.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+              <div style={css("font-size:13.5px;font-weight:700")}>{l.name}{l.company ? " · " + l.company : ""}</div>
+              <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px")}>{l.research!.summary}</div>
+              {l.research!.priorities.length > 0 && (
+                <div style={css("margin-top:10px")}><div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px")}>Priorities</div><div style={css("display:flex;gap:6px;flex-wrap:wrap")}>{l.research!.priorities.map((p, i) => <span key={i} style={css(chip("#F1EDFD", "#5122C1"))}>{p}</span>)}</div></div>
+              )}
+              {l.research!.hooks.length > 0 && (
+                <div style={css("margin-top:10px")}><div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px")}>Hooks</div><div style={css("display:flex;flex-direction:column;gap:4px")}>{l.research!.hooks.map((h, i) => <div key={i} style={css("font-size:12px;color:#3F3F46")}>• {h}</div>)}</div></div>
+              )}
+              <div style={css("margin-top:10px;font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>Angle:</span> {l.research!.angle}</div>
+            </div>
+          ))}
+        </div>
+      </>)}
+
       {/* Emails */}
       {isVisible("emails") && (<>
         <SectionTitle id="sec-emails">Emails</SectionTitle>
@@ -299,12 +346,17 @@ export default function AgentDetail() {
             <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("display:flex;align-items:center;gap:8px")}>
                 <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#F1EDFD", d.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
-                <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail}</div>
+                <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail || (d.leadPlatform ? d.leadPlatform + " DM" : "no email")}</div>
               </div>
               <div style={css("font-size:13.5px;font-weight:700;margin-top:10px")}>{d.subject}</div>
               <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px;white-space:pre-wrap")}>{d.body}</div>
               <div style={css("display:flex;gap:8px;margin-top:12px")}>
-                <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+                {d.leadEmail ? (
+                  <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+                ) : (<>
+                  <Btn onClick={() => copyMessage(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Copy message</Btn>
+                  {d.leadProfileUrl && <Btn onClick={() => openProfile(d.leadProfileUrl!)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Open profile</Btn>}
+                </>)}
                 {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
               </div>
             </div>

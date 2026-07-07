@@ -3,12 +3,12 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
-import { TEAM_TEMPLATES, templateById, type Capability } from "@/lib/agentTypes";
+import { TEAM_TEMPLATES, templateById, AGENT_TYPES, type Capability } from "@/lib/agentTypes";
 
 const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 
 export default function TeamModal() {
-  const { s, set, agents, createTeam } = useApp();
+  const { s, set, agents, createTeam, quickCreateAgent } = useApp();
   const router = useRouter();
   const selCount = Object.keys(s.tSel).filter((k) => s.tSel[k]).length;
   const close = () => set({ showTeamModal: false });
@@ -102,6 +102,33 @@ export default function TeamModal() {
                     return <span key={c} style={css("font-size:11px;font-weight:600;border-radius:99px;padding:4px 11px;" + (ok ? "color:#1B7A3D;background:#E7F7EC" : "color:#B45309;background:#FDEBCB"))}>{ok ? "✓ " : "○ "}{c}</span>;
                   })}
                 </div>
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
+            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
+            const covered = new Set<string>();
+            for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
+            const gaps = req.filter((c) => !covered.has(c));
+            if (!gaps.length) return null;
+            // Prefer a single-capability type for each gap (scout/writer/followup), else first type that has it.
+            const typeForCap = (c: string) => (AGENT_TYPES.find((t) => !t.custom && t.capabilities.length === 1 && t.capabilities[0] === c) || AGENT_TYPES.find((t) => t.capabilities.includes(c as Capability)));
+            return (
+              <div style={css("display:flex;flex-direction:column;gap:8px")}>
+                <div style={css("font-size:11.5px;color:#71717A")}>Missing capabilities — create a fitting agent:</div>
+                {gaps.map((c) => {
+                  const t = typeForCap(c);
+                  if (!t) return null;
+                  return (
+                    <div key={c} style={css("display:flex;gap:8px;align-items:center;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:8px 10px")}>
+                      <div style={css("font-size:12px;font-weight:600;color:#3F3F46;flex:1")}>{t.label} <span style={css("color:#A1A1AA;font-weight:400")}>· {c}</span></div>
+                      <input value={s.tGapName[c] || ""} onChange={(e) => set((p) => ({ tGapName: { ...p.tGapName, [c]: e.target.value } }))} placeholder="Name" style={css("border:1px solid #E4E4E7;border-radius:8px;padding:6px 10px;font-size:12px;width:120px;outline:none")} />
+                      <Btn onClick={() => { const id = quickCreateAgent(t.id, s.tGapName[c] || t.label); set((p) => ({ tSel: { ...p.tSel, [id]: true } })); }} style="background:#5122C1;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Create</Btn>
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}

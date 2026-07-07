@@ -66,6 +66,7 @@ interface State extends WizardState {
   tGoal: string;
   tSel: Record<string, boolean>;
   tTemplate: string;
+  tGapName: Record<string, string>;
   // settings
   toggles: Record<string, boolean>;
   workspaceName: string;
@@ -88,7 +89,7 @@ const initialState: State = {
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
-  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom",
+  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom", tGapName: {},
   toggles: { t0: true, t1: true, t2: false },
   workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
@@ -117,6 +118,7 @@ interface Ctx {
   sendChat: (text: string) => void;
   createTeam: () => string;
   createAgent: () => void;
+  quickCreateAgent: (typeId: string, name: string) => string;
   animateCount: () => void;
 }
 
@@ -306,7 +308,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       activity: ["Team created — agents onboarding", "Shared goal set"],
       template: cur.tTemplate || "custom",
     };
-    set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {}, tTemplate: "custom" }));
+    set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {} }));
     showToast(name + " created");
     saveTeam(team).catch((e) => console.error("[createTeam] persist failed:", e));
     return id;
@@ -335,6 +337,21 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     }
   }, [set]);
 
+  const quickCreateAgent = useCallback((typeId: string, name: string): string => {
+    const at = typeById(typeId);
+    const id = "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const nm = name.trim() || (at?.label ?? "Agent");
+    const initials = nm.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    const agent: Agent = {
+      id, name: nm, initials, role: at?.label ?? "Custom", color: "#5122C1", status: "working",
+      task: "Onboarding", score: 75, goal: "Ramp up in week 1",
+      type: typeId, capabilities: at?.capabilities ?? [],
+    };
+    set((prev) => ({ extraAgents: prev.extraAgents.concat([agent]) }));
+    saveAgent(agent).catch((e) => console.error("[quickCreateAgent] persist failed:", e));
+    return id;
+  }, [set]);
+
   // Lifecycle: count-up + hub tick + live activity, running once authenticated.
   useEffect(() => {
     if (!s.authed) return;
@@ -355,7 +372,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, createTeam, createAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

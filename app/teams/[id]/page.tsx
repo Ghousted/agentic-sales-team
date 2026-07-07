@@ -5,6 +5,7 @@ import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { templateById, type Capability } from "@/lib/agentTypes";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -76,6 +77,22 @@ export default function TeamDetail() {
           </div>
         ))}
       </div>
+
+      {(() => {
+        const req = (templateById(team.template)?.requiredCapabilities ?? []) as Capability[];
+        if (!req.length) return null;
+        const covered = new Set<string>();
+        for (const a of members) if (a) for (const c of a.capabilities) covered.add(c);
+        return (
+          <div style={css("display:flex;align-items:center;gap:8px;flex-wrap:wrap")}>
+            <div style={css("font-size:12px;font-weight:600;color:#71717A")}>Coverage:</div>
+            {req.map((c) => {
+              const ok = covered.has(c);
+              return <span key={c} style={css("font-size:11px;font-weight:600;border-radius:99px;padding:4px 11px;" + (ok ? "color:#1B7A3D;background:#E7F7EC" : "color:#B45309;background:#FDEBCB"))}>{ok ? "✓ " : "missing "}{c}</span>;
+            })}
+          </div>
+        );
+      })()}
 
       <div style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>

@@ -8,6 +8,8 @@ import { css, Box, Btn } from "@/components/primitives";
 import { templateById, type Capability } from "@/lib/agentTypes";
 import { listLeadsForAgents } from "@/lib/leads/actions";
 import type { LeadDTO } from "@/lib/leads/types";
+import { workTheBook, listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
+import type { ApprovalDTO } from "@/lib/pod/types";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -27,12 +29,14 @@ function weekSeries(teamId: string, activity: number): number[] {
 }
 
 export default function TeamDetail() {
-  const { agents, teams, byId, addTeamMembers } = useApp();
+  const { agents, teams, byId, addTeamMembers, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
   const [pick, setPick] = useState<Record<string, boolean>>({});
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
+  const [working, setWorking] = useState(false);
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
 
@@ -40,8 +44,9 @@ export default function TeamDetail() {
   useEffect(() => {
     if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
     else setTeamLeads([]);
+    if (team) listPendingApprovals(team.id).then(setApprovals);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberIds.join(",")]);
+  }, [memberIds.join(","), team?.id]);
 
   if (!team) return null;
 
@@ -49,7 +54,7 @@ export default function TeamDetail() {
   const avgScore = members.length ? Math.round(members.reduce((n, a) => n + a!.score, 0) / members.length) : 0;
   const activity = Math.max(0.55, Math.min(avgScore / 85, 1.15));
   const teamWeek = weekSeries(team.id, activity);
-  const working = members.filter((a) => a!.status === "working").length;
+  const workingCount = members.filter((a) => a!.status === "working").length;
 
   // Agents not already on this team, for the add picker.
   const candidates = agents.filter((a) => !team.members.includes(a.id));
@@ -60,6 +65,23 @@ export default function TeamDetail() {
     if (chosen.length) addTeamMembers(team.id, chosen);
     setShowAdd(false);
   };
+  const refetchPod = () => {
+    if (!team) return;
+    listPendingApprovals(team.id).then(setApprovals);
+    if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
+  };
+  const runBook = async () => {
+    if (!team) return;
+    setWorking(true);
+    const res = await workTheBook(team.id);
+    if (res.error) showToast(res.error);
+    else if (res.needsApproval) showToast("Sent for your approval below");
+    else { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ } showToast("Working the book…"); }
+    setWorking(false);
+    refetchPod();
+  };
+  const approve = async (id: string) => { await approveJob(id); try { await fetch("/api/jobs/run", { method: "POST" }); } catch {} refetchPod(); };
+  const reject = async (id: string) => { await rejectJob(id); refetchPod(); };
 
   const kpis: [string, string][] = [
     ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", String(teamLeads.length)], ["Avg score", avgScore ? String(avgScore) : "—"],
@@ -74,9 +96,12 @@ export default function TeamDetail() {
         <div style={css("min-width:0")}>
           <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{team.desc}</div>
-          <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {working} working now</div>
+          <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
-        <Btn onClick={openAdd} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none" styleHover="background:#42199E">+ Add agents</Btn>
+        <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
+          <Btn onClick={runBook} style={"background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;" + (working ? "opacity:.6" : "")} styleHover="background:#42199E">{working ? "Working…" : "Work the book"}</Btn>
+          <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -160,6 +185,22 @@ export default function TeamDetail() {
             <div style={css("font-size:12.5px;font-weight:700;color:#3B0FA8")}>Shared goal</div>
             <div style={css("font-size:12.5px;color:#6D28D9;margin-top:5px;line-height:1.55")}>{team.goal}</div>
           </div>
+          {approvals.length > 0 && (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+              <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Pending approvals <span style={css("font-size:11px;font-weight:700;color:#fff;background:#5122C1;border-radius:99px;padding:1px 7px")}>{approvals.length}</span></div>
+              <div style={css("display:flex;flex-direction:column;gap:10px")}>
+                {approvals.map((ap) => (
+                  <div key={ap.id} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:10px 12px")}>
+                    <div style={css("font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>{ap.agentName}</span> wants to {ap.capability} for {ap.leadCount} lead{ap.leadCount === 1 ? "" : "s"}.</div>
+                    <div style={css("display:flex;gap:8px;margin-top:9px")}>
+                      <Btn onClick={() => approve(ap.id)} style="border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Approve</Btn>
+                      <Btn onClick={() => reject(ap.id)} style="border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Reject</Btn>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Recent activity</div>
             <div style={css("display:flex;flex-direction:column;gap:9px")}>

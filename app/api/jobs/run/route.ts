@@ -25,7 +25,7 @@ export async function POST() {
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"))).orderBy(asc(jobs.createdAt)).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), eq(jobs.kind, "outreach"))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
@@ -38,26 +38,20 @@ export async function POST() {
     let created = 0;
     let failed = 0;
     try {
-      if (candidate.kind === "outreach") {
-        const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
-        for (const lead of batch) {
-          try {
-            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email });
-            await applyOutreachResult(userId, params.agent.id, lead, result);
-            created++;
-            drafts++;
-          } catch (e) {
-            console.error("[jobs/run] lead failed:", e);
-            failed++;
-          }
+      const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+      for (const lead of batch) {
+        try {
+          const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email });
+          await applyOutreachResult(userId, params.agent.id, lead, result);
+          created++;
+          drafts++;
+        } catch (e) {
+          console.error("[jobs/run] lead failed:", e);
+          failed++;
         }
-        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
-          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
-      } else {
-        // scrape / follow-up / book-meeting engines land in later milestones.
-        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { note: "Engine for '" + candidate.kind + "' is coming soon." } })
-          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       }
+      await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { draftsCreated: created, failed } })
+        .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     } catch (e) {
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })
         .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));

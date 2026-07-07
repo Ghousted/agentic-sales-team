@@ -310,15 +310,14 @@ git commit -m "Capability-aware Find-leads / Run-outreach triggers on agent deta
 - [ ] **Step 1: Write `requirements.txt`.** Create `worker/requirements.txt`:
 
 ```
-browser-use
-playwright
+browser-use==0.13.3
 psycopg[binary]
 python-dotenv
 pydantic
 Pillow
 ```
 
-(browser-use is intentionally unpinned; Step 8 records the version that actually installs.)
+> browser-use is pinned to **0.13.3** — the version verified to install and import on this machine's Python 3.14, and the version Task 5's code targets. 0.13.3 does **not** use Playwright (it drives Chrome via its own CDP layer), so there is no `playwright` line and no `playwright install` step. `pydantic` and `Pillow` arrive transitively via browser-use but are pinned explicitly for clarity.
 
 - [ ] **Step 2: Write `db.py`.** Create `worker/db.py`:
 
@@ -480,16 +479,20 @@ cd agentic-salesforce/worker
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium
 ```
 
 Reads `DATABASE_URL` and `GEMINI_API_KEY` from `../.env.local`.
+
+browser-use (0.13.x) drives a local **Google Chrome** via CDP — it uses an
+installed Chrome (or downloads a Chromium on first run). No `playwright install`
+step is needed. If the first run reports it can't find a browser, install Google
+Chrome (or run the `browser-use` CLI once to let it fetch one).
 
 ### Log in to Facebook (once)
 
 The worker uses a persistent browser profile at `./.browser-profile/` so it can
 act on your own logged-in sessions. On the first run it opens a real (headed)
-Chromium; log into Facebook (and any other platform you want reachable) in that
+Chrome; log into Facebook (and any other platform you want reachable) in that
 window. Those cookies persist for future runs.
 
 > Note: automating a logged-in Facebook account can violate Facebook's terms and
@@ -510,9 +513,9 @@ enqueue a job; the worker picks it up within a few seconds.
 
 Run:
 ```bash
-cd agentic-salesforce/worker && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && playwright install chromium
+cd agentic-salesforce/worker && python3 -m venv .venv && source .venv/bin/activate && pip install -U pip && pip install -r requirements.txt
 ```
-Expected: installs complete without error. (If `psycopg[binary]` fails to build, the machine may need `pip install "psycopg[binary]"` with a newer pip — run `pip install -U pip` first.)
+Expected: installs complete without error. This pulls browser-use 0.13.3 and its dependency tree (~80 packages) — it may take a few minutes. All deps have been verified to resolve on this machine's Python 3.14. (No `playwright install` — browser-use manages its own Chrome.)
 
 - [ ] **Step 6: Run the db self-test.**
 
@@ -524,10 +527,10 @@ Expected: `DB OK — queued scrape jobs: 0` (or however many are queued). This p
 Run: `cd /Users/ed3n/Desktop/ApexHuman/AgenticSalesforce && git status --short worker agentic-salesforce/worker`
 Expected: only `worker/requirements.txt`, `worker/db.py`, `worker/README.md` (and the `.gitignore` change) show — **not** `.venv/`, `.browser-profile/`, or `.env.local`.
 
-- [ ] **Step 8: Record the installed browser-use version.**
+- [ ] **Step 8: Confirm browser-use imports (version already pinned to 0.13.3).**
 
-Run: `cd agentic-salesforce/worker && source .venv/bin/activate && pip show browser-use | grep -i version`
-Then pin it in `requirements.txt` (e.g. change `browser-use` → `browser-use==<version>`) so Task 5's API target is reproducible.
+Run: `cd agentic-salesforce/worker && source .venv/bin/activate && python -c "from browser_use import Agent, ChatGoogle, BrowserProfile, BrowserSession; import importlib.metadata as m; print('browser-use', m.version('browser_use'))"`
+Expected: `browser-use 0.13.3` and no ImportError. (If a different version installed, note it in the report — Task 5's code targets 0.13.3's API.)
 
 - [ ] **Step 9: Commit.**
 
@@ -550,22 +553,21 @@ git commit -m "Scrape worker scaffold: requirements, DB access layer, README, gi
   - `build_task(settings: dict, agent: dict, target: int) -> str` — the natural-language task string.
   - `async run_scrape(task: str, target: int, on_step) -> list[Prospect]` — runs browser-use with a persistent profile; calls `on_step(idx: int, caption: str, url: str, png_bytes: bytes | None)` after each step; returns the extracted prospects.
 
-> **RECONCILE (browser-use API):** browser-use's import paths and callback/output-model API vary by version. The code below targets a recent stable API. Before implementing, confirm against the installed version: `python -c "import browser_use; print(browser_use.__version__); import browser_use as b; print([x for x in dir(b)])"`, and skim the installed package's README/examples (`pip show -f browser-use`). If `ChatGoogle`, `Controller(output_model=...)`, `register_new_step_callback`, or `BrowserProfile/BrowserSession` differ, adapt the imports/wiring while preserving the three interface signatures above. This is expected reconciliation, not a rewrite.
+> **API note — verified against browser-use 0.13.3.** The code below was checked against the actually-installed 0.13.3 API by constructing an `Agent` with these exact imports and kwargs. Specifics that matter: imports are `from browser_use import Agent, ChatGoogle, BrowserProfile, BrowserSession` (0.13.x has no Playwright and no `Controller`); Gemini is `ChatGoogle(model="gemini-2.5-flash", api_key=…, thinking_budget=0)`; structured output is `Agent(output_model_schema=Prospects)` and is read back via the `history.structured_output` **property** (not `final_result()`); the step callback signature is `(browser_state_summary, agent_output, step_number)`, where the screenshot is `browser_state_summary.screenshot` (base64) and a good caption is `agent_output.next_goal`. Transcribe the block verbatim — do **not** substitute a Playwright/`Controller` pattern from older browser-use docs.
 
 - [ ] **Step 1: Write `scraper.py`.** Create `worker/scraper.py`:
 
 ```python
 """Browser-use + Gemini scrape engine. Given an ICP task, drives a real browser
 to find prospects and returns structured Prospect rows. Emits per-step frames
-via an on_step callback."""
+via an on_step callback. Verified against browser-use 0.13.3."""
+import base64
 import os
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from browser_use import Agent, Controller
-from browser_use.llm import ChatGoogle
-from browser_use.browser import BrowserProfile, BrowserSession
+from browser_use import Agent, ChatGoogle, BrowserProfile, BrowserSession
 
 PROFILE_DIR = str(Path(__file__).resolve().parent / ".browser-profile")
 
@@ -611,27 +613,22 @@ Return them as structured data."""
 
 async def run_scrape(task: str, target: int, on_step) -> list[Prospect]:
     max_steps = min(60, 6 * target + 10)
-    controller = Controller(output_model=Prospects)
-    profile = BrowserProfile(user_data_dir=PROFILE_DIR, headless=False)
-    session = BrowserSession(browser_profile=profile)
+    # Persistent, headed profile → reuses the user's logged-in sessions (Facebook, etc.).
+    session = BrowserSession(
+        browser_profile=BrowserProfile(user_data_dir=PROFILE_DIR, headless=False)
+    )
 
-    step_counter = {"i": 0}
+    counter = {"i": 0}
 
     async def _on_step(browser_state_summary, agent_output, step_number):
-        i = step_counter["i"]
-        step_counter["i"] += 1
-        # Defensive extraction — field names vary across browser-use versions.
+        i = counter["i"]
+        counter["i"] += 1
+        caption = (getattr(agent_output, "next_goal", "")
+                   or getattr(agent_output, "thinking", "") or "").strip()
         url = getattr(browser_state_summary, "url", "") or ""
-        caption = ""
-        try:
-            state = getattr(agent_output, "current_state", None)
-            caption = getattr(state, "next_goal", "") or getattr(state, "thought", "") or ""
-        except Exception:
-            caption = ""
         png = None
         b64 = getattr(browser_state_summary, "screenshot", None)
         if b64:
-            import base64
             try:
                 png = base64.b64decode(b64)
             except Exception:
@@ -643,18 +640,17 @@ async def run_scrape(task: str, target: int, on_step) -> list[Prospect]:
 
     agent = Agent(
         task=task,
-        llm=ChatGoogle(model="gemini-2.5-flash", api_key=os.environ.get("GEMINI_API_KEY")),
-        controller=controller,
+        llm=ChatGoogle(model="gemini-2.5-flash",
+                       api_key=os.environ.get("GEMINI_API_KEY"),
+                       thinking_budget=0),
         browser_session=session,
+        output_model_schema=Prospects,
         register_new_step_callback=_on_step,
     )
     history = await agent.run(max_steps=max_steps)
-    try:
-        result = history.final_result()
-        if result:
-            return Prospects.model_validate_json(result).prospects
-    except Exception:
-        pass
+    result = history.structured_output  # property → Prospects | None
+    if result:
+        return result.prospects
     return []
 ```
 

@@ -283,7 +283,7 @@ export default function AgentDetail() {
         </div>
         {scrapeNote && <div style={css("padding:9px 18px;font-size:12px;color:#71717A;border-bottom:1px solid #ECECF1")}>{scrapeNote}</div>}
         {agentLeads.length === 0 ? (
-          <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads assigned to {sel.name} yet. Add one in the Leads module.</div>
+          <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads in {sel.name}’s team book yet.</div>
         ) : (
           <>
             <div style={css("display:grid;grid-template-columns:.9fr 1.4fr 1.2fr .9fr .6fr .9fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;gap:10px")}>

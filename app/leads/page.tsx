@@ -96,14 +96,18 @@ export default function LeadsPage() {
         </div>
         <div style={css("font-size:13px;color:#71717A")}>{view === "active" ? leads.length + " lead" + (leads.length === 1 ? "" : "s") : candidates.length + " to review"}</div>
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
-          <select value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
-            <option value="">All agents</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <select value={fStage} onChange={(e) => setFStage(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
-            <option value="">All stages</option>
-            {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          {view === "active" && (
+            <>
+              <select value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
+                <option value="">All agents</option>
+                {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <select value={fStage} onChange={(e) => setFStage(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
+                <option value="">All stages</option>
+                {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </>
+          )}
           <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add lead</Btn>
         </div>
       </div>

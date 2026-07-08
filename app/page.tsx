@@ -2,27 +2,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { statusMeta, parsePipeline, fmtMoney } from "@/lib/data";
+import { statusMeta } from "@/lib/data";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { getWorkspaceStats } from "@/lib/workspace/statsActions";
+import { listActivity } from "@/lib/workspace/statsActions";
+import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 
-const feedBase = [
-  { id: "sk", text: "booked a meeting with Datadog — VP Eng, Thursday 2pm" },
-  { id: "mt", text: "sent 12 personalized emails to the Fintech CTO segment" },
-  { id: "ew", text: "discovered 35 new leads matching the Healthcare ICP" },
-  { id: "rp", text: "finished research on 8 prospects using AWS" },
-  { id: "al", text: "got a reply from Snowflake — flagged as hot lead" },
-];
-const hubPools: Record<string, string[]> = {
-  sk: ["Drafting follow-up to Plaid", "Prepping Datadog brief", "Personalizing 14 CTO emails"],
-  mt: ["Sending Sequence B batch", "A/B testing subject lines", "Logging opens from Ramp"],
-  ew: ["Qualifying 35 new leads", "Enriching Healthcare ICP", "Scoring AWS accounts"],
-  rp: ["Polishing Snowflake proposal", "Waiting on your approval", "Modeling $180K ARR deal"],
-  al: ["Replying to Snowflake", "Scheduling Brex call", "Writing voice-note intro"],
-  nc: ["Rebalancing workloads", "Reviewing Q3 pipeline", "Coaching Sequence A copy"],
-  ps: ["Offline — back 6:00pm"],
-  lm: ["Needs LinkedIn reauth", "Screening 4 candidates"],
-};
 const hubTypes: Record<string, string> = { sk: "meeting", mt: "email", ew: "research", rp: "writing", al: "call", nc: "analytics", ps: "idle", lm: "alert" };
 const hubIcons: Record<string, [string, string, string]> = {
   email: ["✉", "iconFly 2.6s ease-in-out infinite", "#0EA5E9"], call: ["☏", "iconRing 1.6s ease-in-out infinite", "#2FA45C"],
@@ -35,6 +21,11 @@ export default function Home() {
   const { s, set, agents, teams, byId } = useApp();
   const router = useRouter();
   const [dims, setDims] = useState({ w: 1280, h: 800 });
+  const [ws, setWs] = useState<WorkspaceStats | null>(null);
+  const [acts, setActs] = useState<ActivityItem[]>([]);
+  useEffect(() => { getWorkspaceStats().then(setWs); listActivity(6).then(setActs); }, []);
+  const paMap = new Map((ws?.perAgent ?? []).map((p) => [p.agentId, p]));
+  const maxOut = Math.max(1, ...(ws?.perAgent ?? []).map((p) => p.leadsWorked));
 
   useEffect(() => {
     const on = () => setDims({ w: window.innerWidth, h: window.innerHeight });
@@ -53,33 +44,21 @@ export default function Home() {
     const ang = ((-90 + (i * 360) / HN) * Math.PI) / 180;
     const x = Math.round(380 + Math.cos(ang) * 272);
     const y = Math.round(262 + Math.sin(ang) * 186);
-    const pool = hubPools[a.id] || ["Onboarding — building prospect lists"];
     const ic = hubIcons[hubTypes[a.id] || "writing"];
     const m = statusMeta(a.status);
-    return { a, i, x, y, m, ic, badge: pool[(tick + i) % pool.length] };
+    const latest = acts.find((f) => f.agentId === a.id);
+    return { a, i, x, y, m, ic, badge: latest ? latest.text.slice(0, 40) : (a.status === "working" ? "Working…" : "Idle") };
   });
   const collabs = HN >= 5 ? [[0, 2], [1, 4]] : [];
 
-  const hubWorking = hubMembers.filter((a) => a.status === "working").length;
-
-  // Hero stats derived from the teams in view (all, or the selected pill) and
-  // the working agents shown in the hub — so the ring/pills track real data.
-  const scopeTeams = s.hubTeam === "all" ? teams : teams.filter((t) => t.id === s.hubTeam);
-  const meetingsBooked = scopeTeams.reduce((n, t) => n + t.meetings, 0);
-  const scopePipeline = scopeTeams.reduce((n, t) => n + parsePipeline(t.pipeline), 0);
-  // Monthly target: a ~20%-above-current stretch goal, rounded to a clean 10.
-  const meetingsTarget = Math.max(10, Math.ceil((meetingsBooked * 1.2) / 10) * 10);
-  const goalPct = Math.min(100, Math.round((meetingsBooked / meetingsTarget) * 100 * ct));
-  const goalDone = Math.round(meetingsBooked * ct);
-  const tasksRunning = hubMembers.reduce((n, a) => n + (a.status === "working" ? (hubPools[a.id]?.length ?? 3) : 0), 0);
+  const hubWorking = ws?.activeAgents ?? 0;
+  const leadsWorked = ws?.leadsWorked ?? 0;
+  const tasksRunning = ws?.tasksRunning ?? 0;
   const monthLabel = new Date().toLocaleString("en-US", { month: "long" }).toUpperCase();
 
-  const lastF = s.feedExtra[0] || feedBase[tick % feedBase.length];
-  const lastA = byId(lastF.id) || agents[0];
-  const hubLive = (lastA.name + " " + lastF.text).slice(0, 90);
-  const lastF2 = s.feedExtra[1] || feedBase[(tick + 1) % feedBase.length];
-  const lastA2 = byId(lastF2.id) || agents[0];
-  const hubLive2 = (lastA2.name + " " + lastF2.text).slice(0, 90);
+  const actLine = (f?: ActivityItem) => (f ? (byId(f.agentId)?.name ?? "Agent") + " " + f.text : "");
+  const hubLive = actLine(acts[0]).slice(0, 90);
+  const hubLive2 = actLine(acts[1]).slice(0, 90);
 
   const sbW = s.sidebarOpen ? 224 : 70;
   const hubCardW = dims.w - sbW - 52 - 2;
@@ -126,16 +105,15 @@ export default function Home() {
             <div style={css("position:relative;width:124px;height:124px;display:flex;align-items:center;justify-content:center")}>
               <div style={css("position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out infinite")} />
               <div style={css("position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out 1.5s infinite")} />
-              <div style={css("width:124px;height:124px;border-radius:50%;background:conic-gradient(#B57BFF 0 " + goalPct + "%,rgba(255,255,255,.12) " + goalPct + "% 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 44px rgba(139,92,246,.4)")}>
+              <div style={css("width:124px;height:124px;border-radius:50%;background:conic-gradient(#B57BFF 0 100%,rgba(255,255,255,.12) 100% 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 44px rgba(139,92,246,.4)")}>
                 <div style={css("width:106px;height:106px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center")}>
-                  <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1")}>{goalDone}<span style={css("font-size:13px;color:#8F7EC9")}>/{meetingsTarget}</span></div>
-                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#A99BD8;margin-top:3px")}>MEETINGS · {monthLabel}</div>
+                  <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1")}>{leadsWorked}</div>
+                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#A99BD8;margin-top:3px")}>LEADS WORKED · {monthLabel}</div>
                 </div>
               </div>
             </div>
             <div style={css("display:flex;gap:8px")}>
               <div style={css("font-size:10.5px;font-weight:600;color:#E5DEFF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:4px 11px;backdrop-filter:blur(6px)")}>⚡ {hubWorking} working · {tasksRunning} tasks</div>
-              <div style={css("font-size:10.5px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 11px")}>{fmtMoney(scopePipeline)} pipeline</div>
             </div>
           </div>
 
@@ -148,7 +126,7 @@ export default function Home() {
                   <div style={css("position:absolute;top:-8px;right:-10px;width:22px;height:22px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#18181B;box-shadow:0 3px 10px rgba(0,0,0,.35);animation:" + n.ic[1])}>{n.ic[0]}</div>
                 </div>
                 <div style={css("display:flex;align-items:center;gap:5px;margin-top:2px")}><span style={css("width:7px;height:7px;border-radius:50%;background:" + n.m.dot + ";flex:none;" + (n.a.status === "working" ? "animation:pulse 2s infinite" : ""))} /><span style={css("font-size:12px;font-weight:700;color:#F4F1FF")}>{n.a.name}</span></div>
-                <div style={css("width:60px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden")}><div style={css("width:" + n.a.score + "%;height:100%;border-radius:2px;background:linear-gradient(90deg," + n.a.color + ",#B57BFF)")} /></div>
+                <div style={css("width:60px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden")}><div style={css("width:" + Math.round(((paMap.get(n.a.id)?.leadsWorked ?? 0) / maxOut) * 100) + "%;height:100%;border-radius:2px;background:linear-gradient(90deg," + n.a.color + ",#B57BFF)")} /></div>
                 <div style={css("display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:#E5DEFF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);border-radius:99px;padding:4px 10px;white-space:nowrap;max-width:168px;overflow:hidden;text-overflow:ellipsis;animation:" + (tick % 2 ? "badgePopA" : "badgePopB") + " .4s ease")}><span>{n.badge}</span></div>
               </div>
             </Box>
@@ -182,9 +160,9 @@ export default function Home() {
                 </div>
               </div>
               <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px")}>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Meetings</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.meetings}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Pipeline</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.pipeline}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.leads}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.filter((id) => byId(id)?.status === "working").length}</div></div>
               </div>
             </Box>
           );

@@ -28,4 +28,3 @@ button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
 button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #5122C1; outline-offset: 2px; }
-@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(1.5); } }

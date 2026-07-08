@@ -33,7 +33,7 @@ export interface Team {
 }
 
 export interface ChatMsg {
-  who: "ai" | "me";
+  who: "me" | string;
   text: string;
 }
 

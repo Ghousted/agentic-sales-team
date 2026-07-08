@@ -11,7 +11,7 @@ export interface ChatAgent {
   task: string;
 }
 export interface ChatMsgIn {
-  who: "ai" | "me";
+  who: "me" | string;
   text: string;
 }
 

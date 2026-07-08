@@ -6,7 +6,7 @@ import { statusMeta } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
-import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
+import { enqueueOutreachJob, enqueueJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import { CAPABILITIES } from "@/lib/agentTypes";
 import { useLiveWork } from "@/lib/useLiveWork";
@@ -121,39 +121,20 @@ export default function AgentDetail() {
   const runScrape = useCallback(async () => {
     if (!sel) return;
     setRunningScrape(true);
-    setScrapeNote("");
+    setScrapeNote("Finding leads…");
     const res = await enqueueJob({
       agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
       kind: "scrape", capabilities: sel.capabilities, target: 10,
     });
     if ("error" in res) { setScrapeNote(res.error); setRunningScrape(false); return; }
-    // Poll the worker's progress. The Python worker (not this browser) runs it.
-    const jobId = res.jobId;
-    let waited = 0;
-    const poll = async (): Promise<void> => {
-      const job = await getJob(jobId);
-      if (!job) { setScrapeNote("Job not found."); setRunningScrape(false); return; }
-      const r = (job.result ?? {}) as { leadsFound?: number; steps?: number };
-      if (job.status === "done") {
-        setScrapeNote(`Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"} to review — open the Leads module’s Pending tab.`);
-        setRunningScrape(false);
-        listWorkbook(sel.id).then(setAgentLeads);
-        return;
-      }
-      if (job.status === "failed") { setScrapeNote("Scrape failed: " + (job.error ?? "unknown")); setRunningScrape(false); return; }
-      if (waited >= 40) {
-        setScrapeNote(job.status === "queued"
-          ? "Still queued — the scraper worker doesn't seem to be running."
-          : "Stopped watching — check the worker; the job may still finish in the background.");
-        setRunningScrape(false);
-        return;
-      }
-      if (job.status === "queued" && waited > 12) setScrapeNote("Waiting for the scraper worker to start…");
-      else setScrapeNote(`Working… ${r.steps ?? 0} steps, ${r.leadsFound ?? 0} found`);
-      waited++;
-      setTimeout(poll, 2500);
-    };
-    poll();
+    try {
+      const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: res.jobId }) });
+      const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string };
+      if (!r.ok || data.error) setScrapeNote(data.error ?? "Scrape failed.");
+      else setScrapeNote(`Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} to review — open the Leads module’s Pending tab.`);
+    } catch { setScrapeNote("Scrape failed — please try again."); }
+    setRunningScrape(false);
+    listWorkbook(sel.id).then(setAgentLeads);
   }, [sel]);
 
   const runResearch = useCallback(async () => {

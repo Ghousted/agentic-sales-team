@@ -319,8 +319,18 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       set({ chatTyping: false });
       for (const m of res.messages) append(m.who, m.text);
       if (!res.job) return;
-      // Research/outreach run in the Node runner; scrape is claimed by the worker.
-      if (res.job.kind !== "scrape") { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ } }
+      const job = res.job;
+      if (job.kind === "scrape") {
+        try {
+          const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
+          const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string };
+          if (!r.ok || data.error) append(job.agentId, "That scrape didn't run: " + (data.error ?? "unknown error"));
+          else append(job.agentId, `Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} — in Leads → Pending to accept.`);
+        } catch { append(job.agentId, "That scrape failed — please try again."); }
+        return;
+      }
+      // research / outreach: run in the Node runner, then poll getJob (unchanged below)
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
       let waited = 0;
       const poll = async (): Promise<void> => {
         let job;

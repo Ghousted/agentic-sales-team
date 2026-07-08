@@ -49,6 +49,7 @@ interface State extends WizardState {
   convId: string;
   chatInput: string;
   chatTyping: boolean;
+  chatLeadPicks: { id: string; name: string }[];
   feedExtra: FeedItem[];
   hubTick: number;
   countT: number;
@@ -87,7 +88,7 @@ const initialWizard: WizardState = {
 const initialState: State = {
   ...initialWizard,
   authed: false, authMode: "login", sidebarOpen: true,
-  chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false,
+  chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false, chatLeadPicks: [],
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
@@ -119,7 +120,7 @@ interface Ctx {
   saveConfig: (id: string, cfg: AgentConfig) => void;
   addTeamMembers: (teamId: string, ids: string[]) => void;
   sendChat: (text: string) => void;
-  sendTeamChat: (teamId: string, text: string) => void;
+  sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
   createTeam: () => string;
   createAgent: () => void;
   quickCreateAgent: (typeId: string, name: string) => string;
@@ -319,12 +320,12 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again.", false));
   }, [agents, set]);
 
-  const sendTeamChat = useCallback((teamId: string, text: string) => {
+  const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
     const t = (text || "").trim();
     if (!t) return;
     set((prev) => ({
       chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([{ who: "me", text: t }]) },
-      chatInput: "", chatTyping: true,
+      chatInput: "", chatTyping: true, chatLeadPicks: [],
     }));
     appendMessages(teamId, [{ who: "me", text: t }]).catch((e) => console.error("[sendTeamChat] persist user msg failed:", e));
 
@@ -333,7 +334,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       appendMessages(teamId, [{ who, text }]).catch(() => {});
     };
 
-    teamChat(teamId, t).then(async (res) => {
+    teamChat(teamId, t, leadIds).then(async (res) => {
       set({ chatTyping: false });
       for (const m of res.messages) append(m.who, m.text);
       if (!res.job) return;

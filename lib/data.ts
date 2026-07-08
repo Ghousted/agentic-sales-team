@@ -29,40 +29,6 @@ export function statusMeta(s: StatusKey): StatusMeta {
   return STATUS_META[s];
 }
 
-// Recent agent activity, shown in the dashboard/analytics feeds and the
-// notifications panel. `id` references a seed agent.
-export interface ActivityItem {
-  id: string;
-  text: string;
-  chip: string;
-  chipBg: string;
-  chipColor: string;
-  time: string;
-}
-export const ACTIVITY_FEED: ActivityItem[] = [
-  { id: "sk", text: "booked a meeting with Datadog — VP Eng, Thursday 2pm", chip: "Meeting", chipBg: "#FDF0F5", chipColor: "#DB2777", time: "2m" },
-  { id: "mt", text: "sent 12 personalized emails to the Fintech CTO segment", chip: "Outreach", chipBg: "#FEF6E8", chipColor: "#B45309", time: "9m" },
-  { id: "ew", text: "discovered 35 new leads matching the Healthcare ICP", chip: "Leads", chipBg: "#E7F7EC", chipColor: "#1B7A3D", time: "14m" },
-  { id: "rp", text: "finished research on 8 prospects using AWS", chip: "Research", chipBg: "#F1EDFD", chipColor: "#5122C1", time: "31m" },
-  { id: "al", text: "got a reply from Snowflake — flagged as hot lead", chip: "🔥 Hot", chipBg: "#FEECEC", chipColor: "#B91C1C", time: "1h" },
-];
-
-// Parse a team's pipeline string ("$1.1M", "$860K", "—") into raw dollars.
-export function parsePipeline(str: string): number {
-  const m = /([\d.]+)\s*([MK])?/i.exec(str || "");
-  if (!m) return 0;
-  const n = parseFloat(m[1]);
-  const u = (m[2] || "").toUpperCase();
-  return u === "M" ? n * 1e6 : u === "K" ? n * 1e3 : n;
-}
-
-// Format raw dollars back to a compact label ("$2.4M", "$860K").
-export function fmtMoney(n: number): string {
-  if (n >= 1e6) return "$" + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
-  if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
-  return "$" + Math.round(n);
-}
-
 export function chatsInit(): Chats {
   return {
     sk: [{ who: "ai", text: "Morning! I booked a meeting with Datadog's VP Eng for Thursday 2pm. I'm now working through the Fintech CTO list — 14 left to contact today." }],

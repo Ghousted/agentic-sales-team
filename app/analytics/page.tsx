@@ -1,64 +1,60 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { parsePipeline, fmtMoney } from "@/lib/data";
+import { getWorkspaceStats, listActivity } from "@/lib/workspace/statsActions";
+import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 import { av, chip } from "@/lib/visuals";
 import { css, Box } from "@/components/primitives";
 
-const feedBase = [
-  { id: "sk", text: "booked a meeting with Datadog — VP Eng, Thursday 2pm", chip: "Meeting", chipBg: "#FDF0F5", chipColor: "#DB2777", time: "2m" },
-  { id: "mt", text: "sent 12 personalized emails to the Fintech CTO segment", chip: "Outreach", chipBg: "#FEF6E8", chipColor: "#B45309", time: "9m" },
-  { id: "ew", text: "discovered 35 new leads matching the Healthcare ICP", chip: "Leads", chipBg: "#E7F7EC", chipColor: "#1B7A3D", time: "14m" },
-  { id: "rp", text: "finished research on 8 prospects using AWS", chip: "Research", chipBg: "#F1EDFD", chipColor: "#5122C1", time: "31m" },
-  { id: "al", text: "got a reply from Snowflake — flagged as hot lead", chip: "🔥 Hot", chipBg: "#FEECEC", chipColor: "#B91C1C", time: "1h" },
-];
+const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
+  lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
+  lead_researched: { label: "Research", bg: "#F1EDFD", fg: "#5122C1" },
+  email_drafted: { label: "Draft", bg: "#FEF6E8", fg: "#B45309" },
+  email_sent: { label: "Sent", bg: "#E9F5FE", fg: "#0369A1" },
+};
+function actChip(type: string) { return ACT_CHIP[type] ?? { label: type, bg: "#F4F4F5", fg: "#71717A" }; }
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "now"; if (m < 60) return m + "m"; const h = Math.round(m / 60);
+  if (h < 24) return h + "h"; return Math.round(h / 24) + "d";
+}
+
 const compareColors = ["#5122C1", "#F43F7E", "#F59E0B", "#0EA5E9"];
 const filters = ["Last 30 days", "All teams", "All roles"];
 const timeSlots = ["3:00p", "4:30p", "6:00p", "7:15p"];
-const pipeMonths = ["Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-const pipeRamp = [0.5, 0.62, 0.74, 0.86, 0.95, 1];
 
 export default function AnalyticsPage() {
   const { s, agents, teams, byId, showToast } = useApp();
   const router = useRouter();
-  const ct = s.countT;
   const activeCount = agents.filter((a) => a.status === "working").length;
 
+  const [ws, setWs] = useState<WorkspaceStats | null>(null);
+  const [acts, setActs] = useState<ActivityItem[]>([]);
+  useEffect(() => { getWorkspaceStats().then(setWs); listActivity(8).then(setActs); }, []);
+  const paMap = new Map((ws?.perAgent ?? []).map((p) => [p.agentId, p]));
+
   // ----- Real aggregates derived from the live agents + teams -----
-  const totalMeetings = teams.reduce((sum, t) => sum + t.meetings, 0);
-  const totalLeads = teams.reduce((sum, t) => sum + t.leads, 0);
-  const totalPipeline = teams.reduce((sum, t) => sum + parsePipeline(t.pipeline), 0);
-  const revenue = totalPipeline * 0.16;
-  const avgScore = agents.length ? Math.round(agents.reduce((sum, a) => sum + a.score, 0) / agents.length) : 0;
   const waitingCount = agents.filter((a) => a.status === "waiting").length;
   const attentionCount = agents.filter((a) => a.status === "error" || a.status === "offline").length;
-  const newAgents = s.extraAgents.length;
 
   const metricDefs: [string, string, string, string, boolean][] = [
-    ["Active Agents", String(Math.round(activeCount * ct)), "of " + agents.length, newAgents > 0 ? "▲ " + newAgents + " added" : activeCount + " working", true],
-    ["Meetings Booked", String(Math.round(totalMeetings * ct)), "across " + teams.length + " teams", "▲ this month", true],
-    ["Avg Agent Score", String(Math.round(avgScore * ct)), "/ 100", avgScore >= 85 ? "▲ healthy" : "▼ needs attention", avgScore >= 85],
-    ["Pipeline Generated", fmtMoney(totalPipeline * ct), "", "▲ " + fmtMoney(revenue) + " attributed", true],
+    ["Active Agents", String(ws?.activeAgents ?? 0), "of " + agents.length, (ws?.tasksRunning ?? 0) + " running", true],
+    ["Leads Worked", String(ws?.leadsWorked ?? 0), "accepted", "▲ pipeline", true],
+    ["Emails Sent", String(ws?.sent ?? 0), "of " + (ws?.drafted ?? 0) + " drafts", "▲ outreach", true],
+    ["Reply Rate", (ws?.replyRate ?? 0) + "%", "", (ws?.replyRate ?? 0) >= 20 ? "▲ healthy" : "building", (ws?.replyRate ?? 0) >= 20],
   ];
 
   const orgKpiDefs: [string, string, string][] = [
-    ["Pipeline", fmtMoney(totalPipeline), "▲ " + teams.length + " teams"],
-    ["Leads", totalLeads.toLocaleString(), "▲ across segments"],
-    ["Meetings", String(totalMeetings), "▲ this quarter"],
-    ["Revenue attributed", fmtMoney(revenue), "▲ ~16% of pipeline"],
+    ["Leads worked", String(ws?.leadsWorked ?? 0), "▲ accepted"],
+    ["Drafts", String(ws?.drafted ?? 0), "▲ written"],
+    ["Sent", String(ws?.sent ?? 0), "▲ outreach"],
+    ["Reply rate", (ws?.replyRate ?? 0) + "%", "▲ engaged"],
   ];
 
-  // Team comparison bars scale to the busiest team; pipeline-by-month ramps to
-  // the current real pipeline total (no historical series exists yet).
-  const maxMeetings = Math.max(1, ...teams.map((t) => t.meetings));
-  const pipeSeries = pipeRamp.map((f) => Math.round((totalPipeline / 1e3) * f));
-  const pipeMax = Math.max(1, ...pipeSeries);
-
-  // Outreach trend: deterministic 14-day shape seeded from real totals.
-  const trendData = Array.from({ length: 14 }, (_, i) => {
-    const emails = 40 + ((i * 11 + totalMeetings * 3 + totalLeads) % 55);
-    return [emails, Math.round(emails * 0.28)];
-  });
+  const teamLeads = (t: typeof teams[number]) => t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0);
+  const maxTeamLeads = Math.max(1, ...teams.map(teamLeads));
 
   // Upcoming tasks = what the working agents are actually doing right now.
   const upcoming = agents.filter((a) => a.status === "working").slice(0, 4).map((a, i) => ({
@@ -67,12 +63,8 @@ export default function AnalyticsPage() {
     c: a.color,
   }));
 
-  // Activity feed: live events first, then seed feed; drop any deleted agents.
-  const feed = s.feedExtra
-    .concat(feedBase as never)
-    .map((f) => ({ f, a: byId((f as { id: string }).id) }))
-    .filter((x) => x.a)
-    .slice(0, 6);
+  // Activity feed: real workspace activity; drop any deleted agents.
+  const feed = acts.map((f) => ({ f, a: byId(f.agentId) })).filter((x) => x.a).slice(0, 6);
 
   // Recent conversations = agents the user has actually chatted with.
   const recentConvs = Object.keys(s.chats)
@@ -80,12 +72,12 @@ export default function AnalyticsPage() {
     .filter((a) => a && (s.chats[a.id] || []).length > 0)
     .slice(0, 4);
 
-  const ranking = agents.slice().sort((a, b) => b.score - a.score).slice(0, 5);
+  const ranking = agents.slice().sort((a, b) => (paMap.get(b.id)?.leadsWorked ?? 0) - (paMap.get(a.id)?.leadsWorked ?? 0)).slice(0, 5);
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:20px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        <div style={css("font-size:13px;color:#71717A")}>{activeCount} agents active · {totalMeetings} meetings booked · {totalLeads.toLocaleString()} leads in pipeline</div>
+        <div style={css("font-size:13px;color:#71717A")}>{ws?.activeAgents ?? 0} agents active · {ws?.leadsWorked ?? 0} leads worked · {ws?.sent ?? 0} emails sent</div>
         <div style={css("margin-left:auto;display:flex;gap:8px")}>
           {filters.map((f) => <Box key={f} onClick={() => showToast("Filter: " + f)} style="font-size:12.5px;font-weight:600;color:#5122C1;background:#EEE9F8;border:none;border-radius:99px;padding:8px 16px;cursor:pointer" styleHover="background:#E3DBF9">{f} ⌄</Box>)}
         </div>
@@ -114,7 +106,7 @@ export default function AnalyticsPage() {
               <div key={i} style={css("display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #F4F4F6;animation:fadeUp .35s ease")}>
                 <div style={css(av(a!, 30))}>{a!.initials}</div>
                 <div style={css("font-size:12.5px;color:#52525B")}><strong style={{ color: "#18181B", fontWeight: 600 }}>{a!.name}</strong> {f.text}</div>
-                <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}><span style={css(chip(f.chipBg, f.chipColor))}>{f.chip}</span><span style={css("font-size:11px;color:#A1A1AA")}>{f.time}</span></div>
+                <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}><span style={css(chip(actChip(f.type).bg, actChip(f.type).fg))}>{actChip(f.type).label}</span><span style={css("font-size:11px;color:#A1A1AA")}>{relTime(f.createdAt)}</span></div>
               </div>
             ))}
           </div>
@@ -155,17 +147,20 @@ export default function AnalyticsPage() {
           <div style={css("font-size:13.5px;font-weight:700")}>Outreach trend</div>
           <div style={css("font-size:11px;color:#A1A1AA")}>Last 14 days</div>
           <div style={css("margin-left:auto;display:flex;gap:12px;font-size:11px;color:#71717A")}>
-            <span style={css("display:flex;align-items:center;gap:5px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#5122C1")} />Emails</span>
-            <span style={css("display:flex;align-items:center;gap:5px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#F43F7E")} />Replies</span>
+            <span style={css("display:flex;align-items:center;gap:5px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#5122C1")} />Drafts</span>
+            <span style={css("display:flex;align-items:center;gap:5px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#F43F7E")} />Sent</span>
           </div>
         </div>
         <div style={css("display:flex;align-items:flex-end;gap:10px;height:120px")}>
-          {trendData.map((d, i) => (
-            <div key={i} style={css("flex:1;display:flex;flex-direction:column;gap:2px;justify-content:flex-end;height:100%")}>
-              <div style={css("background:#5122C1;border-radius:4px 4px 0 0;height:" + d[0] + "%")} />
-              <div style={css("background:#F9BDD3;border-radius:0 0 4px 4px;height:" + d[1] + "%")} />
-            </div>
-          ))}
+          {(ws?.daily ?? []).map((d, i) => {
+            const max = Math.max(1, ...(ws?.daily ?? []).map((x) => x.drafted + x.sent));
+            return (
+              <div key={i} style={css("flex:1;display:flex;flex-direction:column;gap:2px;justify-content:flex-end;height:100%")}>
+                <div style={css("background:#5122C1;border-radius:4px 4px 0 0;height:" + Math.round((d.drafted / max) * 90) + "%")} />
+                <div style={css("background:#F9BDD3;border-radius:0 0 4px 4px;height:" + Math.round((d.sent / max) * 90) + "%")} />
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -182,23 +177,13 @@ export default function AnalyticsPage() {
       </div>
       <div style={css("display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start")}>
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:18px")}>
-          <div style={css("font-size:13.5px;font-weight:700;margin-bottom:14px")}>Team comparison — meetings booked</div>
+          <div style={css("font-size:13.5px;font-weight:700;margin-bottom:14px")}>Team comparison — leads</div>
           <div style={css("display:flex;flex-direction:column;gap:12px")}>
             {teams.map((t, i) => (
               <div key={t.id} style={css("display:flex;align-items:center;gap:12px")}>
                 <div style={css("width:130px;font-size:12px;font-weight:600;color:#3F3F46;flex:none")}>{t.name}</div>
-                <div style={css("flex:1;height:22px;background:#F4F4F5;border-radius:6px;overflow:hidden")}><div style={css("height:100%;border-radius:6px;background:" + compareColors[i % 4] + ";width:" + Math.round((t.meetings / maxMeetings) * 100) + "%;transition:width .4s")} /></div>
-                <div style={css("width:30px;font-size:12.5px;font-weight:700;text-align:right")}>{t.meetings}</div>
-              </div>
-            ))}
-          </div>
-          <div style={css("font-size:13.5px;font-weight:700;margin:20px 0 14px")}>Pipeline by month</div>
-          <div style={css("display:flex;align-items:flex-end;gap:10px;height:130px")}>
-            {pipeMonths.map((mo, i) => (
-              <div key={mo} style={css("flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end")}>
-                <div style={css("font-size:10.5px;font-weight:700;color:#5122C1")}>{fmtMoney(pipeSeries[i] * 1e3)}</div>
-                <div style={css("width:100%;max-width:44px;background:linear-gradient(180deg,#8B5CF6,#5122C1);border-radius:8px 8px 4px 4px;height:" + Math.round((pipeSeries[i] / pipeMax) * 88 + 8) + "%")} />
-                <div style={css("font-size:10.5px;color:#A1A1AA")}>{mo}</div>
+                <div style={css("flex:1;height:22px;background:#F4F4F5;border-radius:6px;overflow:hidden")}><div style={css("height:100%;border-radius:6px;background:" + compareColors[i % 4] + ";width:" + Math.round((teamLeads(t) / maxTeamLeads) * 100) + "%;transition:width .4s")} /></div>
+                <div style={css("width:30px;font-size:12.5px;font-weight:700;text-align:right")}>{teamLeads(t)}</div>
               </div>
             ))}
           </div>
@@ -212,7 +197,7 @@ export default function AnalyticsPage() {
                   <div style={css("width:20px;height:20px;border-radius:6px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;" + (i === 0 ? "background:#FDE68A;color:#92400E" : "background:#F4F4F5;color:#71717A"))}>{i + 1}</div>
                   <div style={css(av(a, 28))}>{a.initials}</div>
                   <div style={css("font-size:12.5px;font-weight:600")}>{a.name}<div style={css("font-size:10.5px;color:#A1A1AA;font-weight:400")}>{a.role}</div></div>
-                  <div style={css("margin-left:auto;font-size:13px;font-weight:700;color:#5122C1")}>{a.score}</div>
+                  <div style={css("margin-left:auto;font-size:13px;font-weight:700;color:#5122C1")}>{paMap.get(a.id)?.leadsWorked ?? 0}</div>
                 </Box>
               ))}
             </div>
@@ -220,7 +205,7 @@ export default function AnalyticsPage() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Fleet health</div>
             <div style={css("display:flex;align-items:center;gap:16px")}>
-              <div style={css("width:84px;height:84px;border-radius:50%;background:conic-gradient(#5122C1 0 " + avgScore + "%,#F1EDFD " + avgScore + "% 100%);display:flex;align-items:center;justify-content:center;flex:none")}><div style={css("width:62px;height:62px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700")}>{avgScore}%</div></div>
+              <div style={css("width:84px;height:84px;border-radius:50%;background:conic-gradient(#5122C1 0 " + (ws?.replyRate ?? 0) + "%,#F1EDFD " + (ws?.replyRate ?? 0) + "% 100%);display:flex;align-items:center;justify-content:center;flex:none")}><div style={css("width:62px;height:62px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700")}>{(ws?.replyRate ?? 0)}%</div></div>
               <div style={css("display:flex;flex-direction:column;gap:6px;font-size:12px;color:#3F3F46")}>
                 <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#5122C1")} />{activeCount} working</div>
                 <div style={css("display:flex;align-items:center;gap:7px")}><span style={css("width:8px;height:8px;border-radius:3px;background:#F59E0B")} />{waitingCount} waiting</div>

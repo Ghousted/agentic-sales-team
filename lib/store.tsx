@@ -9,7 +9,7 @@ import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
 import { teamChat } from "./chat/actions";
 import { getJob } from "./jobs/actions";
-import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
+import { saveAgent, saveTeam, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -114,6 +114,7 @@ interface Ctx {
   signedIn: (user: AuthedUser) => void;
   logout: () => Promise<void>;
   deleteAgent: (id: string) => void;
+  deleteTeam: (teamId: string) => void;
   togglePause: (id: string) => void;
   saveConfig: (id: string, cfg: AgentConfig) => void;
   addTeamMembers: (teamId: string, ids: string[]) => void;
@@ -244,6 +245,23 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     if (a) showToast(a.name + " deleted");
     setAgentRemoved(id, true).catch((e) => console.error("[deleteAgent] persist failed:", e));
   }, [agents, set, showToast]);
+
+  // Delete a user-CREATED team (removes it from local state + the DB row). Seed
+  // teams (TEAMS_BASE) aren't in extraTeams, so the UI only offers delete on created ones.
+  const deleteTeam = useCallback((teamId: string) => {
+    const t = sRef.current.extraTeams.find((x) => x.id === teamId);
+    set((prev) => {
+      const teamMembers = { ...prev.teamMembers };
+      delete teamMembers[teamId];
+      return {
+        extraTeams: prev.extraTeams.filter((x) => x.id !== teamId),
+        teamMembers,
+        hubTeam: prev.hubTeam === teamId ? "all" : prev.hubTeam,
+      };
+    });
+    if (t) showToast(t.name + " deleted");
+    deleteTeamAction(teamId).catch((e) => console.error("[deleteTeam] persist failed:", e));
+  }, [set, showToast]);
 
   const togglePause = useCallback((id: string) => {
     const a = agents.find((x) => x.id === id);
@@ -431,7 +449,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

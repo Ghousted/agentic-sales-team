@@ -2,7 +2,7 @@
 // Persistence for a user's workspace: created agents, created teams, and
 // per-agent removed/paused flags. The 8 seed agents / 4 seed teams stay static;
 // only a user's own changes are stored (and merged client-side on load).
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig, teamMembers } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import type { Agent, Team, StatusKey, ChatMsg, Chats } from "@/lib/types";
@@ -109,6 +109,17 @@ export async function saveTeam(team: Team): Promise<void> {
     meetings: team.meetings, pipeline: team.pipeline, leads: team.leads,
     template: team.template,
   });
+}
+
+/** Delete a user-created team (and its member override). Seed teams have no row,
+ * so this is a no-op for them — the UI only offers delete on created teams. */
+export async function deleteTeam(teamId: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  const db = getDb();
+  await db.delete(teams).where(and(eq(teams.userId, userId), eq(teams.id, teamId)));
+  await db.delete(teamMembers).where(and(eq(teamMembers.userId, userId), eq(teamMembers.teamId, teamId)));
 }
 
 /** Set the soft-delete flag for an agent (seed or created). */

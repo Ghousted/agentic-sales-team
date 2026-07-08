@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { statusMeta } from "@/lib/data";
+import { statusMeta, TEAMS_BASE } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { templateById, type Capability } from "@/lib/agentTypes";
@@ -31,7 +31,7 @@ function weekSeries(teamId: string, activity: number): number[] {
 }
 
 export default function TeamDetail() {
-  const { agents, teams, byId, addTeamMembers, showToast } = useApp();
+  const { agents, teams, byId, addTeamMembers, deleteTeam, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
@@ -39,9 +39,12 @@ export default function TeamDetail() {
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
   const [working, setWorking] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const { live, byLead } = useLiveWork();
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
+  // Only user-created teams can be deleted; the 4 seed teams are fixtures.
+  const isSeedTeam = TEAMS_BASE.some((t) => t.id === team.id);
 
   const memberIds = team ? team.members : [];
   useEffect(() => {
@@ -104,6 +107,12 @@ export default function TeamDetail() {
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={runBook} style={"background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;" + (working ? "opacity:.6" : "")} styleHover="background:#42199E">{working ? "Working…" : "Work the book"}</Btn>
           <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
+          {!isSeedTeam && (confirmDel ? (<>
+            <Btn onClick={() => { deleteTeam(team.id); router.push("/"); }} style="background:#FEECEC;color:#B91C1C;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FBD9D9">Confirm delete</Btn>
+            <Btn onClick={() => setConfirmDel(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
+          </>) : (
+            <Btn onClick={() => setConfirmDel(true)} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete team</Btn>
+          ))}
         </div>
       </div>
 

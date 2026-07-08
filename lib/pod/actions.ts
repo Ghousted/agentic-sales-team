@@ -6,6 +6,7 @@ import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { firstStage, enqueuePodStage, approvalMode } from "./orchestrate";
 import type { ApprovalDTO } from "./types";
+import { postTeamMessage } from "@/lib/chat/teamMessages";
 
 async function uid(): Promise<string | null> {
   const s = await getSession();
@@ -41,14 +42,22 @@ export async function approveJob(id: string): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
   if (!userId) return;
-  await getDb().update(jobs).set({ status: "queued" })
-    .where(and(eq(jobs.id, id), eq(jobs.userId, userId), eq(jobs.status, "needs_approval")));
+  const [row] = await getDb().update(jobs).set({ status: "queued" })
+    .where(and(eq(jobs.id, id), eq(jobs.userId, userId), eq(jobs.status, "needs_approval")))
+    .returning({ agentId: jobs.agentId, params: jobs.params });
+  if (!row) return; // wasn't pending (already handled) — no ack
+  const teamId = (row.params as { teamId?: string } | null)?.teamId;
+  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "Thanks — starting now.");
 }
 
 export async function rejectJob(id: string): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
   if (!userId) return;
-  await getDb().update(jobs).set({ status: "dismissed", finishedAt: new Date() })
-    .where(and(eq(jobs.id, id), eq(jobs.userId, userId), eq(jobs.status, "needs_approval")));
+  const [row] = await getDb().update(jobs).set({ status: "dismissed", finishedAt: new Date() })
+    .where(and(eq(jobs.id, id), eq(jobs.userId, userId), eq(jobs.status, "needs_approval")))
+    .returning({ agentId: jobs.agentId, params: jobs.params });
+  if (!row) return;
+  const teamId = (row.params as { teamId?: string } | null)?.teamId;
+  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "No problem — holding off for now.");
 }

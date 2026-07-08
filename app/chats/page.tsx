@@ -63,7 +63,7 @@ function ChatsInner() {
         if (!alive) return;
         set((prev) => {
           const local = prev.chats[teamId] || [];
-          return msgs.length >= local.length ? { chats: { ...prev.chats, [teamId]: msgs } } : prev;
+          return msgs.length > local.length ? { chats: { ...prev.chats, [teamId]: msgs } } : prev;
         });
         setPendingIds(new Set(pend.map((p) => p.id)));
       } catch { /* transient — try again next tick */ }

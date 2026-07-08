@@ -2,21 +2,49 @@ import "server-only";
 // The user's Products & Services catalog: CSV import + CRUD + pgvector semantic
 // search. Embeddings via Gemini text-embedding-004. Agents' source of truth.
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import { getDb, isDbConfigured, products } from "@/lib/db";
+import { getDb, isDbConfigured, products, productFolders } from "@/lib/db";
 import { geminiEmbed, geminiEmbedBatch } from "@/lib/ai/gemini";
 
-export interface ProductDTO { id: string; name: string; description: string; price: string; category: string }
-export interface ProductInput { name: string; description?: string; price?: string; category?: string }
+export interface ProductDTO { id: string; name: string; description: string; price: string; category: string; folderId: string | null }
+export interface ProductInput { name: string; description?: string; price?: string; category?: string; folderId?: string | null }
+export interface FolderDTO { id: string; name: string; count: number }
 
-const toDTO = (r: { id: string; name: string; description: string; price: string; category: string }): ProductDTO =>
-  ({ id: r.id, name: r.name, description: r.description, price: r.price, category: r.category });
+const PRODUCT_COLS = { id: products.id, name: products.name, description: products.description, price: products.price, category: products.category, folderId: products.folderId };
+const toDTO = (r: { id: string; name: string; description: string; price: string; category: string; folderId: string | null }): ProductDTO =>
+  ({ id: r.id, name: r.name, description: r.description, price: r.price, category: r.category, folderId: r.folderId });
 
 const embedText = (p: ProductInput) => [p.name, p.category, p.description].filter(Boolean).join("\n");
 
-export async function listProducts(userId: string): Promise<ProductDTO[]> {
+// ----- Folders -----
+export async function listFolders(userId: string): Promise<FolderDTO[]> {
   if (!isDbConfigured()) return [];
-  const rows = await getDb().select({ id: products.id, name: products.name, description: products.description, price: products.price, category: products.category })
-    .from(products).where(eq(products.userId, userId)).orderBy(desc(products.createdAt));
+  const db = getDb();
+  const [folders, rows] = await Promise.all([
+    db.select({ id: productFolders.id, name: productFolders.name }).from(productFolders).where(eq(productFolders.userId, userId)).orderBy(desc(productFolders.createdAt)),
+    db.select({ folderId: products.folderId }).from(products).where(eq(products.userId, userId)),
+  ]);
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.folderId) counts.set(r.folderId, (counts.get(r.folderId) ?? 0) + 1);
+  return folders.map((f) => ({ id: f.id, name: f.name, count: counts.get(f.id) ?? 0 }));
+}
+
+export async function addFolder(userId: string, name: string): Promise<FolderDTO | null> {
+  if (!isDbConfigured() || !name.trim()) return null;
+  const [row] = await getDb().insert(productFolders).values({ userId, name: name.trim() }).returning({ id: productFolders.id, name: productFolders.name });
+  return { id: row.id, name: row.name, count: 0 };
+}
+
+/** Delete a folder; its products fall back to "no folder" (FK on delete set null). */
+export async function deleteFolder(userId: string, id: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  await getDb().delete(productFolders).where(and(eq(productFolders.userId, userId), eq(productFolders.id, id)));
+}
+
+// ----- Products -----
+export async function listProducts(userId: string, folderId?: string | null): Promise<ProductDTO[]> {
+  if (!isDbConfigured()) return [];
+  const where = folderId ? and(eq(products.userId, userId), eq(products.folderId, folderId)) : eq(products.userId, userId);
+  const rows = await getDb().select(PRODUCT_COLS).from(products).where(where).orderBy(desc(products.createdAt));
   return rows.map(toDTO);
 }
 
@@ -24,15 +52,21 @@ export async function addProduct(userId: string, input: ProductInput): Promise<P
   if (!isDbConfigured() || !input.name?.trim()) return null;
   const embedding = await geminiEmbed(embedText(input));
   const [row] = await getDb().insert(products).values({
-    userId, name: input.name.trim(), description: input.description ?? "", price: input.price ?? "", category: input.category ?? "",
+    userId, folderId: input.folderId ?? null, name: input.name.trim(), description: input.description ?? "", price: input.price ?? "", category: input.category ?? "",
     embedding: embedding ?? null,
-  }).returning({ id: products.id, name: products.name, description: products.description, price: products.price, category: products.category });
+  }).returning(PRODUCT_COLS);
   return toDTO(row);
 }
 
 export async function deleteProduct(userId: string, id: string): Promise<void> {
   if (!isDbConfigured()) return;
   await getDb().delete(products).where(and(eq(products.userId, userId), eq(products.id, id)));
+}
+
+/** Move a product into a folder (or out of any folder when folderId is null). */
+export async function setProductFolder(userId: string, id: string, folderId: string | null): Promise<void> {
+  if (!isDbConfigured()) return;
+  await getDb().update(products).set({ folderId }).where(and(eq(products.userId, userId), eq(products.id, id)));
 }
 
 /** Minimal CSV parse: header row → columns; handles quoted fields with commas. */
@@ -56,14 +90,14 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
 }
 
-export async function importProductsCsv(userId: string, csvText: string): Promise<{ added: number; error?: string }> {
+export async function importProductsCsv(userId: string, csvText: string, folderId?: string | null): Promise<{ added: number; error?: string }> {
   if (!isDbConfigured()) return { added: 0, error: "Server not configured." };
   const parsed = parseCsv(csvText).slice(0, 200); // bounded import
   const wanted = parsed.filter((r) => (r.name ?? "").trim());
   if (wanted.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
   const inputs: ProductInput[] = wanted.map((r) => ({ name: r.name.trim(), description: r.description ?? "", price: r.price ?? "", category: r.category ?? "" }));
   const vecs = await geminiEmbedBatch(inputs.map(embedText));
-  const values = inputs.map((p, i) => ({ userId, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", embedding: vecs[i] ?? null }));
+  const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", embedding: vecs[i] ?? null }));
   try {
     await getDb().insert(products).values(values);
     return { added: values.length };
@@ -78,7 +112,7 @@ export async function searchProducts(userId: string, query: string, k = 5): Prom
   const vec = await geminiEmbed(query);
   if (!vec) return listProducts(userId).then((all) => all.slice(0, k)); // no embeddings → fall back to recent
   const lit = `[${vec.join(",")}]`;
-  const rows = await getDb().select({ id: products.id, name: products.name, description: products.description, price: products.price, category: products.category })
+  const rows = await getDb().select(PRODUCT_COLS)
     .from(products)
     .where(and(eq(products.userId, userId), isNotNull(products.embedding)))
     .orderBy(sql`${products.embedding} <=> ${lit}::vector`)

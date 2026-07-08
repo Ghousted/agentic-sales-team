@@ -13,6 +13,8 @@ import { CAPABILITIES } from "@/lib/agentTypes";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import Link from "next/link";
+import { getAgentStats } from "@/lib/agents/actions";
+import type { AgentStats } from "@/lib/agents/stats";
 
 // [key, label, requiredCapability?] — no capability ⇒ always shown.
 const SECTIONS: [string, string, string?][] = [
@@ -41,6 +43,14 @@ const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
   replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
 };
+const ACT_META: Record<string, { label: string; c: [string, string] }> = {
+  lead_added: { label: "Lead added", c: ["#F4F4F5", "#71717A"] },
+  lead_researched: { label: "Researched", c: ["#F1EDFD", "#5122C1"] },
+  email_drafted: { label: "Drafted", c: ["#FEF6E8", "#B45309"] },
+  email_sent: { label: "Sent", c: ["#E7F7EC", "#1B7A3D"] },
+};
+function actMeta(type: string) { return ACT_META[type] ?? { label: type, c: ["#F4F4F5", "#71717A"] as [string, string] }; }
+function relTime(iso: string): string { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
 
 function permsFrom(saved?: Record<string, boolean>): Record<string, boolean> {
   const base: Record<string, boolean> = {};
@@ -87,6 +97,11 @@ export default function AgentDetail() {
   const [agentLeads, setAgentLeads] = useState<LeadDTO[]>([]);
   useEffect(() => {
     if (selId) listWorkbook(selId).then(setAgentLeads);
+  }, [selId]);
+
+  const [stats, setStats] = useState<AgentStats | null>(null);
+  useEffect(() => {
+    if (selId) getAgentStats(selId).then(setStats);
   }, [selId]);
 
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
@@ -242,13 +257,13 @@ export default function AgentDetail() {
       <div id="sec-overview" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;animation:fadeUp .25s ease")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
           <div style={css("background:linear-gradient(135deg,#F3EFFE,#FDEEF6);border-radius:16px;padding:18px")}>
-            <div style={css("font-size:11px;font-weight:700;color:#5122C1;text-transform:uppercase;letter-spacing:.06em")}>✦ AI Summary — Today</div>
+            <div style={css("font-size:11px;font-weight:700;color:#5122C1;text-transform:uppercase;letter-spacing:.06em")}>✦ Summary</div>
             <div style={css("font-size:13.5px;color:#3F3F46;margin-top:8px;line-height:1.6")}>
-              {detail.summary}
+              {stats ? `${stats.leadsWorked} lead${stats.leadsWorked === 1 ? "" : "s"} · ${stats.researched} researched · ${stats.drafted} draft${stats.drafted === 1 ? "" : "s"} · ${stats.sent} sent` : "Loading…"}
             </div>
           </div>
           <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
-            {detail.overviewStats.map(([l, v]) => (
+            {([["Leads worked", stats?.leadsWorked ?? 0], ["Drafts sent", stats?.sent ?? 0], ["Replies", stats?.replies ?? 0]] as [string, number][]).map(([l, v]) => (
               <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px")}>
                 <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>
                 <div style={css("font-size:22px;font-weight:700;margin-top:4px")}>{v}</div>
@@ -258,8 +273,10 @@ export default function AgentDetail() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Recent accomplishments</div>
             <div style={css("display:flex;flex-direction:column;gap:9px")}>
-              {detail.accomplishments.map((w) => (
-                <div key={w} style={css("display:flex;gap:9px;align-items:center;font-size:12.5px;color:#3F3F46")}><span style={css("color:#2FA45C;font-weight:700")}>✓</span>{w}</div>
+              {!stats || stats.activity.length === 0 ? (
+                <div style={css("font-size:12.5px;color:#A1A1AA")}>No activity yet.</div>
+              ) : stats.activity.slice(0, 5).map((a, i) => (
+                <div key={i} style={css("display:flex;gap:9px;align-items:center;font-size:12.5px;color:#3F3F46")}><span style={css("color:#2FA45C;font-weight:700")}>✓</span>{a.text}</div>
               ))}
             </div>
           </div>
@@ -268,15 +285,7 @@ export default function AgentDetail() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Goals</div>
             <div style={css("display:flex;flex-direction:column;gap:8px")}>
-              {detail.goals.map((g) => <div key={g} style={css("font-size:12px;color:#3F3F46;background:#FAFAFB;border:1px solid #F0F0F3;border-radius:10px;padding:8px 11px")}>{g}</div>)}
-            </div>
-          </div>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Next actions</div>
-            <div style={css("display:flex;flex-direction:column;gap:9px")}>
-              {detail.nextActions.map((n) => (
-                <div key={n} style={css("display:flex;gap:9px;align-items:center;font-size:12px;color:#3F3F46")}><span style={css("width:7px;height:7px;border-radius:50%;background:#5122C1;flex:none")} />{n}</div>
-              ))}
+              <div style={css("font-size:12px;color:#3F3F46;background:#FAFAFB;border:1px solid #F0F0F3;border-radius:10px;padding:8px 11px")}>{sel.goal}</div>
             </div>
           </div>
         </div>

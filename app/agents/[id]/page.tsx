@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
-import { buildAgentDetail } from "@/lib/agentDetail";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
@@ -26,12 +25,9 @@ const SECTIONS: [string, string, string?][] = [
   ["meetings", "Meetings", "book-meeting"],
   ["tasks", "Tasks"],
   ["analytics", "Performance"],
-  ["memory", "Memory"],
   ["settings", "Configuration"],
 ];
 
-const days = ["M", "T", "W", "T", "F", "S", "S"];
-const heatShades = ["#F1EDFD", "#DCD2F8", "#C9B8F5", "#A88CF0", "#8B5CF6", "#5122C1"];
 // [key, label, default] — key is the stable id stored in agent_config.permissions.
 const PERM_DEFS: [string, string, boolean][] = [
   ["emails", "Send emails autonomously", true],
@@ -87,12 +83,6 @@ export default function AgentDetail() {
   }, [selId]);
 
   const paused = sel ? !!s.paused[sel.id] : false;
-  // Deterministic, agent-specific content for every sub-tab (derived from the
-  // agent's own role/task/score/status — see lib/agentDetail).
-  const detail = useMemo(
-    () => (sel ? buildAgentDetail(sel, { paused, userName: s.userName, roster: agents }) : null),
-    [sel, paused, s.userName, agents]
-  );
 
   const [agentLeads, setAgentLeads] = useState<LeadDTO[]>([]);
   useEffect(() => {
@@ -196,7 +186,7 @@ export default function AgentDetail() {
     if (selId) refetchDrafts(selId);
   }, [selId, refetchDrafts]);
 
-  if (!sel || !detail) return null;
+  if (!sel) return null;
   const selM = statusMeta(paused ? "waiting" : sel.status);
 
   const caps = sel.capabilities ?? [];
@@ -448,51 +438,13 @@ export default function AgentDetail() {
       <SectionTitle id="sec-analytics">Performance</SectionTitle>
       <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
         <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
-          {detail.kpis.map((k) => (
-            <div key={k[0]} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px")}>
-              <div style={css("font-size:11.5px;color:#71717A")}>{k[0]}</div>
-              <div style={css("font-size:22px;font-weight:700;margin-top:4px")}>{k[1]}</div>
-              <div style={css("display:inline-block;font-size:11px;font-weight:600;margin-top:6px;border-radius:99px;padding:2px 8px;color:#1B7A3D;background:#E7F7EC")}>{k[2]}</div>
+          {([["Leads worked", String(stats?.leadsWorked ?? 0)], ["Drafts sent", String(stats?.sent ?? 0)], ["Reply rate", (stats?.replyRate ?? 0) + "%"], ["Researched", String(stats?.researched ?? 0)]] as [string, string][]).map(([l, v]) => (
+            <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px")}>
+              <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>
+              <div style={css("font-size:22px;font-weight:700;margin-top:4px")}>{v}</div>
             </div>
           ))}
         </div>
-        <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13px;font-weight:700;margin-bottom:12px")}>Weekly outreach</div>
-            <div style={css("display:flex;align-items:flex-end;gap:8px;height:110px")}>
-              {detail.weekVals.map((v, i) => (
-                <div key={i} style={css("flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end")}>
-                  <div style={css("width:100%;max-width:34px;background:linear-gradient(180deg,#8B5CF6,#5122C1);border-radius:6px 6px 3px 3px;height:" + v + "%")} />
-                  <div style={css("font-size:10px;color:#A1A1AA")}>{days[i]}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13px;font-weight:700;margin-bottom:12px")}>Activity heatmap</div>
-            <div style={css("display:grid;grid-template-columns:repeat(12,1fr);gap:4px")}>
-              {detail.heat.map((v, i) => <div key={i} style={css("aspect-ratio:1;border-radius:4px;background:" + heatShades[v])} />)}
-            </div>
-            <div style={css("display:flex;gap:6px;margin-top:10px;font-size:10px;color:#A1A1AA;align-items:center")}>
-              Less<span style={css("width:9px;height:9px;border-radius:3px;background:#F1EDFD")} /><span style={css("width:9px;height:9px;border-radius:3px;background:#C9B8F5")} /><span style={css("width:9px;height:9px;border-radius:3px;background:#8B5CF6")} /><span style={css("width:9px;height:9px;border-radius:3px;background:#5122C1")} />More
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Memory */}
-      <SectionTitle id="sec-memory">Memory</SectionTitle>
-      <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px;animation:fadeUp .25s ease")}>
-        {detail.memory.map((mm) => (
-          <div key={mm.title} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700")}>
-              <span style={css("width:26px;height:26px;border-radius:8px;background:" + mm.bg + ";display:flex;align-items:center;justify-content:center;font-size:13px")}>{mm.icon}</span>{mm.title}
-            </div>
-            <div style={css("display:flex;flex-direction:column;gap:7px;margin-top:11px")}>
-              {mm.items.map((mi) => <div key={mi} style={css("font-size:12px;color:#3F3F46;background:#FAFAFB;border:1px solid #F0F0F3;border-radius:9px;padding:7px 11px")}>{mi}</div>)}
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Configuration */}

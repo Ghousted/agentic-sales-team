@@ -37,7 +37,8 @@ def run_job(conn, job):
     params = job["params"] or {}
     agent = params.get("agent", {})
     target = int(params.get("target", 10))
-    settings = db.get_scrape_settings(conn, user_id, agent_id)
+    icp = params.get("icp")
+    settings = icp if (icp and any(icp.values())) else db.get_scrape_settings(conn, user_id, agent_id)
     task = build_task(settings, agent, target)
 
     counters = {"steps": 0, "leadsFound": 0}

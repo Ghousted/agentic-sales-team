@@ -147,6 +147,14 @@ export default function Home() {
       </div>
 
       {/* team cards */}
+      {teams.length === 0 ? (
+        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
+          <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>🌐</div>
+          <div style={css("font-size:15px;font-weight:700")}>No teams yet</div>
+          <div style={css("font-size:12.5px;color:#A1A1AA;max-width:380px")}>Group your agents into a team to work a shared book, run the pod, and command them together in chat.</div>
+          <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create your first team</Btn>
+        </div>
+      ) : (
       <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
         {teams.map((t) => {
           const avatars = t.members.slice(0, 3).map((id) => byId(id)).filter(Boolean);
@@ -168,6 +176,7 @@ export default function Home() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

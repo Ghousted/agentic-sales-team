@@ -41,7 +41,8 @@ async function firecrawlSearch(query: string, limit: number): Promise<SearchResu
   const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ query, limit }),
+    // tbs: only relatively-new results (past year) — stale buying-intent posts are dead leads.
+    body: JSON.stringify({ query, limit, tbs: "qdr:y" }),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Firecrawl ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
@@ -119,6 +120,7 @@ async function extractProspects(icpText: string, sells: string, results: SearchR
     `- profileUrl: the SOURCE_URL (the post/page link — this is how the salesperson reaches them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
     "INCLUDE a lead even when the name isn't shown — the post link is the contact path.",
+    "RECENCY: only include RELATIVELY NEW posts. If a post visibly shows its age and it is clearly old (e.g. '2y', '3 years ago', or a date more than ~1 year back), SKIP it — an old buying-intent post is a dead lead.",
     "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to — never a seller or an article about the topic.",
     "Return ONLY JSON.",
   ].filter(Boolean).join("\n");

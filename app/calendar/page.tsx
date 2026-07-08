@@ -1,14 +1,18 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box } from "@/components/primitives";
 import { buildCalendar, buildMonthGrid } from "@/lib/calendar";
+import { listActivity } from "@/lib/workspace/statsActions";
+import type { ActivityItem } from "@/lib/workspace/stats";
 
 const WEEK_LABELS = ["Last week", "This week", "Next week", "In 2 weeks"];
 
 export default function CalendarPage() {
   const { agents } = useApp();
-  const cal = useMemo(() => buildCalendar(agents), [agents]);
+  const [events, setEvents] = useState<ActivityItem[]>([]);
+  useEffect(() => { listActivity(200).then(setEvents); }, []);
+  const cal = useMemo(() => buildCalendar(events, agents), [events, agents]);
   const [view, setView] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -45,6 +49,9 @@ export default function CalendarPage() {
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <div style={css("font-size:13px;color:#71717A")}>Every agent&rsquo;s meetings and reach outs, in one glance</div>
+      {cal.events.length === 0 && (
+        <div style={css("font-size:12.5px;color:#A1AEBE;margin-top:-10px")}>No activity yet — it fills as your agents work.</div>
+      )}
 
       {/* summary cards */}
       <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
@@ -86,7 +93,7 @@ export default function CalendarPage() {
                 {row.cells.map((cell, ci) => (
                   <div key={ci} style={css("border-top:1px solid #F4F4F6;border-left:1px solid #F4F4F6;min-height:52px;padding:3px")}>
                     {cell.map((ev, ei) => (
-                      <div key={ei} title={ev.title + " · " + ev.withWho} style={css("background:" + ev.colors[0] + ";border-radius:8px;padding:3px;display:flex;align-items:center;gap:4px;overflow:hidden;height:100%")}>
+                      <div key={ei} title={ev.title} style={css("background:" + ev.colors[0] + ";border-radius:8px;padding:3px;display:flex;align-items:center;gap:4px;overflow:hidden;height:100%")}>
                         <div style={css(ev.avStyle)}>{ev.initials}</div>
                         <div style={css("font-size:10px;font-weight:600;color:#3F3F46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0")}>{ev.title}</div>
                       </div>

@@ -398,19 +398,23 @@ export default function AgentDetail() {
         <SectionTitle id="sec-reach">Reach outs</SectionTitle>
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;flex-direction:column")}>
-            {detail.reach.map((r, i) => (
-              <div key={i} style={css("display:flex;gap:16px")}>
-                <div style={css("display:flex;flex-direction:column;align-items:center")}>
-                  <div style={css("width:12px;height:12px;border-radius:50%;background:" + r.c[1] + ";border:3px solid " + r.c[0] + ";flex:none;margin-top:2px")} />
-                  <div style={css("width:2px;flex:1;background:#F0F0F3")} />
+            {!stats || stats.activity.length === 0 ? (
+              <div style={css("font-size:12.5px;color:#A1A1AA")}>No reach-outs yet.</div>
+            ) : stats.activity.map((a, i) => {
+              const m = actMeta(a.type);
+              return (
+                <div key={i} style={css("display:flex;gap:16px")}>
+                  <div style={css("display:flex;flex-direction:column;align-items:center")}>
+                    <div style={css("width:12px;height:12px;border-radius:50%;background:" + m.c[1] + ";border:3px solid " + m.c[0] + ";flex:none;margin-top:2px")} />
+                    <div style={css("width:2px;flex:1;background:#F0F0F3")} />
+                  </div>
+                  <div style={css("padding-bottom:20px;min-width:0;flex:1")}>
+                    <div style={css("display:flex;align-items:center;gap:8px")}><span style={css(chip(m.c[0], m.c[1]))}>{m.label}</span><span style={css("font-size:11px;color:#A1A1AA")}>{relTime(a.createdAt)}</span></div>
+                    <div style={css("font-size:13px;font-weight:600;margin-top:6px")}>{a.text}</div>
+                  </div>
                 </div>
-                <div style={css("padding-bottom:20px;min-width:0;flex:1")}>
-                  <div style={css("display:flex;align-items:center;gap:8px")}><span style={css(chip(r.c[0], r.c[1]))}>{r.type}</span><span style={css("font-size:11px;color:#A1A1AA")}>{r.time}</span></div>
-                  <div style={css("font-size:13px;font-weight:600;margin-top:6px")}>{r.title}</div>
-                  <div style={css("font-size:12px;color:#71717A;margin-top:2px")}>{r.desc}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </>)}
@@ -419,28 +423,25 @@ export default function AgentDetail() {
       {isVisible("meetings") && (<>
         <SectionTitle id="sec-meetings">Meetings</SectionTitle>
         <div style={css("display:flex;flex-direction:column;gap:10px;animation:fadeUp .25s ease")}>
-          {detail.meetings.length === 0 ? (
-            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No meetings scheduled.</div>
-          ) : detail.meetings.map((m, i) => (
-            <div key={i} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px")}>
-              <span style={css(chip(m.c[0], m.c[1]))}>{m.purpose}</span>
-              <div style={css("font-size:13px;font-weight:600")}>{m.title}<div style={css("font-size:11.5px;color:#A1A1AA;font-weight:400;margin-top:1px")}>{m.withWho}</div></div>
-              <div style={css("margin-left:auto;font-size:11px;color:#A1A1AA")}>{m.time}</div>
-            </div>
-          ))}
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No meetings yet.</div>
         </div>
       </>)}
 
       {/* Tasks */}
       <SectionTitle id="sec-tasks">Tasks</SectionTitle>
       <div style={css("display:flex;flex-direction:column;gap:10px;animation:fadeUp .25s ease")}>
-        {detail.tasks.map((t, i) => (
-          <div key={i} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px")}>
-            <span style={css("display:inline-flex;align-items:center;gap:5px;" + chip(t.bg, t.fg))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + t.dot)} />{t.status}</span>
-            <div style={css("font-size:13px;font-weight:600")}>{t.title}<div style={css("font-size:11.5px;color:#A1A1AA;font-weight:400;margin-top:1px")}>{t.sub}</div></div>
-            <div style={css("margin-left:auto;font-size:11px;color:#A1A1AA")}>{t.time}</div>
-          </div>
-        ))}
+        {!stats || stats.jobs.length === 0 ? (
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:18px;font-size:12.5px;color:#A1A1AA")}>No tasks yet.</div>
+        ) : stats.jobs.map((j, i) => {
+          const c: [string, string] = j.status === "done" ? ["#E7F7EC", "#1B7A3D"] : j.status === "failed" ? ["#FEECEC", "#B91C1C"] : j.status === "running" ? ["#E9F5FE", "#0369A1"] : ["#FEF6E8", "#B45309"];
+          return (
+            <div key={i} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px")}>
+              <span style={css("display:inline-flex;align-items:center;gap:5px;" + chip(c[0], c[1]))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + c[1])} />{j.status}</span>
+              <div style={css("font-size:13px;font-weight:600;text-transform:capitalize")}>{j.kind}</div>
+              <div style={css("margin-left:auto;font-size:11px;color:#A1A1AA")}>{relTime(j.finishedAt ?? j.createdAt)}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Performance */}

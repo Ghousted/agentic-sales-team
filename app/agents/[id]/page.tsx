@@ -133,11 +133,14 @@ export default function AgentDetail() {
 
   const runScrape = useCallback(async () => {
     if (!sel) return;
+    // Scraping is instruction-driven — ask what to look for (no stored ICP).
+    const instruction = window.prompt("What leads should " + sel.name.split(" ")[0] + " look for?\n(e.g. \"property buyers near Makati\", \"startups hiring SDRs in the US\")");
+    if (!instruction || !instruction.trim()) return;
     setRunningScrape(true);
     setScrapeNote("Finding leads…");
     const res = await enqueueJob({
       agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
-      kind: "scrape", capabilities: sel.capabilities, target: 10,
+      kind: "scrape", capabilities: sel.capabilities, target: 10, instruction: instruction.trim(),
     });
     if ("error" in res) { setScrapeNote(res.error); setRunningScrape(false); return; }
     try {

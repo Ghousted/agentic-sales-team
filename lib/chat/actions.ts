@@ -26,12 +26,11 @@ export async function teamChat(teamId: string, message: string): Promise<TeamCha
   const res = await resolve(userId, teamId, message, intent);
   if (!res.actor || !res.capability) return { messages: res.messages };
 
-  const icp = intent.capability === "scrape" ? { industry: intent.params.industry, titles: intent.params.titles, geo: intent.params.geo } : undefined;
   const enq = await enqueueJob({
     agent: { id: res.actor.id, name: res.actor.name, role: res.actor.role, goal: res.actor.goal, task: res.actor.task },
     kind: res.capability, capabilities: res.actor.capabilities,
-    target: intent.params.target ?? 10, icp,
-    // Pass the user's raw message so a scrape can formulate its own search terms.
+    target: intent.params.target ?? 10,
+    // The user's raw message is the sole targeting for a scrape (no ICP).
     instruction: res.capability === "scrape" ? message : undefined,
   });
   if ("error" in enq) {

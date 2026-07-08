@@ -95,9 +95,8 @@ export default function CreatePage() {
 
   const name = s.wName.trim() || "New Agent";
   // A scrape agent needs a full ICP (industry / titles / geo) before leaving Settings.
-  const scrapeIcpMissing = caps.includes("scrape") && (!sv("scrape", "industry").trim() || !sv("scrape", "titles").trim() || !sv("scrape", "geo").trim());
   const nameMissing = !s.wName.trim();
-  const canContinue = !((step === 0 && nameMissing) || (step === 3 && scrapeIcpMissing));
+  const canContinue = !(step === 0 && nameMissing);
 
   /* ---------- success screen (step 5) ---------- */
   if (step === 5) {
@@ -244,14 +243,8 @@ export default function CreatePage() {
               )}
               <div style={css("display:flex;flex-direction:column;gap:20px")}>
                 {caps.includes("scrape") && (
-                  <div>
-                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Lead scraping — target <span style={css("color:#B91C1C;font-weight:600")}>* required</span></div>
-                    <div style={css("display:flex;flex-direction:column;gap:12px")}>
-                      <input value={sv("scrape", "industry")} onChange={(e) => setSetting("scrape", "industry", e.target.value)} placeholder="Target industry (e.g. Fintech)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
-                      <input value={sv("scrape", "titles")} onChange={(e) => setSetting("scrape", "titles", e.target.value)} placeholder="Job titles (e.g. CTO, VP Eng)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
-                      <input value={sv("scrape", "geo")} onChange={(e) => setSetting("scrape", "geo", e.target.value)} placeholder="Geography (e.g. North America)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
-                    </div>
-                    {scrapeIcpMissing && <div style={css("font-size:12px;color:#B91C1C;margin-top:8px")}>Industry, job titles, and geography are all required for a scraping agent.</div>}
+                  <div style={css("font-size:12.5px;color:#606b79;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:14px 16px")}>
+                    <b>Lead scraping</b> is driven by what you ask in chat — e.g. “find property buyers near Makati.” No target setup needed here.
                   </div>
                 )}
                 {caps.includes("outreach") && (

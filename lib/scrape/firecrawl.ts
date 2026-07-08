@@ -19,18 +19,9 @@ export function isFirecrawlConfigured(): boolean {
 
 interface SearchResult { title?: string; description?: string; url?: string; markdown?: string }
 
-/** Build a web search query aimed at the BUYERS (the people/companies to sell to),
- * not vendor/contact/directory pages. */
-function buildQuery(icp: { industry?: string; titles?: string; geo?: string } | null, agentGoal: string): string {
-  const titles = icp?.titles?.trim();
-  const industry = icp?.industry?.trim();
-  const geo = icp?.geo?.trim();
-  if (!titles && !industry && !geo) return `${agentGoal} — potential customers, decision makers`.slice(0, 490);
-  const who = titles || "decision makers";
-  // Buyer-voice fallback (no free-text instruction): find people expressing intent,
-  // not vendor pages. `who`/industry describe the offering's audience.
-  const what = [industry, titles].filter(Boolean).join(" ") || who;
-  return `looking to buy ${what} ${geo || ""} recommendations`.replace(/\s+/g, " ").trim().slice(0, 490);
+/** Buyer-voice fallback query when no instruction is given (derived from the goal). */
+function buildQuery(agentGoal: string): string {
+  return `${agentGoal || "potential customers"} looking to buy recommendations`.replace(/\s+/g, " ").trim().slice(0, 490);
 }
 
 /** Infer a display platform from a result URL. */
@@ -68,19 +59,16 @@ const PLAN_SCHEMA = {
   required: ["query", "platform"],
 } as const;
 
-/** Turn the user's free-text instruction + ICP into ONE web search query aimed at
- * BUYER posts. Platform-aware: if the instruction names Facebook/Reddit/etc., it
- * targets that site's public, web-accessible content (via a site: filter). */
-async function planSearch(instruction: string, icp: { industry?: string; titles?: string; geo?: string } | null, agentGoal: string): Promise<{ query: string; platform: string }> {
-  const fallback = { query: buildQuery(icp, agentGoal), platform: "web" };
+/** Turn the user's free-text instruction into ONE web search query aimed at BUYER
+ * posts. The instruction IS the targeting (what/who/where). Platform-aware. */
+async function planSearch(instruction: string, agentGoal: string): Promise<{ query: string; platform: string }> {
+  const fallback = { query: buildQuery(agentGoal), platform: "web" };
   if (!isGeminiConfigured()) return fallback;
-  const icpText = [icp?.titles, icp?.industry, icp?.geo].filter(Boolean).join(", ");
   const system = [
     "You write ONE simple web search in the BUYER'S OWN VOICE to surface PUBLIC POSTS where a potential buyer expresses intent — the phrases people actually post: 'looking to buy', 'LF' (looking for), 'want to buy', 'anyone selling', 'recommend a', 'need a'.",
-    "Compose it from those buyer phrases + the ideal-customer keywords + location.",
-    "Do NOT use seller jargon like 'property buyers', 'leads', or 'prospects' — buyers never write that (it matches broker ads). Do NOT add a site: filter (that's added separately). Do NOT use negative operators ('-word').",
-    icpText ? `Ideal customer: ${icpText}.` : "",
-    agentGoal ? `Salesperson focus: ${agentGoal}.` : "",
+    "Compose it from the specifics in the instruction (what they want, and any location).",
+    "Do NOT use seller jargon like 'buyers', 'leads', or 'prospects' — buyers never write that (it matches broker ads). Do NOT add a site: filter (that's added separately). Do NOT use negative operators ('-word').",
+    agentGoal ? `Salesperson focus (context only): ${agentGoal}.` : "",
     "platform: return a specific site ONLY if the instruction explicitly names one ('facebook'|'reddit'|'linkedin'|'x'); otherwise 'web'.",
     "Return JSON { query, platform }.",
   ].filter(Boolean).join("\n");
@@ -112,7 +100,7 @@ const PROSPECTS_SCHEMA = {
 
 /** Extract BUYER prospects (people showing intent / companies to sell to) from
  * public post/page content — not vendors, competitors, directories, or articles. */
-async function extractProspects(icpText: string, sells: string, results: SearchResult[], target: number, platformHint: string, instruction: string): Promise<Prospect[]> {
+async function extractProspects(targetDesc: string, sells: string, results: SearchResult[], target: number, platformHint: string): Promise<Prospect[]> {
   if (!isGeminiConfigured() || results.length === 0) return [];
   const corpus = results
     .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`)
@@ -120,10 +108,9 @@ async function extractProspects(icpText: string, sells: string, results: SearchR
     .slice(0, 22000);
   const system = [
     "You turn PUBLIC posts/listings into SALES LEADS — potential BUYERS a salesperson can reach out to.",
-    instruction ? `The salesperson asked: "${instruction}".` : "",
-    `The ideal customer (who they sell to): ${icpText}.`,
+    `The salesperson is looking for: ${targetDesc}.`,
     sells ? `The salesperson's focus: ${sells}. NEVER return anyone who SELLS the same product/service (competitors, agents, vendors advertising themselves).` : "",
-    "Each source where someone shows BUYING INTENT or matches the ideal customer is ONE lead — e.g. a person asking for recommendations, saying they're 'looking for' / 'need' / 'want to buy', or a company that would be a customer.",
+    "Each source where someone matching that shows BUYING INTENT is ONE lead — e.g. a person asking for recommendations, saying they're 'looking for' / 'need' / 'want to buy', or a company that would be a customer.",
     `Return up to ${target} distinct leads.`,
     "For each lead:",
     "- name: the poster's real name ONLY if it clearly appears in the title/snippet; otherwise a short human-readable descriptor of who they are (e.g. 'First-time home buyer — Austin'). NEVER fabricate a specific personal name.",
@@ -147,15 +134,14 @@ async function extractProspects(icpText: string, sells: string, results: SearchR
 
 export async function runFirecrawlScrape(
   agent: { id: string; name: string; role: string; goal: string; task: string; capabilities?: string[] },
-  icp: { industry?: string; titles?: string; geo?: string } | null,
   target: number,
   instruction?: string,
 ): Promise<Prospect[]> {
-  // With a free-text instruction, let Gemini formulate the search terms (buyer voice).
-  // Otherwise fall back to the ICP-templated buyer query.
+  // The free-text instruction is the sole targeting (what/who/where). No ICP.
+  const targetDesc = instruction?.trim() || agent.goal || "potential customers";
   const plan = instruction?.trim()
-    ? await planSearch(instruction.trim(), icp, agent.goal)
-    : { query: buildQuery(icp, agent.goal), platform: "web" };
+    ? await planSearch(instruction.trim(), agent.goal)
+    : { query: buildQuery(agent.goal), platform: "web" };
   // Buyer-intent posts live on social/community sites — plain web returns seller
   // listings/ads. Always search Facebook first, then Reddit after.
   const sites = ["facebook.com", "reddit.com"];
@@ -166,9 +152,8 @@ export async function runFirecrawlScrape(
     const rs = await firecrawlSearch(`site:${site} ${plan.query}`, per);
     for (const r of rs) if (r.url && !seen.has(r.url)) { seen.add(r.url); results.push(r); }
   }
-  const icpText = [icp?.titles, icp?.industry, icp?.geo].filter(Boolean).join(", ") || agent.goal;
   const sells = [agent.role, agent.goal].filter(Boolean).join(" — "); // seller context, to exclude competitors
-  const prospects = await extractProspects(icpText, sells, results, target, plan.platform, instruction?.trim() ?? "");
+  const prospects = await extractProspects(targetDesc, sells, results, target, plan.platform);
   // normalize: derive platform from the source URL; ensure a profileUrl.
   return prospects.map((p) => ({
     name: p.name, title: p.title ?? "", company: p.company ?? "",

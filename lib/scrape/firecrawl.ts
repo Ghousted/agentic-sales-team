@@ -107,10 +107,14 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     .join("\n\n---\n\n")
     .slice(0, 22000);
   const system = [
-    "You turn PUBLIC posts/listings into SALES LEADS — potential BUYERS a salesperson can reach out to.",
+    "You turn PUBLIC posts/listings into SALES LEADS — people the salesperson can reach out to.",
     `The salesperson is looking for: ${targetDesc}.`,
     sells ? `The salesperson's focus: ${sells}. NEVER return anyone who SELLS the same product/service (competitors, agents, vendors advertising themselves).` : "",
-    "Each source where someone matching that shows BUYING INTENT is ONE lead — e.g. a person asking for recommendations, saying they're 'looking for' / 'need' / 'want to buy', or a company that would be a customer.",
+    "CRITICAL — MATCH THE DIRECTION of intent to what the salesperson wants:",
+    "• If they want BUYERS, include ONLY people who want to BUY / purchase / are shopping for it. EXCLUDE anyone trying to SELL, list, rent out, or asking for advice on selling their own property/item — a seller is the OPPOSITE side and is NOT a lead.",
+    "• If they want SELLERS/owners, do the reverse (exclude buyers).",
+    "Read each post's actual intent, not just keywords. 'Looking for advice on selling my house' is a SELLER — exclude it when buyers are wanted, even though it says 'looking for'.",
+    "Each source whose intent is on the SAME side the salesperson wants is ONE lead — e.g. (for buyers) a person asking for recommendations, saying they're 'looking to buy' / 'want to buy' / 'need a', or a company that would be a customer.",
     `Return up to ${target} distinct leads.`,
     "For each lead:",
     "- name: the poster's real name ONLY if it clearly appears in the title/snippet; otherwise a short human-readable descriptor of who they are (e.g. 'First-time home buyer — Austin'). NEVER fabricate a specific personal name.",

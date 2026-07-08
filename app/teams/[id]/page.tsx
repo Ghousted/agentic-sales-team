@@ -10,6 +10,8 @@ import { listLeadsForAgents } from "@/lib/leads/actions";
 import type { LeadDTO } from "@/lib/leads/types";
 import { workTheBook, listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import type { ApprovalDTO } from "@/lib/pod/types";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { WorkedBy, LivePulse } from "@/components/LeadBits";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -37,6 +39,7 @@ export default function TeamDetail() {
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
   const [working, setWorking] = useState(false);
+  const { live, byLead } = useLiveWork();
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
 
@@ -115,6 +118,20 @@ export default function TeamDetail() {
       </div>
 
       {(() => {
+        const active = live.filter((w) => team.members.includes(w.agentId));
+        if (active.length === 0) return null;
+        return (
+          <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#F0FBF3;border:1px solid #CFEBD8;border-radius:12px;padding:10px 14px")}>
+            <span style={css("font-size:12px;font-weight:700;color:#1B7A3D")}>Working now</span>
+            {active.map((w) => {
+              const verb = w.capability === "research" ? "researching" : w.capability === "outreach" ? "drafting" : w.capability;
+              return <span key={w.agentId} style={css("display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3F3F46")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 1.4s ease-in-out infinite")} />{w.agentName.split(" ")[0]} — {verb} {w.leadIds.length}</span>;
+            })}
+          </div>
+        );
+      })()}
+
+      {(() => {
         const req = (templateById(team.template)?.requiredCapabilities ?? []) as Capability[];
         if (!req.length) return null;
         const covered = new Set<string>();
@@ -160,7 +177,14 @@ export default function TeamDetail() {
                   const a = byId(l.agentId);
                   return (
                     <div key={l.id} style={css("display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #F4F4F6")}>
-                      <div style={css("font-size:12.5px;font-weight:600;min-width:0;flex:1")}>{l.name}<span style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.company ? " · " + l.company : ""}</span></div>
+                      <div style={css("font-size:12.5px;font-weight:600;min-width:0;flex:1")}>{l.name}<span style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.company ? " · " + l.company : ""}</span>
+                        {(byLead[l.id] || l.workedBy.length > 0) && (
+                          <div style={css("display:flex;align-items:center;gap:6px;margin-top:3px")}>
+                            <LivePulse info={byLead[l.id]} />
+                            <WorkedBy ids={l.workedBy} byId={byId} />
+                          </div>
+                        )}
+                      </div>
                       {a && <div style={css("display:flex;align-items:center;gap:5px;flex:none")}><div style={css(av(a, 18))}>{a.initials}</div><span style={css("font-size:11px;color:#71717A")}>{a.name.split(" ")[0]}</span></div>}
                     </div>
                   );

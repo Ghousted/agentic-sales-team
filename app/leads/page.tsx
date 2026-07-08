@@ -6,6 +6,8 @@ import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { WorkedBy, LivePulse } from "@/components/LeadBits";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
@@ -17,6 +19,7 @@ const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9p
 
 export default function LeadsPage() {
   const { agents, byId, showToast } = useApp();
+  const { byLead } = useLiveWork();
   const [leads, setLeads] = useState<LeadDTO[]>([]);
   const [candidates, setCandidates] = useState<LeadDTO[]>([]);
   const [view, setView] = useState<"active" | "pending">("active");
@@ -168,7 +171,14 @@ export default function LeadsPage() {
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
             return (
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
+                <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                  {(byLead[l.id] || l.workedBy.length > 0) && (
+                    <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
+                      <LivePulse info={byLead[l.id]} />
+                      <WorkedBy ids={l.workedBy} byId={byId} />
+                    </div>
+                  )}
+                </div>
                 <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
                 <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>

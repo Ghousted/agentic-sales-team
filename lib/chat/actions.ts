@@ -7,6 +7,7 @@ import { agentInfo } from "@/lib/pod/orchestrate";
 import { detectIntent } from "@/lib/ai/intent";
 import { resolve, type ChatOutMsg } from "./orchestrate";
 import { enqueueJob } from "@/lib/jobs/actions";
+import { listTeamMessages as _listTeamMessages } from "./teamMessages";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
@@ -35,4 +36,10 @@ export async function teamChat(teamId: string, message: string): Promise<TeamCha
     return { messages: res.messages.concat([{ who: res.actor.id, text: "…couldn't start that: " + enq.error }]) };
   }
   return { messages: res.messages, job: { id: enq.jobId, kind: res.capability, agentId: res.actor.id } };
+}
+
+export async function listTeamMessages(teamId: string): Promise<{ who: string; text: string }[]> {
+  const s = await getSession();
+  if (!s?.userId) return [];
+  return _listTeamMessages(s.userId, teamId);
 }

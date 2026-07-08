@@ -8,13 +8,18 @@ import { detectIntent } from "@/lib/ai/intent";
 import { resolve, type ChatOutMsg } from "./orchestrate";
 import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages } from "./teamMessages";
+import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
+import { isAllRequest, askWhoText } from "./outreachTarget";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
   job?: { id: string; kind: string; agentId: string };
 }
 
-export async function teamChat(teamId: string, message: string): Promise<TeamChatResult> {
+// Capabilities whose jobs consume specific leads (so /lead picks apply to them).
+const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal"]);
+
+export async function teamChat(teamId: string, message: string, leadIds?: string[]): Promise<TeamChatResult> {
   const s = await getSession();
   const userId = s?.userId;
   if (!userId) return { messages: [{ who: "system", text: "Not signed in." }] };
@@ -25,18 +30,42 @@ export async function teamChat(teamId: string, message: string): Promise<TeamCha
 
   const res = await resolve(userId, teamId, message, intent);
   if (!res.actor || !res.capability) return { messages: res.messages };
+  const actor = res.actor;
+  const cap = res.capability;
+  const picks = (leadIds ?? []).filter(Boolean);
+
+  // Outreach "ask who" gate: with no pick and no explicit "all", ask instead of
+  // drafting. "all" only proceeds when there is at least one accepted lead.
+  if (cap === "outreach" && picks.length === 0) {
+    if (isAllRequest(message)) {
+      const teamLeads = await listTeamLeadsForPicker(teamId);
+      const hasAccepted = teamLeads.some((l) => l.review === "accepted");
+      if (!hasAccepted) return { messages: [{ who: actor.id, text: askWhoText(actor.name) }] };
+      // fall through → enqueue outreach with no leadIds (all accepted, undrafted)
+    } else {
+      return { messages: [{ who: actor.id, text: askWhoText(actor.name) }] };
+    }
+  }
+
+  // Picking = approving: flip any picked leads to accepted so the runner (which
+  // only drafts review='accepted') will pick them up.
+  if (LEAD_CAPS.has(cap) && picks.length) {
+    await setLeadReview(picks, "accepted");
+  }
 
   const enq = await enqueueJob({
-    agent: { id: res.actor.id, name: res.actor.name, role: res.actor.role, goal: res.actor.goal, task: res.actor.task },
-    kind: res.capability, capabilities: res.actor.capabilities,
+    agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
+    kind: cap, capabilities: actor.capabilities,
     target: intent.params.target ?? 10,
     // The user's raw message is the sole targeting for a scrape (no ICP).
-    instruction: res.capability === "scrape" ? message : undefined,
+    instruction: cap === "scrape" ? message : undefined,
+    // /lead picks target specific leads for lead-consuming capabilities.
+    leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
   });
   if ("error" in enq) {
-    return { messages: res.messages.concat([{ who: res.actor.id, text: "…couldn't start that: " + enq.error }]) };
+    return { messages: res.messages.concat([{ who: actor.id, text: "…couldn't start that: " + enq.error }]) };
   }
-  return { messages: res.messages, job: { id: enq.jobId, kind: res.capability, agentId: res.actor.id } };
+  return { messages: res.messages, job: { id: enq.jobId, kind: cap, agentId: actor.id } };
 }
 
 export async function listTeamMessages(teamId: string): Promise<{ who: string; text: string }[]> {

@@ -3,9 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/store";
-import { ACTIVITY_FEED } from "@/lib/data";
+import { listActivity } from "@/lib/workspace/statsActions";
+import type { ActivityItem } from "@/lib/workspace/stats";
 import { av, chip } from "@/lib/visuals";
 import { css, Box } from "./primitives";
+
+const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
+  lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
+  lead_researched: { label: "Research", bg: "#F1EDFD", fg: "#5122C1" },
+  email_drafted: { label: "Draft", bg: "#FEF6E8", fg: "#B45309" },
+  email_sent: { label: "Sent", bg: "#E9F5FE", fg: "#0369A1" },
+};
+function actChip(type: string) { return ACT_CHIP[type] ?? { label: type, bg: "#F4F4F5", fg: "#71717A" }; }
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "now"; if (m < 60) return m + "m"; const h = Math.round(m / 60);
+  if (h < 24) return h + "h"; return Math.round(h / 24) + "d";
+}
 
 export default function NotificationsBell() {
   const { s, byId, agents } = useApp();
@@ -24,12 +39,9 @@ export default function NotificationsBell() {
     return () => document.removeEventListener("click", onClickAway);
   }, [open]);
 
-  // Live activity (feedExtra) first, then the base feed. Drop deleted agents.
-  const items = s.feedExtra
-    .concat(ACTIVITY_FEED)
-    .map((f) => ({ f, a: byId(f.id) }))
-    .filter((x) => x.a)
-    .slice(0, 8);
+  const [acts, setActs] = useState<ActivityItem[]>([]);
+  useEffect(() => { listActivity(12).then(setActs); }, []);
+  const items = acts.map((f) => ({ f, a: byId(f.agentId) })).filter((x) => x.a);
   const unread = !seen && items.length > 0;
 
   const toggle = () => {
@@ -70,8 +82,8 @@ export default function NotificationsBell() {
                       <strong style={{ color: "#18181B", fontWeight: 600 }}>{a!.name}</strong> {f.text}
                     </div>
                     <div style={css("display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none")}>
-                      <span style={css(chip(f.chipBg, f.chipColor))}>{f.chip}</span>
-                      <span style={css("font-size:10.5px;color:#A1A1AA")}>{f.time}</span>
+                      <span style={css(chip(actChip(f.type).bg, actChip(f.type).fg))}>{actChip(f.type).label}</span>
+                      <span style={css("font-size:10.5px;color:#A1A1AA")}>{relTime(f.createdAt)}</span>
                     </div>
                   </Link>
                 ))

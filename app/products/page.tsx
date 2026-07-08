@@ -137,15 +137,15 @@ export default function ProductsPage() {
       {/* FOLDER VIEW: the open folder's (or Unfiled's) products */}
       {inFolderView && (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-          <div style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-            <div>Product</div><div>Category</div><div>Price</div><div>Folder</div><div>Actions</div>
+          <div style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+            <div>Product</div><div>Category</div><div>Price</div><div>Actions</div>
           </div>
           {loading ? (
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
           ) : shown.length === 0 ? (
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>This folder is empty. Use “Import CSV” or “+ Add product”, or move products in from the Folder column.</div>
           ) : shown.map((p) => (
-            <div key={p.id} style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+            <div key={p.id} style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
               <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div>
                 {Object.keys(p.attributes || {}).length > 0 && (
                   <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:5px")}>
@@ -157,13 +157,13 @@ export default function ProductsPage() {
               </div>
               <div>{p.category ? <span style={css(chip("#F1EDFD", "#5122C1"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
               <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
-              <div>
-                <select value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:100%")}>
-                  <option value="">No folder</option>
+              <div style={css("display:flex;gap:8px;align-items:center")}>
+                <select aria-label="Move to folder" value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} title="Move to folder" style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:150px")}>
+                  <option value="">Move… (no folder)</option>
                   {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
+                <Btn onClick={() => onDelete(p.id, p.name)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#B91C1C" styleHover="background:#FEECEC">Delete</Btn>
               </div>
-              <Btn onClick={() => onDelete(p.id, p.name)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#B91C1C" styleHover="background:#FEECEC">Delete</Btn>
             </div>
           ))}
         </div>

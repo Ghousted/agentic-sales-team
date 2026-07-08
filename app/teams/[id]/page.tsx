@@ -44,7 +44,7 @@ export default function TeamDetail() {
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
   // Only user-created teams can be deleted; the 4 seed teams are fixtures.
-  const isSeedTeam = TEAMS_BASE.some((t) => t.id === team.id);
+  const isSeedTeam = TEAMS_BASE.some((t) => t.id === team?.id);
 
   const memberIds = team ? team.members : [];
   useEffect(() => {

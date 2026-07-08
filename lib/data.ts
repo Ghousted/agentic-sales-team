@@ -12,12 +12,10 @@ export const AGENTS_BASE: Agent[] = [
   { id: "lm", name: "Leo Martins", initials: "LM", role: "Recruiter", color: "#EF4444", status: "error", task: "LinkedIn connection failed — needs reauth", score: 72, goal: "15 qualified candidates / month", type: "recruiter", capabilities: ["scrape", "outreach"] },
 ];
 
-export const TEAMS_BASE: Team[] = [
-  { id: "t1", name: "North America SDR", icon: "🌎", iconBg: "#F1EDFD", desc: "Outbound prospecting · US & Canada", members: ["sk", "ew", "al"], meetings: 28, pipeline: "$1.1M", leads: 412, goal: "Book 90 meetings this quarter across the NA territory, prioritizing companies on AWS.", activity: ["Sarah booked Datadog — VP Eng", "Ava flagged Snowflake as hot", "Emily added 35 Healthcare leads"], template: "outbound" },
-  { id: "t2", name: "Enterprise Team", icon: "🏛", iconBg: "#FDF0F5", desc: "Named accounts · $100K+ deals", members: ["rp", "nc"], meetings: 9, pipeline: "$860K", leads: 64, goal: "Land 3 enterprise logos this quarter with multi-threaded outreach.", activity: ["Ryan drafted Snowflake proposal", "Noah reviewed Q3 pipeline"], template: "enterprise" },
-  { id: "t3", name: "Outbound Team", icon: "📣", iconBg: "#FEF6E8", desc: "High-volume sequences", members: ["mt", "sk", "al"], meetings: 19, pipeline: "$390K", leads: 1230, goal: "Maintain 25%+ reply rate while scaling to 600 emails/week.", activity: ["Michael sent 12 emails to Fintech CTOs", "Sequence B reply rate hit 27%"], template: "outbound" },
-  { id: "t4", name: "Recruitment Team", icon: "🎯", iconBg: "#E9F5FE", desc: "Sourcing sales talent", members: ["lm"], meetings: 6, pipeline: "—", leads: 88, goal: "15 qualified AE candidates per month.", activity: ["Leo needs LinkedIn reauth", "4 candidate screens scheduled"], template: "recruitment" },
-];
+// No seed team instances — users create their own teams from the team TEMPLATES
+// (TEAM_TEMPLATES in lib/agentTypes.ts, offered in the New Team modal). Kept as a
+// typed empty array so every TEAMS_BASE consumer just iterates nothing.
+export const TEAMS_BASE: Team[] = [];
 
 const STATUS_META: Record<StatusKey, StatusMeta> = {
   working: { label: "Working", bg: "#E7F7EC", color: "#1B7A3D", dot: "#2FA45C" },

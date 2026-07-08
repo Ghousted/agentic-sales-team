@@ -2,7 +2,7 @@
 // Client-facing server actions for the leads domain — thin wrappers over the
 // server-only store so client components never import server-only code.
 import * as store from "./store";
-import type { LeadDTO, DraftDTO, LiveWorkDTO } from "./types";
+import type { LeadDTO, DraftDTO, LiveWorkDTO, TeamLeadPick } from "./types";
 
 export async function addLead(input: { agentId: string; name: string; title?: string; company?: string; email: string }): Promise<LeadDTO | null> {
   return store.addLead(input);
@@ -18,6 +18,9 @@ export async function listLeadsForAgents(agentIds: string[]): Promise<LeadDTO[]>
 }
 export async function listCandidates(filter?: { agentId?: string }): Promise<LeadDTO[]> {
   return store.listCandidates(filter);
+}
+export async function listTeamLeads(teamId: string): Promise<TeamLeadPick[]> {
+  return store.listTeamLeadsForPicker(teamId);
 }
 export async function acceptLeads(ids: string[]): Promise<void> {
   return store.setLeadReview(ids, "accepted");

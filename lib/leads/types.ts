@@ -83,3 +83,13 @@ export interface ProposalResult {
   body: string;
   productsUsed: string[];
 }
+
+// A slim lead shape for the team-chat /lead picker (pending + accepted only).
+export interface TeamLeadPick {
+  id: string;
+  name: string;
+  title: string;
+  company: string;
+  platform: string | null;
+  review: string; // "pending" | "accepted"
+}

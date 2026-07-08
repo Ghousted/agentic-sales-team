@@ -5,8 +5,8 @@ import "server-only";
 import { and, desc, eq, inArray, asc } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type LiveWorkDTO } from "./types";
-import { teammatesOf } from "@/lib/teams/membership";
+import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
+import { teammatesOf, membersOfTeam } from "@/lib/teams/membership";
 import type { Prospect } from "@/lib/scrape/firecrawl";
 
 type LeadRow = typeof leads.$inferSelect;
@@ -136,6 +136,20 @@ export async function listCandidates(filter?: { agentId?: string }): Promise<Lea
   if (filter?.agentId) conds.push(eq(leads.agentId, filter.agentId));
   const rows = await getDb().select().from(leads).where(and(...conds)).orderBy(desc(leads.createdAt));
   return toLeadDTOs(userId, rows);
+}
+
+/** Leads for the team-chat /lead picker: every non-dismissed lead (pending +
+ *  accepted) owned by any member of the team, newest first. Session-scoped. */
+export async function listTeamLeadsForPicker(teamId: string): Promise<TeamLeadPick[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const memberIds = await membersOfTeam(userId, teamId);
+  if (memberIds.length === 0) return [];
+  const rows = await getDb().select().from(leads)
+    .where(and(eq(leads.userId, userId), inArray(leads.agentId, memberIds), inArray(leads.review, ["pending", "accepted"])))
+    .orderBy(desc(leads.createdAt));
+  return rows.map((r) => ({ id: r.id, name: r.name, title: r.title, company: r.company, platform: r.platform, review: r.review }));
 }
 
 /** Accept or dismiss candidate leads (bulk). Dismiss is a soft 'dismissed'. */

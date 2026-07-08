@@ -83,3 +83,24 @@ export async function geminiJSON<T>(system: string, turns: Turn[], schema: Recor
   if (!text) throw new Error("Gemini returned no JSON text.");
   return JSON.parse(text) as T;
 }
+
+/** Embed text with Gemini text-embedding-004 (768-dim). Returns null if unconfigured or on failure. */
+export async function geminiEmbed(text: string): Promise<number[] | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${key}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: { parts: [{ text: text.slice(0, 8000) }] } }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const values = data?.embedding?.values;
+    return Array.isArray(values) && values.length ? (values as number[]) : null;
+  } catch {
+    return null;
+  }
+}

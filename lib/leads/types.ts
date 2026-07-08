@@ -25,8 +25,16 @@ export interface LeadDTO {
   profileUrl: string | null;
   platform: string | null;
   research: ResearchBrief | null;
+  workedBy: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LiveWorkDTO {
+  agentId: string;
+  agentName: string;
+  capability: string;
+  leadIds: string[];
 }
 
 export interface DraftDTO {

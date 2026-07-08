@@ -3,9 +3,9 @@ import "server-only";
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
 import { and, desc, eq, inArray, asc } from "drizzle-orm";
-import { getDb, isDbConfigured, leads, outreachDrafts, activity } from "@/lib/db";
+import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief } from "./types";
+import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type LiveWorkDTO } from "./types";
 import { teammatesOf } from "@/lib/teams/membership";
 
 type LeadRow = typeof leads.$inferSelect;
@@ -19,8 +19,27 @@ function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
     email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: r.profileUrl, platform: r.platform, research: r.research ?? null,
+    workedBy: [],
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
+}
+
+/** Map rows to DTOs, attaching each lead's `workedBy` (distinct agents that have
+ *  acted on it, most-recent first) from the activity log in one query. */
+async function toLeadDTOs(userId: string, rows: LeadRow[]): Promise<LeadDTO[]> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const acts = await getDb().select({ leadId: activity.leadId, agentId: activity.agentId })
+    .from(activity)
+    .where(and(eq(activity.userId, userId), inArray(activity.leadId, ids)))
+    .orderBy(desc(activity.createdAt));
+  const byLead: Record<string, string[]> = {};
+  for (const a of acts) {
+    if (!a.leadId) continue;
+    const list = (byLead[a.leadId] ??= []);
+    if (!list.includes(a.agentId)) list.push(a.agentId);
+  }
+  return rows.map((r) => ({ ...toLeadDTO(r), workedBy: byLead[r.id] ?? [] }));
 }
 
 export async function addLead(input: { agentId: string; name: string; title?: string; company?: string; email: string }): Promise<LeadDTO | null> {
@@ -49,7 +68,7 @@ export async function listLeads(filter?: { agentId?: string; status?: string; so
   if (filter?.status) conds.push(eq(leads.status, filter.status));
   if (filter?.source) conds.push(eq(leads.source, filter.source));
   const rows = await getDb().select().from(leads).where(and(...conds)).orderBy(desc(leads.createdAt));
-  return rows.map(toLeadDTO);
+  return toLeadDTOs(userId, rows);
 }
 
 /** The agent's working book: leads assigned to any teammate (its shared team
@@ -62,7 +81,7 @@ export async function listWorkbook(agentId: string): Promise<LeadDTO[]> {
   const rows = await getDb().select().from(leads)
     .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted")))
     .orderBy(desc(leads.createdAt));
-  return rows.map(toLeadDTO);
+  return toLeadDTOs(userId, rows);
 }
 
 /** Accepted leads assigned to any of the given agents (a team's book). */
@@ -73,7 +92,7 @@ export async function listLeadsForAgents(agentIds: string[]): Promise<LeadDTO[]>
   const rows = await getDb().select().from(leads)
     .where(and(eq(leads.userId, userId), inArray(leads.agentId, agentIds), eq(leads.review, "accepted")))
     .orderBy(desc(leads.createdAt));
-  return rows.map(toLeadDTO);
+  return toLeadDTOs(userId, rows);
 }
 
 /** Scraped candidates awaiting human review (review='pending'). */
@@ -84,7 +103,7 @@ export async function listCandidates(filter?: { agentId?: string }): Promise<Lea
   const conds = [eq(leads.userId, userId), eq(leads.review, "pending")];
   if (filter?.agentId) conds.push(eq(leads.agentId, filter.agentId));
   const rows = await getDb().select().from(leads).where(and(...conds)).orderBy(desc(leads.createdAt));
-  return rows.map(toLeadDTO);
+  return toLeadDTOs(userId, rows);
 }
 
 /** Accept or dismiss candidate leads (bulk). Dismiss is a soft 'dismissed'. */
@@ -202,4 +221,23 @@ export async function applyResearchResult(userId: string, agentId: string, lead:
   await db.update(leads).set({ research: brief, updatedAt: new Date() })
     .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "lead_researched", leadId: lead.id, text: `Researched ${lead.name}` });
+}
+
+/** Running research/outreach jobs → who is actively working which leads now
+ *  (the job's remaining pool). Renders nothing when idle. */
+export async function getLiveWork(): Promise<LiveWorkDTO[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const running = await getDb().select().from(jobs)
+    .where(and(eq(jobs.userId, userId), eq(jobs.status, "running"), inArray(jobs.kind, ["research", "outreach"])));
+  const out: LiveWorkDTO[] = [];
+  for (const j of running) {
+    const p = j.params as { agent?: { id?: string; name?: string } };
+    const agentId = p.agent?.id ?? j.agentId;
+    const pick = j.kind === "research" ? pickLeadsForResearch : pickLeadsForRun;
+    const pool = await pick(userId, agentId, undefined, 50);
+    out.push({ agentId, agentName: p.agent?.name ?? "Agent", capability: j.kind, leadIds: pool.map((l) => l.id) });
+  }
+  return out;
 }

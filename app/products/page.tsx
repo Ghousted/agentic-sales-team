@@ -70,14 +70,8 @@ export default function ProductsPage() {
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
-      {/* toolbar: folder toggle + actions (mirrors Leads) */}
+      {/* toolbar: count + actions */}
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px;max-width:100%;overflow-x:auto")}>
-          <Box onClick={() => setFolder(null)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;white-space:nowrap;" + (folder === null ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>All products</Box>
-          {folders.map((f) => (
-            <Box key={f.id} onClick={() => setFolder(f.id)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;" + (folder === f.id ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>{f.name}<span style={css("background:" + (folder === f.id ? "#5122C1" : "#E4E4E7") + ";color:" + (folder === f.id ? "#fff" : "#71717A") + ";border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{f.count}</span></Box>
-          ))}
-        </div>
         <div style={css("font-size:13px;color:#71717A")}>{items.length} product{items.length === 1 ? "" : "s"}{activeFolder ? " in " + activeFolder.name : " · your agents’ source of truth"}</div>
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           {activeFolder && <Btn onClick={removeFolder} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete folder</Btn>}
@@ -86,6 +80,14 @@ export default function ProductsPage() {
           <Btn onClick={() => fileRef.current?.click()} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Import CSV</Btn>
           <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add product</Btn>
         </div>
+      </div>
+
+      {/* folders row */}
+      <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px;max-width:100%;overflow-x:auto;align-self:flex-start")}>
+        <Box onClick={() => setFolder(null)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;white-space:nowrap;" + (folder === null ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>All products</Box>
+        {folders.map((f) => (
+          <Box key={f.id} onClick={() => setFolder(f.id)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;" + (folder === f.id ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>{f.name}<span style={css("background:" + (folder === f.id ? "#5122C1" : "#E4E4E7") + ";color:" + (folder === f.id ? "#fff" : "#71717A") + ";border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{f.count}</span></Box>
+        ))}
       </div>
 
       {/* catalog table (mirrors Leads) */}

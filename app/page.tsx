@@ -108,7 +108,7 @@ export default function Home() {
               <div style={css("width:124px;height:124px;border-radius:50%;background:conic-gradient(#B57BFF 0 100%,rgba(255,255,255,.12) 100% 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 44px rgba(139,92,246,.4)")}>
                 <div style={css("width:106px;height:106px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center")}>
                   <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1")}>{leadsWorked}</div>
-                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.12em;color:#A99BD8;margin-top:3px")}>LEADS WORKED · {monthLabel}</div>
+                  <div style={css("font-size:8.5px;font-weight:700;letter-spacing:.1em;color:#A99BD8;margin-top:4px;text-align:center;line-height:1.4")}>LEADS WORKED<br />{monthLabel}</div>
                 </div>
               </div>
             </div>

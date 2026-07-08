@@ -70,49 +70,57 @@ export default function ProductsPage() {
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
-      {/* toolbar: count + actions */}
-      <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        <div style={css("font-size:13px;color:#71717A")}>{items.length} product{items.length === 1 ? "" : "s"}{activeFolder ? " in " + activeFolder.name : " · your agents’ source of truth"}</div>
-        <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
-          {activeFolder && <Btn onClick={removeFolder} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete folder</Btn>}
-          <Btn onClick={() => setShowFolder(true)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">New folder</Btn>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label="Import CSV" onChange={(e) => onCsv(e.target.files?.[0])} style={css("display:none")} />
-          <Btn onClick={() => fileRef.current?.click()} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Import CSV</Btn>
-          <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add product</Btn>
+      {/* file-explorer layout: folders sidebar + products main */}
+      <div style={css("display:flex;gap:16px;align-items:flex-start")}>
+        {/* folders sidebar */}
+        <div style={css("width:210px;flex:none;background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:2px")}>
+          <div style={css("font-size:10.5px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;padding:6px 10px 8px")}>Folders</div>
+          <Box onClick={() => setFolder(null)} style={"display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:600;" + (folder === null ? "background:#F1EDFD;color:#5122C1" : "color:#3F3F46")} styleHover="background:#FAFAFB"><span>🗂</span>All products</Box>
+          {folders.map((f) => (
+            <Box key={f.id} onClick={() => setFolder(f.id)} style={"display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:600;" + (folder === f.id ? "background:#F1EDFD;color:#5122C1" : "color:#3F3F46")} styleHover="background:#FAFAFB">
+              <span>📁</span><span style={css("min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1")}>{f.name}</span>
+              <span style={css("background:" + (folder === f.id ? "#5122C1" : "#E4E4E7") + ";color:" + (folder === f.id ? "#fff" : "#71717A") + ";border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px;flex:none")}>{f.count}</span>
+            </Box>
+          ))}
+          <Box onClick={() => setShowFolder(true)} style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:600;color:#5122C1;margin-top:2px" styleHover="background:#FAFAFB"><span>＋</span>New folder</Box>
         </div>
-      </div>
 
-      {/* folders row */}
-      <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px;max-width:100%;overflow-x:auto;align-self:flex-start")}>
-        <Box onClick={() => setFolder(null)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;white-space:nowrap;" + (folder === null ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>All products</Box>
-        {folders.map((f) => (
-          <Box key={f.id} onClick={() => setFolder(f.id)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;" + (folder === f.id ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>{f.name}<span style={css("background:" + (folder === f.id ? "#5122C1" : "#E4E4E7") + ";color:" + (folder === f.id ? "#fff" : "#71717A") + ";border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{f.count}</span></Box>
-        ))}
-      </div>
-
-      {/* catalog table (mirrors Leads) */}
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-        <div style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-          <div>Product</div><div>Category</div><div>Price</div><div>Folder</div><div>Actions</div>
-        </div>
-        {loading ? (
-          <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
-        ) : items.length === 0 ? (
-          <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>{activeFolder ? "No products in this folder yet." : "No products yet. Use “Import CSV” or “+ Add product”."}</div>
-        ) : items.map((p) => (
-          <div key={p.id} style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-            <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div></div>
-            <div>{p.category ? <span style={css(chip("#F1EDFD", "#5122C1"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
-            <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
-            <div>
-              <select value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:100%")}>
-                <option value="">No folder</option>
-                {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
+        {/* products main */}
+        <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;gap:12px")}>
+          <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
+            <div style={css("font-size:13px;color:#71717A")}>{items.length} product{items.length === 1 ? "" : "s"}{activeFolder ? " in " + activeFolder.name : " · your agents’ source of truth"}</div>
+            <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
+              {activeFolder && <Btn onClick={removeFolder} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete folder</Btn>}
+              <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label="Import CSV" onChange={(e) => onCsv(e.target.files?.[0])} style={css("display:none")} />
+              <Btn onClick={() => fileRef.current?.click()} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Import CSV</Btn>
+              <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add product</Btn>
             </div>
-            <Btn onClick={() => onDelete(p.id, p.name)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#B91C1C" styleHover="background:#FEECEC">Delete</Btn>
           </div>
-        ))}
+
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+            <div style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+              <div>Product</div><div>Category</div><div>Price</div><div>Folder</div><div>Actions</div>
+            </div>
+            {loading ? (
+              <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+            ) : items.length === 0 ? (
+              <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>{activeFolder ? "No products in this folder yet." : "No products yet. Use “Import CSV” or “+ Add product”."}</div>
+            ) : items.map((p) => (
+              <div key={p.id} style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+                <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div></div>
+                <div>{p.category ? <span style={css(chip("#F1EDFD", "#5122C1"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
+                <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
+                <div>
+                  <select value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:100%")}>
+                    <option value="">No folder</option>
+                    {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <Btn onClick={() => onDelete(p.id, p.name)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#B91C1C" styleHover="background:#FEECEC">Delete</Btn>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* new-folder modal */}

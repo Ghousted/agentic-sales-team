@@ -94,6 +94,9 @@ export default function CreatePage() {
   const next = () => set((p) => ({ wStep: Math.min(4, p.wStep + 1) }));
 
   const name = s.wName.trim() || "New Agent";
+  // A scrape agent needs a full ICP (industry / titles / geo) before leaving Settings.
+  const scrapeIcpMissing = caps.includes("scrape") && (!sv("scrape", "industry").trim() || !sv("scrape", "titles").trim() || !sv("scrape", "geo").trim());
+  const canContinue = !(step === 3 && scrapeIcpMissing);
 
   /* ---------- success screen (step 5) ---------- */
   if (step === 5) {
@@ -131,8 +134,9 @@ export default function CreatePage() {
       )}
       <Btn
         onClick={step === 4 ? createAgent : next}
-        style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;display:flex;align-items:center;gap:8px"
-        styleHover="background:#42199E"
+        disabled={!canContinue}
+        style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;letter-spacing:-.15px;display:flex;align-items:center;gap:8px;" + (canContinue ? "cursor:pointer" : "opacity:.45;cursor:not-allowed")}
+        styleHover={canContinue ? "background:#42199E" : ""}
       >
         {step === 4 ? "Create agent" : "Continue"}<Chevron dir="right" />
       </Btn>
@@ -239,12 +243,13 @@ export default function CreatePage() {
               <div style={css("display:flex;flex-direction:column;gap:20px")}>
                 {caps.includes("scrape") && (
                   <div>
-                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Lead scraping — target</div>
+                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Lead scraping — target <span style={css("color:#B91C1C;font-weight:600")}>* required</span></div>
                     <div style={css("display:flex;flex-direction:column;gap:12px")}>
                       <input value={sv("scrape", "industry")} onChange={(e) => setSetting("scrape", "industry", e.target.value)} placeholder="Target industry (e.g. Fintech)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
                       <input value={sv("scrape", "titles")} onChange={(e) => setSetting("scrape", "titles", e.target.value)} placeholder="Job titles (e.g. CTO, VP Eng)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
                       <input value={sv("scrape", "geo")} onChange={(e) => setSetting("scrape", "geo", e.target.value)} placeholder="Geography (e.g. North America)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
                     </div>
+                    {scrapeIcpMissing && <div style={css("font-size:12px;color:#B91C1C;margin-top:8px")}>Industry, job titles, and geography are all required for a scraping agent.</div>}
                   </div>
                 )}
                 {caps.includes("outreach") && (

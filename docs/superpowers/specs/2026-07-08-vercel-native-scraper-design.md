@@ -1,69 +1,76 @@
-# Vercel-Native Scraper — Design
+# Vercel-Native Scraper (Firecrawl) — Design
 
-Move lead scraping off the persistent Python worker and onto an **on-demand Vercel Python serverless function** that drives a **hosted cloud browser (Browserbase)** with browser-use. Goal: the whole app — including scraping — deploys to **Vercel only**, works **multi-user** (public sources, not tied to any login), and needs **no second always-on host**.
+Replace the persistent Python/browser-use worker with a **Node scrape job that calls the Firecrawl API** from inside Next.js. Goal: the whole app — including scraping — deploys to **Vercel only**, on the **Hobby** plan (no Pro), works **multi-user** (public sources, not tied to any login), and needs **no browser, no Python, and no second host**.
 
-> Supersedes the deploy path of the M2 lead-scraping worker. Keeps browser-use, the `Prospect` model, `build_task`, `READ_ONLY_GUARD`, the jobs table, the capability gate, and the Leads → Pending approval gate.
-> **Public sources only** this round. "Scrape my own logged-in Facebook" stays deferred to a future browser-extension approach.
+> Supersedes the M2 lead-scraping worker's execution path. Keeps the `Prospect` shape, the ICP, the `jobs` table, the capability gate, and the Leads → Pending approval gate.
+> **Public sources only.** "Scrape my own logged-in Facebook" stays deferred to a future browser-extension approach.
 
 ---
 
-## Why
+## Why Firecrawl
 
-The persistent worker (`while True` poll + headed local Chrome + persistent profile) **cannot run on Vercel serverless** — no long-lived process, no display, hard time limits. Public-web scraping isn't tied to any user's login, so it can run **centrally in a serverless function** for all users, scoped by `userId`. That collapses the deployment to a single Vercel project.
+Firecrawl is a plain HTTP scraping/search/extract API (open-source and self-hostable, used here via its hosted API). Because it's just an API call, scraping runs in a normal **Next.js TypeScript route** — dropping browser-use, Browserbase, the headless browser, the Python function, the bundle-size risk, **and the Vercel Pro requirement**. Public-web discovery isn't tied to any login, so one route serves all users, scoped by `userId`. Single Vercel deploy.
 
 ---
 
 ## Part A — Architecture
 
 ```
-scrape enqueued (team chat @mention or agent Find-leads)  →  jobs row (queued, userId, params.icp)
-        │  client POSTs /api/scrape { jobId } (fire-and-forget; session cookie carries auth)
+scrape enqueued (team chat @mention or agent Find-leads)  →  jobs row (queued, userId, params.icp, params.target)
+        │  client POSTs /api/scrape { jobId }   (session cookie carries auth)
         ▼
-/api/scrape  — a Vercel Python Function (api/scrape.py + vercel.json runtime), NOT a Next route
-   1. verify session JWT (HS256 + AUTH_SECRET) → userId; load job; assert job.userId === userId
-   2. atomically mark running:  UPDATE jobs SET status='running' WHERE id=? AND userId=? AND status='queued' RETURNING
-   3. create a Browserbase session → remote CDP connectUrl
-   4. browser-use (ChatGoogle gemini-2.5-flash, thinking_budget=0) drives that remote browser
-      over PUBLIC sources for the ICP → structured Prospects
-   5. write each as a lead (review='pending') + a job_steps row per browser step (caption, url, base64 screenshot)
-   6. close the Browserbase session; mark job done (or failed on error)
+/api/scrape  — a normal Next.js route handler (TypeScript, runtime "nodejs")
+   1. getSession → userId; load job; assert job.userId === userId
+   2. atomically mark running (UPDATE ... WHERE status='queued' RETURNING)
+   3. build a search query + extraction prompt from the ICP
+   4. SUBMIT an async Firecrawl job (search + schema-extract for the Prospect shape); store its
+      firecrawlJobId on our job (result.firecrawlJobId); return quickly (invocation stays short)
         ▼
-existing getJob poll shows progress + the "Found N leads → Pending" status line; leads await accept/dismiss
+client polls /api/scrape/status { jobId }  every few seconds (like the existing getJob poll)
+   • checks the Firecrawl job; while pending → return {status:"running", found:N}
+   • when Firecrawl completes → write each prospect as a lead (review='pending', source='scrape')
+     + an activity row, dedup by profileUrl/email; mark our job done with { leadsFound }
+        ▼
+leads land in Leads → Pending (approval gate unchanged); the team-chat status line reports "Found N leads → Pending"
 ```
 
-- **Single deploy:** the Python function is a Vercel Function co-located with the Next app in the same project. Browserbase/Neon/Gemini are **APIs called**, not deployments.
-- **Non-persistent:** the function runs only while a scrape is in flight.
-- **Multi-user:** one function serves everyone; every invocation is `userId`-scoped. No per-user machine.
+- **Single deploy, Hobby-friendly:** every function invocation is short (submit, or poll-and-maybe-write). No long-running process, no Pro `maxDuration` needed. Firecrawl/Neon/Gemini are APIs called, not deployments.
+- **Multi-user:** one route serves everyone; every call is `userId`-scoped.
+- **No browser, no Python.** Firecrawl does the crawling + LLM extraction server-side.
+
+*(If a small `target` scrape completes fast enough synchronously, `/api/scrape` may do search+extract in one invocation and write leads directly — the async submit+poll path is the Hobby-safe default; the plan picks based on the verified Firecrawl endpoint behavior.)*
 
 ---
 
-## Part B — Function internals
+## Part B — Scrape handler internals
 
-Reuse the existing worker logic; swap the browser + the storage.
-
-- **Reused as shared modules:** `scraper.py` (`build_task`, `run_scrape`, `Prospect`/`Prospects`, `READ_ONLY_GUARD`, the `on_step` callback) and `db.py` (`insert_lead`, `insert_job_step`, `update_job_result`, `finish_job`/`fail_job`, `get_scrape_settings`, `lead_exists`). Deleted: `main.py`'s `while True` loop + `claim_next_scrape_job` (replaced by per-job invocation).
-- **Browser → Browserbase over CDP.** Replace `BrowserProfile(user_data_dir=…, headless=False)` with: create a Browserbase session (their SDK/API → CDP `connectUrl`), connect browser-use to that `cdp_url`, and **close the session in a `finally`** so paid sessions never leak. Headless cloud browser, public pages, no profile/login. *(Verify the exact browser-use remote-CDP connect API against 0.13.3 in the plan — probe it before writing code.)*
-- **Screenshots → DB.** Vercel `public/` is read-only, so drop `_save_screenshot` → filesystem. `insert_job_step` writes the downscaled frame as **base64 into a new `job_steps.screenshot` column** (plus `caption` + `url`). This is required for Vercel and unblocks a future in-app "watch it scrape" view.
-- **Auth + scoping.** The handler verifies the session JWT (PyJWT, HS256, `AUTH_SECRET`) → `userId`, loads the job, asserts ownership, and atomically claims it (the `status='queued'` guard prevents a double-POST double-run). ICP: prefer `params.icp`, else `agent_config.settings.scrape`/goal (already built).
-- **Lifecycle:** update `result` counters (`steps`, `leadsFound`) per step; `finish_job` on success; `fail_job` (with a short error) on any throw or timeout.
+- **Firecrawl call:** from the ICP (`industry`/`titles`/`geo`, preferring `params.icp`, else `agent_config.settings.scrape`/goal), build a search query and an extraction prompt, and call Firecrawl to **search public sources + extract structured `Prospect`s against a JSON schema**. Firecrawl's own LLM does the structuring — **no separate Gemini call needed for scrape**. Exact endpoint mix (`/search` + `/scrape`-with-`json` vs a single async `/extract`) is verified against the current Firecrawl API in the plan; use raw `fetch` (consistent with the Gemini transport) or the Firecrawl Node SDK.
+- **Prospect shape (reused):** `{ name, title, company, profileUrl, platform, email }` — email only if visibly present. Map each Firecrawl result → a `leads` row via the existing `insert`/DTO path with `source='scrape'`, `review='pending'`.
+- **Dedup:** skip prospects whose `profileUrl` (or email) already exists for this user+agent (reuse the existing `lead_exists` logic, ported to TS).
+- **Lifecycle:** mark `running` on submit (atomic `status='queued'` guard prevents double-run from a double-POST). Store `result.firecrawlJobId` + a `found` counter. On completion write leads + `finish` (`result.leadsFound`); on Firecrawl error/timeout → `fail` with a short error.
+- **Auth:** `getSession()` in both `/api/scrape` and `/api/scrape/status`; reject if no session or the job isn't the caller's.
+- **READ-ONLY by construction:** Firecrawl only reads public pages — no posting/logging-in, so the old `READ_ONLY_GUARD` is inherent.
 
 ---
 
-## Part C — App-side changes + constraints
+## Part C — App-side changes, drops, constraints
 
 **Changes:**
-- **Migration:** add `job_steps.screenshot` text column (base64).
-- **Client invokes the function:** after `enqueueJob({kind:"scrape", …})`, the client POSTs `/api/scrape { jobId }` (fire-and-forget). Two call sites: `sendTeamChat`'s job handling when `kind==='scrape'`, and the agent page's `runScrape`. The `getJob` progress poll is unchanged.
-- **Retire the persistent worker from the deploy path:** remove `main.py`'s poll loop + `claim_next_scrape_job`; keep `scraper.py`/`db.py` as shared logic the function imports. (An optional thin local-run shim may stay for dev.)
-- **New env keys:** `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID`.
-- **`vercel.json`:** register the Python runtime for `api/scrape.py` and set `maxDuration` (e.g. 300 on Pro).
+- **New routes:** `app/api/scrape/route.ts` (submit) + `app/api/scrape/status/route.ts` (poll → write leads on completion). Both `runtime = "nodejs"`, short invocations.
+- **Client invokes + polls:** after `enqueueJob({kind:"scrape", …})`, POST `/api/scrape { jobId }`, then poll `/api/scrape/status`. Two call sites: `sendTeamChat`'s `kind==='scrape'` branch and the agent page's `runScrape`. (The generic `getJob` poll may be reused instead of a dedicated status route if the status route folds the Firecrawl check into it — plan decides.)
+- **New env key:** `FIRECRAWL_API_KEY`.
+- **Scrape logic in TS:** a `lib/scrape/firecrawl.ts` (`server-only`) module holds the query/prompt builder, the Firecrawl calls, and the prospect→lead mapping. (The old Python `build_task`/`Prospect` concepts move here.)
 
-**Constraints (documented, not hidden):**
-- **Vercel Pro required** for a usable `maxDuration` (Hobby's 60s is too short). Each scrape scoped **small** (low `target`); a timeout → `failed`, retry smaller.
-- **Bundle-size risk:** the function + `browser-use` deps must fit Vercel's ~250MB unzipped limit. Remote browser means no bundled Chromium, but **verify with a probe deploy first** (hello-world `api/scrape.py` importing `browser_use` + a Browserbase connect) before building the rest.
-- **Per-scrape cost** (Browserbase + Gemini steps) and **agentic fragility**. **Public sources only.**
+**Dropped (relative to the browser-use design):**
+- The **Python worker** (`worker/`), **browser-use**, **Browserbase** (+ its 2 keys), the headless browser, the Python/Vercel-function machinery, and **Vercel Pro**.
+- **Per-step screenshots** and the **`job_steps.screenshot` migration** (no browser to screenshot). `job_steps` is unused by this path; progress = Firecrawl status counts surfaced through the job `result`.
+- Graceful fallback when `FIRECRAWL_API_KEY` is unset: scrape returns a clear "scraping isn't configured" error (mirrors the Gemini-unconfigured pattern) — the rest of the app still runs.
 
-**Unchanged:** the `jobs` table, `enqueueJob` (with `icp`), the capability gate, the review gate + Leads → Pending, `getJob`, the `Prospect` model, `build_task`, `READ_ONLY_GUARD`.
+**Constraints (documented):**
+- **Firecrawl cost + rate limits** per scrape (search + extract credits). Scope `target` sensibly; consider a per-user rate cap later.
+- **Public sources only**; quality depends on Firecrawl's discovery + extraction. Results still pass through the human **Pending** review gate, so bad extractions are filtered by the user, not shipped.
+
+**Unchanged:** the `jobs` table, `enqueueJob` (with `icp`), the capability gate (`scrape` capability), the review gate + Leads → Pending, `getJob`, the `Prospect` shape, the ICP source, and team-chat routing.
 
 ---
 
@@ -71,30 +78,28 @@ Reuse the existing worker logic; swap the browser + the storage.
 
 | File | Change |
 |---|---|
-| `api/scrape.py` | **new** — the Vercel Python Function handler (auth → claim → Browserbase → run → persist) |
-| `vercel.json` | **new/edit** — Python runtime + `maxDuration` for `api/scrape.py` |
-| `worker/scraper.py` | Browserbase CDP connect (was local headed Chrome); shared by the function |
-| `worker/db.py` | `insert_job_step` stores base64 screenshot; add JWT-verify + job-load helpers |
-| `worker/main.py` | remove poll loop + `claim_next_scrape_job` (or reduce to an optional local shim) |
-| `lib/db/schema.ts` + migration | add `job_steps.screenshot` |
-| `lib/store.tsx` | `sendTeamChat`: POST `/api/scrape` for `kind==='scrape'` |
-| `app/agents/[id]/page.tsx` | `runScrape`: POST `/api/scrape` after enqueue |
-| `.env.example` | document `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` |
+| `lib/scrape/firecrawl.ts` | **new** (`server-only`) — query/prompt builder, Firecrawl calls, prospect→lead mapping, dedup |
+| `app/api/scrape/route.ts` | **new** — submit: auth → claim job → submit Firecrawl → store firecrawlJobId |
+| `app/api/scrape/status/route.ts` | **new** — poll: check Firecrawl → on done, write leads (pending) + finish job |
+| `lib/store.tsx` | `sendTeamChat`: POST `/api/scrape` + poll for `kind==='scrape'` |
+| `app/agents/[id]/page.tsx` | `runScrape`: POST `/api/scrape` + poll (replaces the worker-dependent path) |
+| `worker/` | retire from the deploy path (remove, or keep an optional local shim); no longer required |
+| `.env.example` | add `FIRECRAWL_API_KEY`; remove any browser-worker vars |
 
 ---
 
 ## Verification
 
-No unit-test framework — `npx tsc --noEmit` clean + manual (one migration):
+No unit-test framework — `npx tsc --noEmit` clean + manual (no migration needed):
 
-- **Probe first:** a minimal `api/scrape.py` deploys to Vercel, imports `browser_use`, and opens+closes a Browserbase session within `maxDuration`. (De-risks bundle size + connectivity before the full build.)
-- **Local:** run a scrape from team chat (`@Emily find <ICP>`) and from the agent Find-leads button → the function runs → leads land in **Leads → Pending** with `review='pending'` → `job_steps` rows carry base64 screenshots → `getJob` reaches `done` with a `leadsFound` count.
-- **Multi-user:** two users' scrape jobs are each scoped to their own `userId`; neither sees the other's leads/steps.
-- **Failure paths:** unauthenticated POST → rejected; a job belonging to another user → rejected; a timeout/throw → job `failed` with an error, Browserbase session closed.
+- **Config probe:** with `FIRECRAWL_API_KEY` set, a single scrape from team chat (`@Emily find <ICP>`) and from Find-leads submits a Firecrawl job, the status poll reaches completion, and leads land in **Leads → Pending** (`source='scrape'`, `review='pending'`) with a `leadsFound` count in `getJob`.
+- **Multi-user:** two users' scrape jobs are each `userId`-scoped; neither sees the other's leads or job.
+- **Failure paths:** unauthenticated POST → rejected; another user's job → rejected; Firecrawl error/timeout → job `failed` with a short error, surfaced in the thread; `FIRECRAWL_API_KEY` unset → a clear "not configured" message, app otherwise fine.
+- **No Pro / no worker:** the whole scrape flow runs on Vercel Hobby with no Python process running.
 - `tsc` clean.
 
 ## Deferred
 
-- The in-app "watch it scrape" live view (now unblocked by DB-stored screenshots) — separate slice.
+- The in-app scrape **progress/status view** (Firecrawl status → "searching… found N") — a small follow-on; no screenshots.
 - "Scrape my own logged-in Facebook" (per-user browser extension) — future.
-- Auto-retry/backoff and per-user scrape rate limits.
+- Per-user scrape rate limits / credit budgeting; self-hosting Firecrawl.

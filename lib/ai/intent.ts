@@ -4,7 +4,7 @@ import "server-only";
 import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
 
 export interface Intent {
-  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "chat" | "unknown";
+  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "status" | "chat" | "unknown";
   params: { industry?: string; titles?: string; geo?: string; target?: number };
   summary: string;
 }
@@ -12,7 +12,7 @@ export interface Intent {
 const SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "chat", "unknown"] },
+    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "status", "chat", "unknown"] },
     params: {
       type: "object",
       properties: { industry: { type: "string" }, titles: { type: "string" }, geo: { type: "string" }, target: { type: "integer" } },
@@ -31,7 +31,8 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
     "- outreach: draft/write emails or messages to leads.",
     "- follow-up: re-engage cold/non-replying leads.",
     "- book-meeting: propose times / book meetings.",
-    "- chat: small talk, questions, status — no action.",
+    "- status: the user asks for an update/progress on what an agent is doing or recently did — e.g. 'any updates?', 'how's it going?', 'what are you working on?', 'done yet?', 'where are you at?'.",
+    "- chat: small talk or general questions — no action.",
     "- unknown: a task request that fits none of the above.",
     "For a scrape request, extract params from the message: industry, titles (job titles), geo (geography), target (how many, integer).",
     "Return a short `summary` restating the ask in a few words.",

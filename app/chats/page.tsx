@@ -43,13 +43,14 @@ function ChatsInner() {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
+  const [leadsLoaded, setLeadsLoaded] = useState(false);
   useEffect(() => {
-    if (!activeTeam) { setTeamLeads([]); return; }
+    if (!activeTeam) { setTeamLeads([]); setLeadsLoaded(false); return; }
     let alive = true;
-    listTeamLeads(activeTeam.id).then((ls) => { if (alive) setTeamLeads(ls); }).catch(() => {});
+    setLeadsLoaded(false);
+    listTeamLeads(activeTeam.id).then((ls) => { if (alive) { setTeamLeads(ls); setLeadsLoaded(true); } }).catch(() => { if (alive) setLeadsLoaded(true); });
     return () => { alive = false; };
   }, [activeTeam]);
-  const leadLabel = (l: TeamLeadPick) => l.name + (l.title ? " — " + l.title : l.company ? " — " + l.company : "");
   const addPick = (l: TeamLeadPick) => set((prev) => ({
     chatInput: prev.chatInput.replace(/\/lead[^\s]*$/i, ""),
     chatLeadPicks: prev.chatLeadPicks.some((p) => p.id === l.id) ? prev.chatLeadPicks : prev.chatLeadPicks.concat([{ id: l.id, name: l.name }]),
@@ -211,7 +212,7 @@ function ChatsInner() {
             const hits = teamLeads.filter((l) => (l.name + " " + l.title + " " + l.company).toLowerCase().includes(q)).slice(0, 6);
             if (hits.length === 0) return (
               <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);padding:11px 14px;z-index:20;font-size:12px;color:#A1A1AA")}>
-                No leads yet — scrape some first.
+                {leadsLoaded ? "No leads yet — scrape some first." : "Loading leads…"}
               </div>
             );
             return (

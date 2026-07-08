@@ -61,6 +61,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     instruction: cap === "scrape" ? message : undefined,
     // /lead picks target specific leads for lead-consuming capabilities.
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
+    batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
   });
   if ("error" in enq) {
     return { messages: res.messages.concat([{ who: actor.id, text: "…couldn't start that: " + enq.error }]) };

@@ -220,7 +220,7 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
   const mates = await teammatesOf(userId, agentId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
-      .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
+      .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
       .limit(batchSize);
   }
   const pool = await db.select().from(leads)
@@ -253,7 +253,7 @@ export async function pickLeadsForResearch(userId: string, agentId: string, lead
   const mates = await teammatesOf(userId, agentId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
-      .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
+      .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
       .limit(batchSize);
   }
   const pool = await db.select().from(leads)
@@ -278,7 +278,7 @@ export async function pickLeadsForQualify(userId: string, agentId: string, leadI
   const mates = await teammatesOf(userId, agentId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
-      .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
+      .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
       .limit(batchSize);
   }
   return db.select().from(leads)

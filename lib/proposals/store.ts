@@ -37,10 +37,10 @@ export async function pickLeadsForProposal(userId: string, agentId: string, lead
   if (!isDbConfigured()) return [];
   const db = getDb();
   const mates = await teammatesOf(userId, agentId);
-  const base = and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"));
+  const accepted = and(eq(leads.userId, userId), eq(leads.review, "accepted"));
   const candidates = leadIds && leadIds.length
-    ? await db.select().from(leads).where(and(base, inArray(leads.id, leadIds))).limit(batchSize + 50)
-    : await db.select().from(leads).where(base).orderBy(asc(leads.createdAt)).limit(batchSize + 50);
+    ? await db.select().from(leads).where(and(accepted, inArray(leads.id, leadIds))).limit(batchSize + 50)
+    : await db.select().from(leads).where(and(accepted, inArray(leads.agentId, mates))).orderBy(asc(leads.createdAt)).limit(batchSize + 50);
   if (candidates.length === 0) return [];
   const ids = candidates.map((l) => l.id);
   const existing = await db.select({ leadId: proposals.leadId }).from(proposals)

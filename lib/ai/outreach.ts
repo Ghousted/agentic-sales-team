@@ -5,6 +5,7 @@ import "server-only";
 // the lead's research brief when present. Pure — no DB.
 import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
 import type { AgentSnapshot, OutreachResult, ResearchBrief } from "@/lib/leads/types";
+import type { ProductDTO } from "@/lib/products/store";
 
 const SCHEMA = {
   type: "object",
@@ -35,7 +36,8 @@ function systemPrompt(a: AgentSnapshot, channel: "email" | "dm", platform?: stri
 
 export async function draftOutreach(
   agent: AgentSnapshot,
-  lead: { name: string; title: string; company: string; email: string; platform?: string | null; research?: ResearchBrief | null }
+  lead: { name: string; title: string; company: string; email: string; platform?: string | null; research?: ResearchBrief | null },
+  products?: ProductDTO[],
 ): Promise<OutreachResult> {
   const hasEmail = !!(lead.email && lead.email.trim());
   const channel: "email" | "dm" = hasEmail ? "email" : "dm";
@@ -51,10 +53,13 @@ export async function draftOutreach(
   const researchBlock = lead.research
     ? `\n\nResearch brief (use these specifics to personalize):\nSummary: ${lead.research.summary}\nPriorities: ${(lead.research.priorities || []).join("; ")}\nHooks: ${(lead.research.hooks || []).join("; ")}\nRecommended angle: ${lead.research.angle}`
     : "";
+  const productBlock = products && products.length
+    ? `\n\nRelevant offerings (reference the fitting product + price when natural, don't hard-sell):\n` + products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}`).join("\n")
+    : "";
   const contact = hasEmail ? `Email: ${lead.email}` : `Platform: ${lead.platform || "(unknown)"} (no email — direct message)`;
   const turns: Turn[] = [{
     role: "user",
-    text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\n${contact}${researchBlock}`,
+    text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\n${contact}${researchBlock}${productBlock}`,
   }];
   const r = await geminiJSON<OutreachResult>(systemPrompt(agent, channel, lead.platform), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
   return {

@@ -157,9 +157,8 @@ export async function runFirecrawlScrape(
     ? await planSearch(instruction.trim(), icp, agent.goal)
     : { query: buildQuery(icp, agent.goal), platform: "web" };
   // Buyer-intent posts live on social/community sites — plain web returns seller
-  // listings/ads. If no platform was named, search Facebook + Reddit by default.
-  const domains: Record<string, string> = { facebook: "facebook.com", reddit: "reddit.com", linkedin: "linkedin.com", x: "x.com", twitter: "x.com" };
-  const sites = domains[plan.platform] ? [domains[plan.platform]] : ["facebook.com", "reddit.com"];
+  // listings/ads. Always search Facebook first, then Reddit after.
+  const sites = ["facebook.com", "reddit.com"];
   const per = Math.max(4, Math.min(target, 8));
   const seen = new Set<string>();
   const results: SearchResult[] = [];

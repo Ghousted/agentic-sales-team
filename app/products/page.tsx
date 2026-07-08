@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { css, Box, Btn } from "@/components/primitives";
+import { css, Btn } from "@/components/primitives";
 import { listProducts, addProduct, deleteProduct, importProductsCsv } from "@/lib/products/actions";
 import type { ProductDTO } from "@/lib/products/store";
 
@@ -16,8 +16,10 @@ export default function ProductsPage() {
   const onCsv = async (file: File | undefined) => {
     if (!file) return;
     setNote("Importing…");
-    const res = await importProductsCsv(await file.text());
-    setNote(res.error ? res.error : `Imported ${res.added} product${res.added === 1 ? "" : "s"}.`);
+    try {
+      const res = await importProductsCsv(await file.text());
+      setNote(res.error ? res.error : `Imported ${res.added} product${res.added === 1 ? "" : "s"}.`);
+    } catch { setNote("Import failed — please try again."); }
     refresh();
   };
   const onAdd = async () => {

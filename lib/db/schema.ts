@@ -198,7 +198,7 @@ export const products = pgTable("products", {
   description: text("description").notNull().default(""),
   price: text("price").notNull().default(""),
   category: text("category").notNull().default(""),
-  embedding: vector("embedding", { dimensions: 768 }),
+  embedding: vector("embedding", { dimensions: 768 }), // hnsw cosine index lives only in the raw migration (0012) — drizzle doesn't manage vector indexes
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ProductRow = typeof products.$inferSelect;

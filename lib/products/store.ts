@@ -3,7 +3,7 @@ import "server-only";
 // search. Embeddings via Gemini text-embedding-004. Agents' source of truth.
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, products } from "@/lib/db";
-import { geminiEmbed } from "@/lib/ai/gemini";
+import { geminiEmbed, geminiEmbedBatch } from "@/lib/ai/gemini";
 
 export interface ProductDTO { id: string; name: string; description: string; price: string; category: string }
 export interface ProductInput { name: string; description?: string; price?: string; category?: string }
@@ -61,12 +61,15 @@ export async function importProductsCsv(userId: string, csvText: string): Promis
   const parsed = parseCsv(csvText).slice(0, 200); // bounded import
   const wanted = parsed.filter((r) => (r.name ?? "").trim());
   if (wanted.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
-  let added = 0;
-  for (const r of wanted) {
-    await addProduct(userId, { name: r.name, description: r.description ?? "", price: r.price ?? "", category: r.category ?? "" });
-    added++;
+  const inputs: ProductInput[] = wanted.map((r) => ({ name: r.name.trim(), description: r.description ?? "", price: r.price ?? "", category: r.category ?? "" }));
+  const vecs = await geminiEmbedBatch(inputs.map(embedText));
+  const values = inputs.map((p, i) => ({ userId, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", embedding: vecs[i] ?? null }));
+  try {
+    await getDb().insert(products).values(values);
+    return { added: values.length };
+  } catch (e) {
+    return { added: 0, error: "Import failed: " + String(e).slice(0, 150) };
   }
-  return { added };
 }
 
 /** Semantic top-K over the user's catalog (cosine). The primitive agents ground on. */

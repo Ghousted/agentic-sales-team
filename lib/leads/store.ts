@@ -7,6 +7,7 @@ import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type LiveWorkDTO } from "./types";
 import { teammatesOf } from "@/lib/teams/membership";
+import type { Prospect } from "@/lib/scrape/firecrawl";
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -57,6 +58,37 @@ export async function addLead(input: { agentId: string; name: string; title?: st
     text: `Added lead ${row.name}${row.company ? " · " + row.company : ""}`,
   });
   return toLeadDTO(row);
+}
+
+/** Insert scraped prospects as PENDING leads (the approval gate), deduped against
+ *  the agent's existing leads by profileUrl or email. Returns how many were added. */
+export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<number> {
+  if (!isDbConfigured() || prospects.length === 0) return 0;
+  const db = getDb();
+  const existing = await db.select({ profileUrl: leads.profileUrl, email: leads.email })
+    .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
+  const seenUrl = new Set(existing.map((e) => (e.profileUrl ?? "").trim()).filter(Boolean));
+  const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
+  let added = 0;
+  for (const p of prospects) {
+    const url = (p.profileUrl ?? "").trim();
+    const email = (p.email ?? "").trim();
+    if (url && seenUrl.has(url)) continue;
+    if (email && seenEmail.has(email.toLowerCase())) continue;
+    const [row] = await db.insert(leads).values({
+      userId, agentId, name: p.name, title: p.title ?? "", company: p.company ?? "",
+      email, status: "new", score: 0, source: "scrape", review: "pending",
+      profileUrl: url || null, platform: p.platform || null,
+    }).returning({ id: leads.id });
+    await db.insert(activity).values({
+      userId, agentId, type: "lead_added", leadId: row.id,
+      text: `Scraped ${p.name}${p.company ? " · " + p.company : ""}`,
+    });
+    if (url) seenUrl.add(url);
+    if (email) seenEmail.add(email.toLowerCase());
+    added++;
+  }
+  return added;
 }
 
 export async function listLeads(filter?: { agentId?: string; status?: string; source?: string; review?: string }): Promise<LeadDTO[]> {

@@ -25,12 +25,12 @@ function ChatsInner() {
 
   const teamById = (id: string) => teams.find((t) => t.id === id);
   const agentConvIds = Object.keys(s.chats).filter((id) => byId(id));
-  const isTeam = (id: string) => !!teamById(id);
   // The stored convId can point at a deleted agent (e.g. the default). Fall back
   // to the first valid conversation so the header and messages stay in sync.
   const activeId = byId(s.convId) || teamById(s.convId) ? s.convId : (teams[0]?.id ?? agentConvIds[0] ?? s.convId);
   useEffect(() => {
-    if (!byId(s.convId) && !teamById(s.convId) && agentConvIds[0]) set({ convId: agentConvIds[0] });
+    if (!byId(s.convId) && !teamById(s.convId)) { const next = teams[0]?.id ?? agentConvIds[0]; if (next) set({ convId: next }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.convId, agentConvIds, byId, set]);
   const activeTeam = teamById(activeId);
   const activeAgent = byId(activeId) || agents[0];
@@ -140,7 +140,15 @@ function ChatsInner() {
               aria-label="Message"
               value={s.chatInput}
               onChange={(e) => set({ chatInput: e.target.value })}
-              onKeyDown={(e) => { if (e.key === "Enter") { activeTeam ? sendTeamChat(activeTeam.id, s.chatInput) : sendChat(s.chatInput); } }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                if (activeTeam) {
+                  const mm = s.chatInput.match(/@([\w'-]*)$/);
+                  const hit = mm ? teamMembers.find((a) => a!.name.toLowerCase().includes(mm[1].toLowerCase())) : undefined;
+                  if (mm && mm[1] && hit) { e.preventDefault(); set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + hit!.name.split(" ")[0] + " ") }); return; }
+                  sendTeamChat(activeTeam.id, s.chatInput);
+                } else { sendChat(s.chatInput); }
+              }}
               placeholder={activeTeam ? "Message the team — @mention an agent…" : "Message " + activeAgent.name.split(" ")[0] + "…"}
               style={css("flex:1;border:none;outline:none;font-size:13px;background:transparent;color:#18181B")}
             />

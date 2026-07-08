@@ -39,14 +39,6 @@ async function allAgents(userId: string): Promise<{ id: string; name: string; ca
   return created.concat(seed.filter((a) => !seen.has(a.id)));
 }
 
-async function teamName(userId: string, teamId: string): Promise<string> {
-  const seed = TEAMS_BASE.find((t) => t.id === teamId);
-  if (seed) return seed.name;
-  if (!isDbConfigured()) return "the team";
-  const [row] = await getDb().select().from(teamsTable).where(and(eq(teamsTable.userId, userId), eq(teamsTable.id, teamId))).limit(1);
-  return row?.name ?? "the team";
-}
-
 /** Decide who acts + the reply messages, given the detected intent. */
 export async function resolve(userId: string, teamId: string, message: string, intent: Intent): Promise<Resolution> {
   const memberIds = await membersOfTeam(userId, teamId);
@@ -102,5 +94,3 @@ function actWith(actor: { id: string; name: string; role: string; goal: string; 
   const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : "drafting outreach";
   return { messages: [{ who: actor.id, text: `On it — ${verb}${intent.summary ? " (" + intent.summary + ")" : ""}. 🔍` }], actor, capability: cap };
 }
-
-export { teamName };

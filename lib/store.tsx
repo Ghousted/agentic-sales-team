@@ -323,7 +323,9 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       if (res.job.kind !== "scrape") { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ } }
       let waited = 0;
       const poll = async (): Promise<void> => {
-        const job = await getJob(res.job!.id);
+        let job;
+        try { job = await getJob(res.job!.id); }
+        catch { if (waited >= 40) { append(res.job!.agentId, "Lost track of that run — check the agent."); return; } waited++; setTimeout(poll, 2500); return; }
         if (!job) return;
         const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; steps?: number };
         if (job.status === "done") {

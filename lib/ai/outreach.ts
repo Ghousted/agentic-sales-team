@@ -54,7 +54,7 @@ export async function draftOutreach(
     ? `\n\nResearch brief (use these specifics to personalize):\nSummary: ${lead.research.summary}\nPriorities: ${(lead.research.priorities || []).join("; ")}\nHooks: ${(lead.research.hooks || []).join("; ")}\nRecommended angle: ${lead.research.angle}`
     : "";
   const productBlock = products && products.length
-    ? `\n\nRelevant offerings (reference the fitting product + price when natural, don't hard-sell):\n` + products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}`).join("\n")
+    ? `\n\nRelevant offerings (reference the fitting product + price when natural, don't hard-sell):\n` + products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}${Object.entries(p.attributes ?? {}).map(([k, v]) => ` | ${k}: ${v}`).join("")}`).join("\n")
     : "";
   const contact = hasEmail ? `Email: ${lead.email}` : `Platform: ${lead.platform || "(unknown)"} (no email — direct message)`;
   const turns: Turn[] = [{

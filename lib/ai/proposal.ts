@@ -21,7 +21,8 @@ export async function draftProposal(
   lead: { name: string; title: string; company: string; research?: ResearchBrief | null },
   products: ProductDTO[],
 ): Promise<ProposalResult> {
-  const catalog = products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}${p.description ? ": " + p.description : ""}`).join("\n");
+  const attrs = (p: ProductDTO) => Object.entries(p.attributes ?? {}).map(([k, v]) => ` | ${k}: ${v}`).join("");
+  const catalog = products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}${p.description ? ": " + p.description : ""}${attrs(p)}`).join("\n");
   if (!isGeminiConfigured()) {
     return {
       title: `Proposal for ${lead.company || lead.name}`,

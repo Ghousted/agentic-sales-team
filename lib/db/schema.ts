@@ -223,6 +223,9 @@ export const products = pgTable("products", {
   description: text("description").notNull().default(""),
   price: text("price").notNull().default(""),
   category: text("category").notNull().default(""),
+  // Vertical-agnostic extra fields (e.g. real-estate: location/features; SaaS:
+  // plan/seats). Any non-standard CSV column lands here as key→value.
+  attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
   embedding: vector("embedding", { dimensions: 768 }), // hnsw cosine index lives only in the raw migration (0012) — drizzle doesn't manage vector indexes
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

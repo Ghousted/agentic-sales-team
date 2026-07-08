@@ -5,15 +5,18 @@ import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, products, productFolders } from "@/lib/db";
 import { geminiEmbed, geminiEmbedBatch } from "@/lib/ai/gemini";
 
-export interface ProductDTO { id: string; name: string; description: string; price: string; category: string; folderId: string | null }
-export interface ProductInput { name: string; description?: string; price?: string; category?: string; folderId?: string | null }
+export interface ProductDTO { id: string; name: string; description: string; price: string; category: string; folderId: string | null; attributes: Record<string, string> }
+export interface ProductInput { name: string; description?: string; price?: string; category?: string; folderId?: string | null; attributes?: Record<string, string> }
 export interface FolderDTO { id: string; name: string; count: number }
 
-const PRODUCT_COLS = { id: products.id, name: products.name, description: products.description, price: products.price, category: products.category, folderId: products.folderId };
-const toDTO = (r: { id: string; name: string; description: string; price: string; category: string; folderId: string | null }): ProductDTO =>
-  ({ id: r.id, name: r.name, description: r.description, price: r.price, category: r.category, folderId: r.folderId });
+const PRODUCT_COLS = { id: products.id, name: products.name, description: products.description, price: products.price, category: products.category, folderId: products.folderId, attributes: products.attributes };
+const toDTO = (r: { id: string; name: string; description: string; price: string; category: string; folderId: string | null; attributes: Record<string, string> }): ProductDTO =>
+  ({ id: r.id, name: r.name, description: r.description, price: r.price, category: r.category, folderId: r.folderId, attributes: r.attributes ?? {} });
 
-const embedText = (p: ProductInput) => [p.name, p.category, p.description].filter(Boolean).join("\n");
+// Embed name/category/description + all extra attributes so RAG grounds on the
+// vertical's real fields (e.g. real-estate location/features/selling points).
+const embedText = (p: ProductInput) =>
+  [p.name, p.category, p.description, ...Object.entries(p.attributes ?? {}).map(([k, v]) => `${k}: ${v}`)].filter(Boolean).join("\n");
 
 // ----- Folders -----
 export async function listFolders(userId: string): Promise<FolderDTO[]> {
@@ -53,7 +56,7 @@ export async function addProduct(userId: string, input: ProductInput): Promise<P
   const embedding = await geminiEmbed(embedText(input));
   const [row] = await getDb().insert(products).values({
     userId, folderId: input.folderId ?? null, name: input.name.trim(), description: input.description ?? "", price: input.price ?? "", category: input.category ?? "",
-    embedding: embedding ?? null,
+    attributes: input.attributes ?? {}, embedding: embedding ?? null,
   }).returning(PRODUCT_COLS);
   return toDTO(row);
 }
@@ -90,14 +93,35 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
 }
 
+// Standard fields (+ aliases). Every OTHER CSV column becomes a vertical-specific
+// attribute (key→value) — so real-estate location/features/selling-points, SaaS
+// plan/seats, etc. all import without hardcoding any vertical.
+const FIELD_ALIASES: Record<string, "name" | "description" | "price" | "category"> = {
+  name: "name", title: "name",
+  description: "description", "short description": "description", desc: "description", summary: "description",
+  price: "price", cost: "price",
+  category: "category", type: "category",
+};
+
 export async function importProductsCsv(userId: string, csvText: string, folderId?: string | null): Promise<{ added: number; error?: string }> {
   if (!isDbConfigured()) return { added: 0, error: "Server not configured." };
   const parsed = parseCsv(csvText).slice(0, 200); // bounded import
-  const wanted = parsed.filter((r) => (r.name ?? "").trim());
-  if (wanted.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
-  const inputs: ProductInput[] = wanted.map((r) => ({ name: r.name.trim(), description: r.description ?? "", price: r.price ?? "", category: r.category ?? "" }));
+  const inputs: ProductInput[] = [];
+  for (const row of parsed) {
+    const fields: { name: string; description: string; price: string; category: string } = { name: "", description: "", price: "", category: "" };
+    const attributes: Record<string, string> = {};
+    for (const [key, val] of Object.entries(row)) {
+      if (!val) continue;
+      const field = FIELD_ALIASES[key];
+      if (field) fields[field] = fields[field] || val; // first match wins
+      else attributes[key] = val; // vertical-specific extra column
+    }
+    if (!fields.name.trim()) continue;
+    inputs.push({ ...fields, attributes });
+  }
+  if (inputs.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
   const vecs = await geminiEmbedBatch(inputs.map(embedText));
-  const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", embedding: vecs[i] ?? null }));
+  const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", attributes: p.attributes ?? {}, embedding: vecs[i] ?? null }));
   try {
     await getDb().insert(products).values(values);
     return { added: values.length };

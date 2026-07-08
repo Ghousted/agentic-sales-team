@@ -146,7 +146,15 @@ export default function ProductsPage() {
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>This folder is empty. Use “Import CSV” or “+ Add product”, or move products in from the Folder column.</div>
           ) : shown.map((p) => (
             <div key={p.id} style={css("display:grid;grid-template-columns:2fr 1fr .7fr 1.1fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-              <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div></div>
+              <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div>
+                {Object.keys(p.attributes || {}).length > 0 && (
+                  <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:5px")}>
+                    {Object.entries(p.attributes).slice(0, 4).map(([k, v]) => (
+                      <span key={k} style={css("font-size:10px;font-weight:500;color:#52525B;background:#F4F4F5;border-radius:6px;padding:2px 7px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}><span style={css("color:#A1A1AA")}>{k}:</span> {v}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div>{p.category ? <span style={css(chip("#F1EDFD", "#5122C1"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
               <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
               <div>

@@ -10,6 +10,7 @@ const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/", icon: "home", label: "Dashboard" },
   { href: "/agents", icon: "robot", label: "Agents" },
   { href: "/leads", icon: "leads", label: "Leads" },
+  { href: "/products", icon: "leads", label: "Products" },
   { href: "/chats", icon: "chat", label: "Chats" },
   { href: "/calendar", icon: "calendar", label: "Calendar" },
   { href: "/analytics", icon: "bars", label: "Analytics" },
@@ -32,6 +33,7 @@ function headerTitle(path: string): string {
   if (path.startsWith("/analytics")) return "Analytics";
   if (path.startsWith("/settings")) return "Settings";
   if (path.startsWith("/leads")) return "Leads";
+  if (path.startsWith("/products")) return "Products";
   return "Dashboard";
 }
 

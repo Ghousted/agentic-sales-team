@@ -109,6 +109,8 @@ export async function importProductsCsv(userId: string, csvText: string, folderI
 /** Semantic top-K over the user's catalog (cosine). The primitive agents ground on. */
 export async function searchProducts(userId: string, query: string, k = 5): Promise<ProductDTO[]> {
   if (!isDbConfigured() || !query.trim()) return [];
+  const [any] = await getDb().select({ id: products.id }).from(products).where(eq(products.userId, userId)).limit(1);
+  if (!any) return []; // empty catalog → skip the embedding call
   const vec = await geminiEmbed(query);
   if (!vec) return listProducts(userId).then((all) => all.slice(0, k)); // no embeddings → fall back to recent
   const lit = `[${vec.join(",")}]`;

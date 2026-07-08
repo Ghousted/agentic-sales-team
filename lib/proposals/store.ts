@@ -1,13 +1,13 @@
 import "server-only";
 // Generated proposals: per-agent list + create + mark-sent, and the lead pool
 // for the proposal job (accepted teammate leads without a proposal yet).
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, proposals, leads } from "@/lib/db";
-import { pickLeadsForRun } from "@/lib/leads/store";
+import { teammatesOf } from "@/lib/teams/membership";
 import type { ProposalResult } from "@/lib/leads/types";
 
-// Mirrors the unexported LeadRow idiom in lib/leads/store.ts — pickLeadsForRun
-// (which pickLeadsForProposal wraps) returns raw lead rows, not LeadDTOs.
+// Mirrors the unexported LeadRow idiom in lib/leads/store.ts — the queries
+// below return raw lead rows, not LeadDTOs.
 type LeadRow = typeof leads.$inferSelect;
 
 export interface ProposalDTO { id: string; leadId: string; title: string; body: string; products: string[]; status: string; createdAt: string }
@@ -34,10 +34,16 @@ export async function markProposalSent(userId: string, id: string): Promise<void
 
 // Accepted teammate leads that don't yet have a proposal, oldest first, capped.
 export async function pickLeadsForProposal(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
-  const candidates = await pickLeadsForRun(userId, agentId, leadIds, batchSize + 50); // team-expanded, accepted
-  if (candidates.length === 0 || !isDbConfigured()) return candidates.slice(0, batchSize);
+  if (!isDbConfigured()) return [];
+  const db = getDb();
+  const mates = await teammatesOf(userId, agentId);
+  const base = and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"));
+  const candidates = leadIds && leadIds.length
+    ? await db.select().from(leads).where(and(base, inArray(leads.id, leadIds))).limit(batchSize + 50)
+    : await db.select().from(leads).where(base).orderBy(asc(leads.createdAt)).limit(batchSize + 50);
+  if (candidates.length === 0) return [];
   const ids = candidates.map((l) => l.id);
-  const existing = await getDb().select({ leadId: proposals.leadId }).from(proposals)
+  const existing = await db.select({ leadId: proposals.leadId }).from(proposals)
     .where(and(eq(proposals.userId, userId), inArray(proposals.leadId, ids)));
   const has = new Set(existing.map((e) => e.leadId));
   return candidates.filter((l) => !has.has(l.id)).slice(0, batchSize);

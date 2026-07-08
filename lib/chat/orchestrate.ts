@@ -51,7 +51,7 @@ async function describeWork(userId: string, agentId: string, first: string): Pro
     .orderBy(desc(jobs.createdAt)).limit(1);
   if (!job) return `${first} here — I'm not running anything right now. Want me to find leads, research, or draft outreach?`;
   const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number };
-  const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind;
+  const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind;
   if (job.status === "running" || job.status === "queued") {
     const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? ` — ${r.leadsFound} found so far` : "";
     return `${first} here — I'm ${doing} right now${prog}. I'll post the results here when it's done.`;
@@ -126,6 +126,6 @@ function actWith(actor: { id: string; name: string; role: string; goal: string; 
   if (!engineReady(cap)) {
     return { messages: [{ who: actor.id, text: `${first} here — ${CAPABILITIES.find((c) => c.id === cap)?.label ?? cap} isn't wired up yet, so I can't run it. Coming soon!` }] };
   }
-  const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : "drafting outreach";
+  const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : cap === "qualify" ? "qualifying the leads" : cap === "proposal" ? "drafting a proposal" : "drafting outreach";
   return { messages: [{ who: actor.id, text: `On it — ${verb}${intent.summary ? " (" + intent.summary + ")" : ""}. 🔍` }], actor, capability: cap };
 }

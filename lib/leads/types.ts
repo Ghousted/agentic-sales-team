@@ -71,3 +71,15 @@ export interface OutreachResult {
   body: string;
   rationale: string;
 }
+
+export interface QualifyResult {
+  score: number; // 1-100
+  tier: "hot" | "warm" | "cold";
+  reason: string;
+}
+
+export interface ProposalResult {
+  title: string;
+  body: string;
+  productsUsed: string[];
+}

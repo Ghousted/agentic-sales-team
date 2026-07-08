@@ -2,7 +2,7 @@
 // one per jobs.kind), agent-type presets (bundles of capabilities), and team
 // templates (required capabilities). Developer-curated, like AGENTS_BASE.
 
-export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research";
+export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research" | "qualify" | "proposal" | "enrich";
 
 export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKind: string; engineReady: boolean }[] = [
   { id: "scrape", label: "Lead scraping", desc: "Find & import prospects matching an ICP", jobKind: "scrape", engineReady: true },
@@ -10,14 +10,17 @@ export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKin
   { id: "outreach", label: "Email drafting", desc: "Qualify leads and draft personalized emails", jobKind: "outreach", engineReady: true },
   { id: "follow-up", label: "Follow-ups", desc: "Re-engage non-repliers and cold leads", jobKind: "follow-up", engineReady: false },
   { id: "book-meeting", label: "Meeting booking", desc: "Propose times and book on positive replies", jobKind: "book-meeting", engineReady: false },
+  { id: "qualify", label: "Lead qualification", desc: "Score & prioritize the book (hot/warm/cold)", jobKind: "qualify", engineReady: true },
+  { id: "proposal", label: "Proposal drafting", desc: "Draft a scoped, priced proposal from your catalog", jobKind: "proposal", engineReady: true },
+  { id: "enrich", label: "Contact enrichment", desc: "Fill in missing contact info & firmographics", jobKind: "enrich", engineReady: false },
 ];
 
 export interface AgentType { id: string; label: string; desc: string; capabilities: Capability[]; custom?: boolean }
 
 export const AGENT_TYPES: AgentType[] = [
-  { id: "sdr", label: "SDR", desc: "Full-funnel prospector — finds, writes, and follows up.", capabilities: ["research", "scrape", "outreach", "follow-up"] },
+  { id: "sdr", label: "SDR", desc: "Full-funnel prospector — finds, writes, and follows up.", capabilities: ["research", "scrape", "outreach", "follow-up", "qualify"] },
   { id: "bdr", label: "BDR", desc: "High-volume outbound on a given list.", capabilities: ["outreach", "follow-up"] },
-  { id: "ae", label: "Account Executive", desc: "Works warm leads to booked meetings.", capabilities: ["outreach", "book-meeting"] },
+  { id: "ae", label: "Account Executive", desc: "Works warm leads to booked meetings.", capabilities: ["outreach", "book-meeting", "proposal"] },
   { id: "csm", label: "Customer Success", desc: "Check-ins and re-engagement for accounts.", capabilities: ["follow-up"] },
   { id: "recruiter", label: "Recruiter", desc: "Sources and contacts candidates.", capabilities: ["scrape", "outreach"] },
   { id: "manager", label: "Sales Manager", desc: "Coordinates the team and reports — no direct outreach.", capabilities: [] },
@@ -25,6 +28,8 @@ export const AGENT_TYPES: AgentType[] = [
   { id: "researcher", label: "Research Agent", desc: "Enriches prospects with research briefs.", capabilities: ["research"] },
   { id: "writer", label: "Outreach Writer", desc: "Pure email drafter.", capabilities: ["outreach"] },
   { id: "followup", label: "Follow-up Agent", desc: "Pure re-engagement for cold leads.", capabilities: ["follow-up"] },
+  { id: "qualifier", label: "Lead Qualifier", desc: "Scores & triages the book so the team works the best leads first.", capabilities: ["qualify"] },
+  { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal"] },
   { id: "custom", label: "Custom", desc: "Build your own — pick the capabilities you want.", capabilities: [], custom: true },
 ];
 
@@ -46,6 +51,7 @@ export const TEAM_TEMPLATES: TeamTemplate[] = [
   { id: "meetings", label: "Meeting-Booking / SDR→AE", desc: "Book demos, hand off to closers.", requiredCapabilities: ["outreach", "book-meeting"] },
   { id: "recruitment", label: "Recruitment", desc: "Source & contact candidates.", requiredCapabilities: ["scrape", "outreach"] },
   { id: "success", label: "Customer Success", desc: "Retention, check-ins, renewals.", requiredCapabilities: ["follow-up"] },
+  { id: "revenue", label: "Qualify → Propose", desc: "Prioritize the book and send proposals.", requiredCapabilities: ["qualify", "proposal"] },
   { id: "custom", label: "Custom", desc: "Freeform — pick any agents.", requiredCapabilities: [] },
 ];
 

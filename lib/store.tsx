@@ -7,6 +7,8 @@ import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { typeById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
+import { teamChat } from "./chat/actions";
+import { getJob } from "./jobs/actions";
 import { saveAgent, saveTeam, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
@@ -116,6 +118,7 @@ interface Ctx {
   saveConfig: (id: string, cfg: AgentConfig) => void;
   addTeamMembers: (teamId: string, ids: string[]) => void;
   sendChat: (text: string) => void;
+  sendTeamChat: (teamId: string, text: string) => void;
   createTeam: () => string;
   createAgent: () => void;
   quickCreateAgent: (typeId: string, name: string) => string;
@@ -298,6 +301,47 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again.", false));
   }, [agents, set]);
 
+  const sendTeamChat = useCallback((teamId: string, text: string) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    set((prev) => ({
+      chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([{ who: "me", text: t }]) },
+      chatInput: "", chatTyping: true,
+    }));
+    appendMessages(teamId, [{ who: "me", text: t }]).catch((e) => console.error("[sendTeamChat] persist user msg failed:", e));
+
+    const append = (who: string, text: string) => {
+      set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([{ who, text }]) } }));
+      appendMessages(teamId, [{ who, text }]).catch(() => {});
+    };
+
+    teamChat(teamId, t).then(async (res) => {
+      set({ chatTyping: false });
+      for (const m of res.messages) append(m.who, m.text);
+      if (!res.job) return;
+      // Research/outreach run in the Node runner; scrape is claimed by the worker.
+      if (res.job.kind !== "scrape") { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ } }
+      let waited = 0;
+      const poll = async (): Promise<void> => {
+        const job = await getJob(res.job!.id);
+        if (!job) return;
+        const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; steps?: number };
+        if (job.status === "done") {
+          const done = res.job!.kind === "scrape" ? `Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"} — in Leads → Pending to accept.`
+            : res.job!.kind === "research" ? `Researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
+            : `Drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"} — in the Emails tab.`;
+          append(res.job!.agentId, done);
+          return;
+        }
+        if (job.status === "failed") { append(res.job!.agentId, "That run failed — check the agent."); return; }
+        if (waited >= 40) { append(res.job!.agentId, "Still working in the background — check back shortly."); return; }
+        waited++;
+        setTimeout(poll, 2500);
+      };
+      poll();
+    }).catch(() => { set({ chatTyping: false }); append("system", "Sorry — I couldn't process that just now."); });
+  }, [set]);
+
   const createTeam = useCallback((): string => {
     const cur = sRef.current;
     const name = cur.tName.trim() || "New Team";
@@ -375,7 +419,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

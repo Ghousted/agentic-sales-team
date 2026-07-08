@@ -3,9 +3,10 @@
 // leads, and finishes the job — all in one ≤60s invocation. Replaces the Python worker.
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { getDb, isDbConfigured, jobs } from "@/lib/db";
+import { getDb, isDbConfigured, jobs, agentConfig } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecrawl";
+import { isGeminiConfigured } from "@/lib/ai/gemini";
 import { addScrapedLeads } from "@/lib/leads/store";
 
 export const runtime = "nodejs";
@@ -31,6 +32,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scraping isn't configured (FIRECRAWL_API_KEY)." }, { status: 400 });
   }
 
+  if (!isGeminiConfigured()) {
+    await db.update(jobs).set({ status: "failed", error: "GEMINI_API_KEY not set (needed to extract prospects).", finishedAt: new Date() })
+      .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));
+    return NextResponse.json({ error: "Lead extraction isn't configured (GEMINI_API_KEY)." }, { status: 400 });
+  }
+
   // Atomic claim: only one invocation proceeds.
   const claimed = await db.update(jobs).set({ status: "running", startedAt: new Date() })
     .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId), eq(jobs.status, "queued")))
@@ -42,7 +49,13 @@ export async function POST(req: Request) {
   const target = typeof params.target === "number" ? params.target : 10;
 
   try {
-    const prospects = await runFirecrawlScrape(agent, params.icp ?? null, target);
+    let icp = (params.icp ?? null) as { industry?: string; titles?: string; geo?: string } | null;
+    if (!icp || !(icp.industry || icp.titles || icp.geo)) {
+      const [cfg] = await db.select().from(agentConfig).where(and(eq(agentConfig.userId, userId), eq(agentConfig.agentId, job.agentId))).limit(1);
+      const stored = (cfg?.settings as Record<string, { industry?: string; titles?: string; geo?: string }> | null | undefined)?.scrape;
+      if (stored && (stored.industry || stored.titles || stored.geo)) icp = stored;
+    }
+    const prospects = await runFirecrawlScrape(agent, icp, target);
     const leadsFound = await addScrapedLeads(userId, job.agentId, prospects);
     await db.update(jobs).set({ status: "done", result: { leadsFound }, finishedAt: new Date() })
       .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));

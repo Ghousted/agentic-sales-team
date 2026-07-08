@@ -129,8 +129,9 @@ export default function AgentDetail() {
     if ("error" in res) { setScrapeNote(res.error); setRunningScrape(false); return; }
     try {
       const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: res.jobId }) });
-      const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string };
+      const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
       if (!r.ok || data.error) setScrapeNote(data.error ?? "Scrape failed.");
+      else if (data.note === "already running") setScrapeNote("That scrape is already running — hang tight.");
       else setScrapeNote(`Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} to review — open the Leads module’s Pending tab.`);
     } catch { setScrapeNote("Scrape failed — please try again."); }
     setRunningScrape(false);

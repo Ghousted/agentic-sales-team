@@ -91,7 +91,7 @@ export async function runFirecrawlScrape(
   target: number,
 ): Promise<Prospect[]> {
   const query = buildQuery(icp, agent.goal);
-  const limit = Math.max(3, Math.min(target, 6)); // keep small so search + extract fit maxDuration=60
+  const limit = Math.max(3, Math.min(target, 4)); // small so search + extract fit maxDuration=60
   const results = await firecrawlSearch(query, limit);
   const icpText = [icp?.titles, icp?.industry, icp?.geo].filter(Boolean).join(", ") || agent.goal;
   const prospects = await extractProspects(icpText, results, target);

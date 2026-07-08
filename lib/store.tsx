@@ -323,8 +323,9 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       if (job.kind === "scrape") {
         try {
           const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
-          const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string };
+          const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
           if (!r.ok || data.error) append(job.agentId, "That scrape didn't run: " + (data.error ?? "unknown error"));
+          else if (data.note === "already running") append(job.agentId, "That scrape is already running — hang tight.");
           else append(job.agentId, `Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} — in Leads → Pending to accept.`);
         } catch { append(job.agentId, "That scrape failed — please try again."); }
         return;
@@ -339,8 +340,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         if (!job) return;
         const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; steps?: number };
         if (job.status === "done") {
-          const done = res.job!.kind === "scrape" ? `Found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"} — in Leads → Pending to accept.`
-            : res.job!.kind === "research" ? `Researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
+          const done = res.job!.kind === "research" ? `Researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
             : `Drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"} — in the Emails tab.`;
           append(res.job!.agentId, done);
           return;

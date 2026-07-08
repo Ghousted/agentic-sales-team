@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResearchResult } from "@/lib/leads/store";
+import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResearchResult, pickLeadsForQualify, applyQualifyResult } from "@/lib/leads/store";
 import { draftOutreach } from "@/lib/ai/outreach";
 import { draftResearch } from "@/lib/ai/research";
+import { qualifyLead } from "@/lib/ai/qualify";
+import { draftProposal } from "@/lib/ai/proposal";
+import { pickLeadsForProposal, addProposal } from "@/lib/proposals/store";
+import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import { chainNext } from "@/lib/pod/orchestrate";
 
@@ -28,7 +32,7 @@ export async function POST() {
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research"]))).orderBy(asc(jobs.createdAt)).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research", "qualify", "proposal"]))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
@@ -45,7 +49,8 @@ export async function POST() {
         const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
         for (const lead of batch) {
           try {
-            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, platform: lead.platform, research: lead.research });
+            const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 3);
+            const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, platform: lead.platform, research: lead.research }, products);
             await applyOutreachResult(userId, params.agent.id, lead, result);
             created++;
             drafts++;
@@ -70,6 +75,29 @@ export async function POST() {
           }
         }
         await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { briefed: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else if (candidate.kind === "qualify") {
+        const batch = await pickLeadsForQualify(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        for (const lead of batch) {
+          try {
+            const q = await qualifyLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, research: lead.research });
+            await applyQualifyResult(userId, params.agent.id, lead, q);
+            created++;
+          } catch (e) { console.error("[jobs/run] qualify failed:", e); failed++; }
+        }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { qualified: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else if (candidate.kind === "proposal") {
+        const batch = await pickLeadsForProposal(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        for (const lead of batch) {
+          try {
+            const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 5);
+            const p = await draftProposal(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, products);
+            await addProposal(userId, params.agent.id, lead.id, p);
+            created++;
+          } catch (e) { console.error("[jobs/run] proposal failed:", e); failed++; }
+        }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { proposals: created, failed } })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       } else {
         await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "Unknown job kind: " + candidate.kind })

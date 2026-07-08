@@ -6,7 +6,7 @@ import { av, statusPill } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 
 export default function AgentsPage() {
-  const { s, agents } = useApp();
+  const { s, agents, deleteAgent } = useApp();
   const router = useRouter();
   const activeCount = agents.filter((a) => a.status === "working").length;
 
@@ -49,6 +49,14 @@ export default function AgentsPage() {
                 </div>
                 <div style={css("font-size:11px;color:#A1A1AA")}>Performance<br />score</div>
                 <div style={css("margin-left:auto;display:flex;gap:6px")}>
+                  <Btn
+                    onClick={(e) => { e.stopPropagation(); deleteAgent(a.id); }}
+                    aria-label={"Delete " + a.name}
+                    style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer"
+                    styleHover="background:#FEECEC"
+                  >
+                    Delete
+                  </Btn>
                   <Btn
                     onClick={(e) => { e.stopPropagation(); router.push("/chats?agent=" + a.id); }}
                     style="background:#F1EDFD;color:#5122C1;border:none;border-radius:99px;padding:6px 13px;font-size:11.5px;font-weight:600;cursor:pointer"

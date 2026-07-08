@@ -14,6 +14,8 @@ import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import Link from "next/link";
 import { getAgentStats } from "@/lib/agents/actions";
 import type { AgentStats } from "@/lib/agents/stats";
+import { listProposalsForAgent, markProposalSent } from "@/lib/proposals/actions";
+import type { ProposalDTO } from "@/lib/proposals/store";
 
 // [key, label, requiredCapability?] — no capability ⇒ always shown.
 const SECTIONS: [string, string, string?][] = [
@@ -21,6 +23,7 @@ const SECTIONS: [string, string, string?][] = [
   ["leads", "Leads"],
   ["research", "Research", "research"],
   ["emails", "Emails", "outreach"],
+  ["proposal", "Proposals", "proposal"],
   ["reach", "Reach Outs", "follow-up"],
   ["meetings", "Meetings", "book-meeting"],
   ["tasks", "Tasks"],
@@ -42,11 +45,14 @@ const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
 const ACT_META: Record<string, { label: string; c: [string, string] }> = {
   lead_added: { label: "Lead added", c: ["#F4F4F5", "#71717A"] },
   lead_researched: { label: "Researched", c: ["#F1EDFD", "#5122C1"] },
+  lead_qualified: { label: "Qualified", c: ["#E9F5FE", "#0369A1"] },
   email_drafted: { label: "Drafted", c: ["#FEF6E8", "#B45309"] },
   email_sent: { label: "Sent", c: ["#E7F7EC", "#1B7A3D"] },
 };
 function actMeta(type: string) { return ACT_META[type] ?? { label: type, c: ["#F4F4F5", "#71717A"] as [string, string] }; }
 function relTime(iso: string): string { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
+// Lead-qualification tier chip from the persisted score: [bg, fg, label].
+const tierChip = (score: number): [string, string, string] => score >= 75 ? ["#FEECEC", "#B91C1C", "Hot"] : score >= 50 ? ["#FEF6E8", "#B45309", "Warm"] : score > 0 ? ["#E9F5FE", "#0369A1", "Cold"] : ["#F4F4F5", "#A1A1AA", "—"];
 
 function permsFrom(saved?: Record<string, boolean>): Record<string, boolean> {
   const base: Record<string, boolean> = {};
@@ -98,6 +104,7 @@ export default function AgentDetail() {
   const [runningOutreach, setRunningOutreach] = useState(false);
   const [runningScrape, setRunningScrape] = useState(false);
   const [runningResearch, setRunningResearch] = useState(false);
+  const [runningQualify, setRunningQualify] = useState(false);
   const [scrapeNote, setScrapeNote] = useState("");
 
   const refetchDrafts = useCallback(async (id: string) => {
@@ -106,6 +113,12 @@ export default function AgentDetail() {
   useEffect(() => {
     if (selId) refetchDrafts(selId);
   }, [selId, refetchDrafts]);
+
+  const [proposals, setProposals] = useState<ProposalDTO[]>([]);
+  const [runningProposal, setRunningProposal] = useState(false);
+  useEffect(() => {
+    if (selId) listProposalsForAgent(selId).then(setProposals);
+  }, [selId]);
 
   const runOutreachForAgent = useCallback(async () => {
     if (!sel) return;
@@ -150,6 +163,34 @@ export default function AgentDetail() {
     } else { showToast(res.error); }
     setRunningResearch(false);
     listWorkbook(sel.id).then(setAgentLeads);
+  }, [sel]);
+
+  const runQualify = useCallback(async () => {
+    if (!sel) return;
+    setRunningQualify(true);
+    const res = await enqueueJob({
+      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+      kind: "qualify", capabilities: sel.capabilities,
+    });
+    if (!("error" in res)) {
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
+    } else { showToast(res.error); }
+    setRunningQualify(false);
+    listWorkbook(sel.id).then(setAgentLeads);
+  }, [sel]);
+
+  const runProposals = useCallback(async () => {
+    if (!sel) return;
+    setRunningProposal(true);
+    const res = await enqueueJob({
+      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+      kind: "proposal", capabilities: sel.capabilities,
+    });
+    if (!("error" in res)) {
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; proposals refetched below */ }
+    } else { showToast(res.error); }
+    setRunningProposal(false);
+    listProposalsForAgent(sel.id).then(setProposals);
   }, [sel]);
 
   const sendDraft = useCallback((d: DraftDTO) => {
@@ -271,7 +312,10 @@ export default function AgentDetail() {
           {sel.capabilities?.includes("scrape") && (
             <Btn onClick={runScrape} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningScrape ? "opacity:.6" : "")} styleHover="background:#42199E">{runningScrape ? "Finding…" : "Find leads"}</Btn>
           )}
-          <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
+          {sel.capabilities?.includes("qualify") && (
+            <Btn onClick={runQualify} style={(sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningQualify ? "opacity:.6" : "")} styleHover="background:#42199E">{runningQualify ? "Qualifying…" : "Qualify leads"}</Btn>
+          )}
+          <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") || sel.capabilities?.includes("qualify") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
         </div>
         {scrapeNote && <div style={css("padding:9px 18px;font-size:12px;color:#71717A;border-bottom:1px solid #ECECF1")}>{scrapeNote}</div>}
         {agentLeads.length === 0 ? (
@@ -296,7 +340,7 @@ export default function AgentDetail() {
                   </div>
                   <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
                   <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-                  <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>
+                  <div>{(() => { const [bg, fg, label] = tierChip(l.score || 0); return <span style={css(chip(bg, fg))}>{label}{l.score ? " · " + l.score : ""}</span>; })()}</div>
                   <div style={css("color:#71717A")}>{new Date(l.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
                 </div>
               );
@@ -360,6 +404,30 @@ export default function AgentDetail() {
                 </>)}
                 {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
               </div>
+            </div>
+          ))}
+        </div>
+      </>)}
+
+      {/* Proposals */}
+      {isVisible("proposal") && (<>
+        <SectionTitle id="sec-proposal">Proposals</SectionTitle>
+        <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
+          <div style={css("display:flex;align-items:center;gap:10px")}>
+            <div style={css("font-size:12.5px;color:#71717A")}>{proposals.length} proposal{proposals.length === 1 ? "" : "s"}</div>
+            <Btn onClick={runProposals} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningProposal ? "opacity:.6" : "")} styleHover="background:#42199E">{runningProposal ? "Drafting…" : "Generate proposals"}</Btn>
+          </div>
+          {proposals.length === 0 ? (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No proposals yet. Hit “Generate proposals” to draft from your catalog.</div>
+          ) : proposals.map((p) => (
+            <div key={p.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
+              <div style={css("display:flex;align-items:center;gap:8px")}>
+                <span style={css(chip(p.status === "sent" ? "#E7F7EC" : "#F1EDFD", p.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{p.status === "sent" ? "Sent" : "Draft"}</span>
+                <div style={css("font-size:13.5px;font-weight:700")}>{p.title}</div>
+              </div>
+              {p.products.length > 0 && <div style={css("display:flex;gap:6px;flex-wrap:wrap;margin-top:8px")}>{p.products.map((pr, i) => <span key={i} style={css(chip("#F1EDFD", "#5122C1"))}>{pr}</span>)}</div>}
+              <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:8px;white-space:pre-wrap")}>{p.body}</div>
+              {p.status !== "sent" && <div style={css("margin-top:12px")}><Btn onClick={async () => { await markProposalSent(p.id); listProposalsForAgent(sel.id).then(setProposals); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn></div>}
             </div>
           ))}
         </div>

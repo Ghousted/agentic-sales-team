@@ -96,7 +96,8 @@ export default function CreatePage() {
   const name = s.wName.trim() || "New Agent";
   // A scrape agent needs a full ICP (industry / titles / geo) before leaving Settings.
   const scrapeIcpMissing = caps.includes("scrape") && (!sv("scrape", "industry").trim() || !sv("scrape", "titles").trim() || !sv("scrape", "geo").trim());
-  const canContinue = !(step === 3 && scrapeIcpMissing);
+  const nameMissing = !s.wName.trim();
+  const canContinue = !((step === 0 && nameMissing) || (step === 3 && scrapeIcpMissing));
 
   /* ---------- success screen (step 5) ---------- */
   if (step === 5) {
@@ -155,10 +156,11 @@ export default function CreatePage() {
           {step === 0 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
-                <div style={css(titleStyle)}>Name your agent</div>
+                <div style={css(titleStyle)}>Name your agent <span style={css("color:#B91C1C;font-weight:600;font-size:14px")}>* required</span></div>
                 <div style={css(subtitleStyle)}>Give your AI employee a name your team will recognize.</div>
               </div>
               <input aria-label="Agent name" value={s.wName} onChange={(e) => set({ wName: e.target.value })} placeholder="Enter name" style={css(inputStyle)} />
+              {nameMissing && <div style={css("font-size:12px;color:#B91C1C")}>A name is required.</div>}
             </>
           )}
 

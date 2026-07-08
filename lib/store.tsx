@@ -182,8 +182,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const agents = useMemo(
     () =>
-      AGENTS_BASE.filter((a) => !s.removed[a.id])
-        .concat(s.extraAgents)
+      AGENTS_BASE.concat(s.extraAgents)
+        .filter((a) => !s.removed[a.id]) // hide soft-deleted seed AND created agents
         .map((a) => {
           const c = s.agentConfig[a.id];
           return c ? { ...a, role: c.role ?? a.role, goal: c.goal ?? a.goal } : a;

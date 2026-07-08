@@ -31,6 +31,8 @@ export async function teamChat(teamId: string, message: string): Promise<TeamCha
     agent: { id: res.actor.id, name: res.actor.name, role: res.actor.role, goal: res.actor.goal, task: res.actor.task },
     kind: res.capability, capabilities: res.actor.capabilities,
     target: intent.params.target ?? 10, icp,
+    // Pass the user's raw message so a scrape can formulate its own search terms.
+    instruction: res.capability === "scrape" ? message : undefined,
   });
   if ("error" in enq) {
     return { messages: res.messages.concat([{ who: res.actor.id, text: "…couldn't start that: " + enq.error }]) };

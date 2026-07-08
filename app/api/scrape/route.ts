@@ -44,9 +44,10 @@ export async function POST(req: Request) {
     .returning({ id: jobs.id });
   if (claimed.length === 0) return NextResponse.json({ ok: true, leadsFound: 0, note: "already running" });
 
-  const params = (job.params ?? {}) as { agent?: any; target?: number; icp?: { industry?: string; titles?: string; geo?: string } | null };
+  const params = (job.params ?? {}) as { agent?: any; target?: number; icp?: { industry?: string; titles?: string; geo?: string } | null; instruction?: string | null };
   const agent = params.agent ?? { id: job.agentId, name: "Agent", role: "", goal: "", task: "" };
   const target = typeof params.target === "number" ? params.target : 10;
+  const instruction = params.instruction ?? undefined;
 
   try {
     let icp = (params.icp ?? null) as { industry?: string; titles?: string; geo?: string } | null;
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
       const stored = (cfg?.settings as Record<string, { industry?: string; titles?: string; geo?: string }> | null | undefined)?.scrape;
       if (stored && (stored.industry || stored.titles || stored.geo)) icp = stored;
     }
-    const prospects = await runFirecrawlScrape(agent, icp, target);
+    const prospects = await runFirecrawlScrape(agent, icp, target, instruction);
     const leadsFound = await addScrapedLeads(userId, job.agentId, prospects);
     await db.update(jobs).set({ status: "done", result: { leadsFound }, finishedAt: new Date() })
       .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));

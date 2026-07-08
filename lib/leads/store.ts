@@ -233,10 +233,10 @@ export async function getLiveWork(): Promise<LiveWorkDTO[]> {
     .where(and(eq(jobs.userId, userId), eq(jobs.status, "running"), inArray(jobs.kind, ["research", "outreach"])));
   const out: LiveWorkDTO[] = [];
   for (const j of running) {
-    const p = j.params as { agent?: { id?: string; name?: string } };
+    const p = j.params as { agent?: { id?: string; name?: string }; leadIds?: string[] | null; batchSize?: number };
     const agentId = p.agent?.id ?? j.agentId;
     const pick = j.kind === "research" ? pickLeadsForResearch : pickLeadsForRun;
-    const pool = await pick(userId, agentId, undefined, 50);
+    const pool = await pick(userId, agentId, p.leadIds ?? undefined, p.batchSize ?? 5);
     out.push({ agentId, agentName: p.agent?.name ?? "Agent", capability: j.kind, leadIds: pool.map((l) => l.id) });
   }
   return out;

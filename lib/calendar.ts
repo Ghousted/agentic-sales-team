@@ -1,5 +1,5 @@
 // Deterministic calendar model derived from the live agent roster (no DB).
-// Mirrors lib/agentDetail.ts: same roster → same schedule. Real event data
+// Mirrors lib/agents/stats.ts: same roster → same schedule. Real event data
 // arrives when the book-meeting / follow-up engines exist.
 import type { Agent } from "./types";
 import { av } from "./visuals";

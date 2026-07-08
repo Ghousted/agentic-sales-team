@@ -1,7 +1,7 @@
 import "server-only";
 // Real per-agent stats for the agent-detail sub-tabs, from the agent's own rows
-// in leads / outreach_drafts / activity / jobs. User-scoped. Replaces the mock
-// lib/agentDetail.ts builder.
+// in leads / outreach_drafts / activity / jobs. User-scoped. Replaces the former
+// mock agent-detail builder.
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
@@ -27,7 +27,7 @@ export async function getAgentStats(agentId: string): Promise<AgentStats> {
   const db = getDb();
 
   const [leadRows, draftRows, actRows, jobRows] = await Promise.all([
-    db.select().from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId))),
+    db.select().from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId), eq(leads.review, "accepted"))),
     db.select().from(outreachDrafts).where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.agentId, agentId))),
     db.select().from(activity).where(and(eq(activity.userId, userId), eq(activity.agentId, agentId))).orderBy(desc(activity.createdAt)).limit(12),
     db.select().from(jobs).where(and(eq(jobs.userId, userId), eq(jobs.agentId, agentId))).orderBy(desc(jobs.createdAt)).limit(10),

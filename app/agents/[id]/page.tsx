@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
@@ -388,9 +388,11 @@ export default function AgentDetail() {
         <SectionTitle id="sec-reach">Reach outs</SectionTitle>
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;flex-direction:column")}>
-            {!stats || stats.activity.length === 0 ? (
-              <div style={css("font-size:12.5px;color:#A1A1AA")}>No reach-outs yet.</div>
-            ) : stats.activity.map((a, i) => {
+            {(() => {
+              const reachActs = stats ? stats.activity.filter((a) => a.type !== "lead_added") : [];
+              return reachActs.length === 0 ? (
+                <div style={css("font-size:12.5px;color:#A1A1AA")}>No reach-outs yet.</div>
+              ) : reachActs.map((a, i) => {
               const m = actMeta(a.type);
               return (
                 <div key={i} style={css("display:flex;gap:16px")}>
@@ -404,7 +406,8 @@ export default function AgentDetail() {
                   </div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
       </>)}

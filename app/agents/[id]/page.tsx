@@ -10,6 +10,8 @@ import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/act
 import { enqueueOutreachJob, enqueueJob, getJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import { CAPABILITIES } from "@/lib/agentTypes";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import Link from "next/link";
 
 // [key, label, requiredCapability?] — no capability ⇒ always shown.
@@ -55,6 +57,7 @@ export default function AgentDetail() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
+  const { byLead } = useLiveWork();
 
   const sel = byId(params.id) || agents[0];
 
@@ -302,7 +305,14 @@ export default function AgentDetail() {
               return (
                 <div key={l.id} style={css("display:grid;grid-template-columns:.9fr 1.4fr 1.2fr .9fr .6fr .9fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                   <div style={css("display:flex;align-items:center;gap:6px;min-width:0")}>{(() => { const a = byId(l.agentId); return a ? <><div style={css(av(a, 18))}>{a.initials}</div><span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a.name.split(" ")[0]}</span></> : <span>{l.agentId}</span>; })()}</div>
-                  <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div></div>
+                  <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                    {(byLead[l.id] || l.workedBy.length > 0) && (
+                      <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
+                        <LivePulse info={byLead[l.id]} />
+                        <WorkedBy ids={l.workedBy} byId={byId} />
+                      </div>
+                    )}
+                  </div>
                   <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
                   <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
                   <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>

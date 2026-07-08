@@ -6,6 +6,8 @@ import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listTeamMessages } from "@/lib/chat/actions";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
+import { listTeamLeads } from "@/lib/leads/actions";
+import type { TeamLeadPick } from "@/lib/leads/types";
 
 const SUGGESTIONS = ["What are you working on?", "Summarize today", "Who should we contact next?", "Show hottest prospects"];
 
@@ -40,6 +42,19 @@ function ChatsInner() {
   const messages = s.chats[activeId] || [];
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
+  const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
+  useEffect(() => {
+    if (!activeTeam) { setTeamLeads([]); return; }
+    let alive = true;
+    listTeamLeads(activeTeam.id).then((ls) => { if (alive) setTeamLeads(ls); }).catch(() => {});
+    return () => { alive = false; };
+  }, [activeTeam]);
+  const leadLabel = (l: TeamLeadPick) => l.name + (l.title ? " — " + l.title : l.company ? " — " + l.company : "");
+  const addPick = (l: TeamLeadPick) => set((prev) => ({
+    chatInput: prev.chatInput.replace(/\/lead[^\s]*$/i, ""),
+    chatLeadPicks: prev.chatLeadPicks.some((p) => p.id === l.id) ? prev.chatLeadPicks : prev.chatLeadPicks.concat([{ id: l.id, name: l.name }]),
+  }));
+  const removePick = (id: string) => set((prev) => ({ chatLeadPicks: prev.chatLeadPicks.filter((p) => p.id !== id) }));
 
   const APPROVE_RE = /⟦approve:([0-9a-f-]{36})⟧/;
   const onApprove = async (jobId: string) => {
@@ -189,9 +204,41 @@ function ChatsInner() {
               </div>
             );
           })()}
+          {activeTeam && (() => {
+            const m = s.chatInput.match(/\/lead([^\s]*)$/i);
+            if (!m) return null;
+            const q = m[1].toLowerCase();
+            const hits = teamLeads.filter((l) => (l.name + " " + l.title + " " + l.company).toLowerCase().includes(q)).slice(0, 6);
+            if (hits.length === 0) return (
+              <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);padding:11px 14px;z-index:20;font-size:12px;color:#A1A1AA")}>
+                No leads yet — scrape some first.
+              </div>
+            );
+            return (
+              <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);overflow:hidden;z-index:20;min-width:280px;max-height:280px;overflow-y:auto")}>
+                {hits.map((l) => (
+                  <Box key={l.id} onClick={() => addPick(l)} style="display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer" styleHover="background:#F4F4F5">
+                    <div style={css("flex:1;font-size:12.5px;font-weight:600;color:#18181B")}>{l.name}<span style={css("font-size:10.5px;color:#A1A1AA;font-weight:400")}> · {l.title || l.company || l.platform || "lead"}</span></div>
+                    <div style={css("font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-radius:99px;padding:2px 7px;" + (l.review === "accepted" ? "background:#E7F7EC;color:#1B7A3D" : "background:#FEF3E7;color:#B7791F"))}>{l.review}</div>
+                  </Box>
+                ))}
+              </div>
+            );
+          })()}
           {!activeTeam && (
             <div style={css("display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap")}>
               {SUGGESTIONS.map((q) => <Box key={q} onClick={() => sendChat(q)} style="font-size:11.5px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:5px 13px;cursor:pointer;font-weight:600" styleHover="background:#E3DBF9">{q}</Box>)}
+            </div>
+          )}
+          {activeTeam && s.chatLeadPicks.length > 0 && (
+            <div style={css("display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center")}>
+              <span style={css("font-size:11px;color:#A1A1AA;font-weight:600")}>To:</span>
+              {s.chatLeadPicks.map((p) => (
+                <span key={p.id} style={css("display:inline-flex;align-items:center;gap:6px;background:#F1EDFD;color:#5122C1;border-radius:99px;padding:4px 10px;font-size:11.5px;font-weight:600")}>
+                  {p.name}
+                  <span onClick={() => removePick(p.id)} style={css("cursor:pointer;font-weight:700;opacity:.7")}>✕</span>
+                </span>
+              ))}
             </div>
           )}
           <div style={css("display:flex;gap:10px;background:#fff;border:1px solid #ECECF1;border-radius:99px;padding:6px 6px 6px 18px;box-shadow:0 1px 3px rgba(24,24,27,.05)")}>
@@ -205,13 +252,13 @@ function ChatsInner() {
                   const mm = s.chatInput.match(/@([\w'-]*)$/);
                   const hit = mm ? teamMembers.find((a) => a!.name.toLowerCase().includes(mm[1].toLowerCase())) : undefined;
                   if (mm && mm[1] && hit) { e.preventDefault(); set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + hit!.name.split(" ")[0] + " ") }); return; }
-                  sendTeamChat(activeTeam.id, s.chatInput);
+                  sendTeamChat(activeTeam.id, s.chatInput, s.chatLeadPicks.map((p) => p.id));
                 } else { sendChat(s.chatInput); }
               }}
-              placeholder={activeTeam ? "Message the team — @mention an agent…" : "Message " + activeAgent.name.split(" ")[0] + "…"}
+              placeholder={activeTeam ? "Message the team — @mention an agent, /lead to pick leads…" : "Message " + activeAgent.name.split(" ")[0] + "…"}
               style={css("flex:1;border:none;outline:none;font-size:13px;background:transparent;color:#18181B")}
             />
-            <Btn onClick={() => { activeTeam ? sendTeamChat(activeTeam.id, s.chatInput) : sendChat(s.chatInput); }} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Send ↑</Btn>
+            <Btn onClick={() => { activeTeam ? sendTeamChat(activeTeam.id, s.chatInput, s.chatLeadPicks.map((p) => p.id)) : sendChat(s.chatInput); }} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Send ↑</Btn>
           </div>
         </div>
       </div>

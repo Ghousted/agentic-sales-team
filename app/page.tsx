@@ -80,7 +80,7 @@ export default function Home() {
             <Box key={p.id} onClick={() => set({ hubTeam: p.id })} style={"font-size:11.5px;font-weight:600;border-radius:99px;padding:5px 13px;cursor:pointer;transition:all .12s;backdrop-filter:blur(6px);" + (s.hubTeam === p.id ? "background:#fff;color:#2E1065;border:1px solid #fff" : "background:rgba(255,255,255,.07);color:#CFC6F2;border:1px solid rgba(255,255,255,.16)")} styleHover="border-color:#C9B8F5">{p.label}</Box>
           ))}
         </div>
-        <div style={css("position:absolute;top:16px;right:20px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 12px;z-index:3;backdrop-filter:blur(6px)")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 2s infinite")} />Working now</div>
+        {hubWorking > 0 && <div style={css("position:absolute;top:16px;right:20px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 12px;z-index:3;backdrop-filter:blur(6px)")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 2s infinite")} />Working now</div>}
 
         <div style={css("position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(" + hubScale.toFixed(3) + ");width:760px;height:524px")}>
           <div style={css("position:absolute;left:380px;top:262px;width:560px;height:380px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.06);border-radius:50%")} />

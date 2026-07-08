@@ -8,6 +8,7 @@ import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { pickLeadsForResearch, pickLeadsForRun } from "@/lib/leads/store";
 import { POD_ORDER, POD_BATCH } from "./types";
+import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
 
@@ -53,14 +54,23 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   if (!info) return;
   const mode = await approvalMode(userId, agentId, capability);
   const leadCount = await countPending(userId, agentId, capability);
-  await getDb().insert(jobs).values({
+  const [row] = await getDb().insert(jobs).values({
     userId, agentId, kind: capability,
     status: mode === "ask" ? "needs_approval" : "queued",
     params: {
       agent: { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task },
       teamId, pod: true, leadCount, batchSize: POD_BATCH, leadIds: null,
     },
-  });
+  }).returning({ id: jobs.id });
+
+  const doing = capability === "research" ? "researching the book" : "drafting outreach";
+  const verb = capability === "research" ? "research these leads" : "draft outreach";
+  if (mode === "ask") {
+    const first = await userFirstName(userId);
+    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${verb}. Approve and I'll start. ⟦approve:${row.id}⟧`);
+  } else {
+    await postTeamMessage(userId, teamId, info.id, `On it — ${doing} now.`);
+  }
 }
 
 /** The first pod stage the team can cover + the member responsible. */
@@ -83,5 +93,16 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   if (!nextCap) return;
   const agentId = await memberWithCapability(userId, teamId, nextCap);
   if (!agentId) return;
+  // Narrate the hand-off from the finishing agent to the next.
+  const finisherId = await memberWithCapability(userId, teamId, completedKind);
+  const [finisher, nextInfo] = await Promise.all([
+    finisherId ? agentInfo(userId, finisherId) : Promise.resolve(null),
+    agentInfo(userId, agentId),
+  ]);
+  if (finisher && nextInfo) {
+    const done = completedKind === "research" ? "researching the book" : "drafting outreach";
+    const nextNoun = nextCap === "research" ? "research" : "outreach";
+    await postTeamMessage(userId, teamId, finisher.id, `Done ${done} — @${nextInfo.name.split(" ")[0]}, over to you for ${nextNoun}.`);
+  }
   await enqueuePodStage(userId, teamId, nextCap, agentId);
 }

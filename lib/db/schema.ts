@@ -1,5 +1,5 @@
 // Drizzle schema for the app's Postgres (Neon) database.
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial, vector } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -189,6 +189,19 @@ export const jobSteps = pgTable("job_steps", {
   screenshotPath: text("screenshot_path").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Products & Services catalog, embedded for RAG-based retrieval during outreach.
+export const products = pgTable("products", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  price: text("price").notNull().default(""),
+  category: text("category").notNull().default(""),
+  embedding: vector("embedding", { dimensions: 768 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ProductRow = typeof products.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

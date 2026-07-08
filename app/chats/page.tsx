@@ -1,9 +1,11 @@
 "use client";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { listTeamMessages } from "@/lib/chat/actions";
+import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 
 const SUGGESTIONS = ["What are you working on?", "Summarize today", "Who should we contact next?", "Show hottest prospects"];
 
@@ -36,6 +38,41 @@ function ChatsInner() {
   const activeAgent = byId(activeId) || agents[0];
   const teamMembers = activeTeam ? activeTeam.members.map((id) => byId(id)).filter(Boolean) as typeof agents : [];
   const messages = s.chats[activeId] || [];
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [handled, setHandled] = useState<Set<string>>(new Set());
+
+  const APPROVE_RE = /⟦approve:([0-9a-f-]{36})⟧/;
+  const onApprove = async (jobId: string) => {
+    setHandled((h) => new Set(h).add(jobId));
+    await approveJob(jobId);
+    try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
+  };
+  const onReject = async (jobId: string) => {
+    setHandled((h) => new Set(h).add(jobId));
+    await rejectJob(jobId);
+  };
+
+  // Live-poll the open team thread so agent-written hand-offs / approvals appear.
+  useEffect(() => {
+    if (!activeTeam) return;
+    const teamId = activeTeam.id;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const [msgs, pend] = await Promise.all([listTeamMessages(teamId), listPendingApprovals(teamId)]);
+        if (!alive) return;
+        set((prev) => {
+          const local = prev.chats[teamId] || [];
+          return msgs.length >= local.length ? { chats: { ...prev.chats, [teamId]: msgs } } : prev;
+        });
+        setPendingIds(new Set(pend.map((p) => p.id)));
+      } catch { /* transient — try again next tick */ }
+    };
+    tick();
+    const iv = setInterval(tick, 4000);
+    return () => { alive = false; clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeam?.id, set]);
 
   return (
     <div style={css("display:flex;height:100%;animation:fadeUp .3s ease")}>
@@ -91,12 +128,21 @@ function ChatsInner() {
           {messages.map((m, i) => {
             const mine = m.who === "me";
             const speaker = !mine && activeTeam ? byId(m.who) : null;
+            const am = m.text.match(APPROVE_RE);
+            const clean = am ? m.text.replace(APPROVE_RE, "").trim() : m.text;
+            const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
               <div key={i} style={css("display:flex;gap:8px;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
                 {speaker && <div style={css(av(speaker, 26) + ";flex:none;margin-top:2px")}>{speaker.initials}</div>}
                 <div style={css("display:flex;flex-direction:column;max-width:62%;gap:2px")}>
                   {speaker && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{speaker.name.split(" ")[0]}</div>}
-                  <div style={css((mine ? "background:#5122C1;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{m.text}</div>
+                  <div style={css((mine ? "background:#5122C1;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{clean}</div>
+                  {showApprove && (
+                    <div style={css("display:flex;gap:8px;margin-top:6px;padding-left:2px")}>
+                      <Btn onClick={() => onApprove(am![1])} style="background:#E7F7EC;color:#1B7A3D;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6EFDD">Approve</Btn>
+                      <Btn onClick={() => onReject(am![1])} style="background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Reject</Btn>
+                    </div>
+                  )}
                 </div>
               </div>
             );

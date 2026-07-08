@@ -151,6 +151,21 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });
 
+// Agent-written proposals (products/services bundled for a lead).
+export const proposals = pgTable("proposals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  products: jsonb("products").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("draft"), // draft|sent
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+});
+export type ProposalRow = typeof proposals.$inferSelect;
+
 // Real event log (feeds notifications + dashboard/analytics in a later milestone).
 export const activity = pgTable("activity", {
   id: uuid("id").defaultRandom().primaryKey(),

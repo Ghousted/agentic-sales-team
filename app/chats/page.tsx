@@ -74,6 +74,19 @@ function ChatsInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTeam?.id, set]);
 
+  // Zero conversations (no agents and no teams) — show an empty state instead of
+  // dereferencing an undefined activeAgent.
+  if (!activeTeam && !activeAgent) {
+    return (
+      <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;animation:fadeUp .3s ease")}>
+        <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
+        <div style={css("font-size:15px;font-weight:700")}>No conversations yet</div>
+        <div style={css("font-size:12.5px;color:#A1A1AA;max-width:340px")}>Create an agent or a team to start chatting with your AI workforce.</div>
+        <Btn onClick={() => router.push("/create")} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create an agent</Btn>
+      </div>
+    );
+  }
+
   return (
     <div style={css("display:flex;height:100%;animation:fadeUp .3s ease")}>
       {/* conversation list */}

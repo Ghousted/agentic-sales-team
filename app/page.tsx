@@ -38,7 +38,7 @@ export default function Home() {
   const tick = s.hubTick;
   const userFirst = s.userName.split(" ")[0];
 
-  const hubMembers = (s.hubTeam === "all" ? agents.slice(0, 8) : (teams.find((t) => t.id === s.hubTeam) || teams[0]).members.map((id) => byId(id))).filter(Boolean) as typeof agents;
+  const hubMembers = (s.hubTeam === "all" ? agents.slice(0, 8) : ((teams.find((t) => t.id === s.hubTeam) || teams[0])?.members ?? []).map((id) => byId(id))).filter(Boolean) as typeof agents;
   const HN = Math.max(hubMembers.length, 1);
   const nodes = hubMembers.map((a, i) => {
     const ang = ((-90 + (i * 360) / HN) * Math.PI) / 180;

@@ -1,16 +1,10 @@
 // Seed data + pure helpers ported verbatim from the v5 prototype.
 import type { Agent, Team, StatusKey, StatusMeta, Chats } from "./types";
 
-export const AGENTS_BASE: Agent[] = [
-  { id: "sk", name: "Sarah Kim", initials: "SK", role: "SDR", color: "#5122C1", status: "working", task: "Booking meetings with Fintech CTOs", score: 94, goal: "Book 30 meetings / month", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
-  { id: "mt", name: "Michael Torres", initials: "MT", role: "BDR", color: "#0EA5E9", status: "working", task: "Sending personalized outreach — Fintech segment", score: 88, goal: "120 personalized emails / week", type: "bdr", capabilities: ["outreach", "follow-up"] },
-  { id: "ew", name: "Emily Watson", initials: "EW", role: "SDR", color: "#2FA45C", status: "working", task: "Discovering Healthcare ICP leads", score: 91, goal: "200 qualified leads / month", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
-  { id: "rp", name: "Ryan Patel", initials: "RP", role: "Account Executive", color: "#F43F7E", status: "waiting", task: "Awaiting approval on Snowflake proposal", score: 86, goal: "$500K pipeline / quarter", type: "ae", capabilities: ["outreach", "book-meeting"] },
-  { id: "al", name: "Ava Lindqvist", initials: "AL", role: "SDR", color: "#F59E0B", status: "working", task: "Following up with Snowflake reply", score: 90, goal: "25% reply rate", type: "sdr", capabilities: ["scrape", "outreach", "follow-up"] },
-  { id: "nc", name: "Noah Chen", initials: "NC", role: "Sales Manager", color: "#8B5CF6", status: "working", task: "Reviewing team pipeline for Q3", score: 83, goal: "Keep team above 85 score", type: "manager", capabilities: [] },
-  { id: "ps", name: "Priya Sharma", initials: "PS", role: "Customer Success", color: "#14B8A6", status: "offline", task: "Idle — next shift at 6:00pm", score: 79, goal: "NPS 60+ across accounts", type: "csm", capabilities: ["follow-up"] },
-  { id: "lm", name: "Leo Martins", initials: "LM", role: "Recruiter", color: "#EF4444", status: "error", task: "LinkedIn connection failed — needs reauth", score: 72, goal: "15 qualified candidates / month", type: "recruiter", capabilities: ["scrape", "outreach"] },
-];
+// No seed agents — every user builds their own workforce via the creation wizard
+// (from the AGENT_TYPES presets in lib/agentTypes.ts). Typed empty array so every
+// AGENTS_BASE consumer just iterates nothing.
+export const AGENTS_BASE: Agent[] = [];
 
 // No seed team instances — users create their own teams from the team TEMPLATES
 // (TEAM_TEMPLATES in lib/agentTypes.ts, offered in the New Team modal). Kept as a
@@ -27,13 +21,9 @@ export function statusMeta(s: StatusKey): StatusMeta {
   return STATUS_META[s];
 }
 
+// No seed conversations — chats begin once the user creates agents/teams.
 export function chatsInit(): Chats {
-  return {
-    sk: [{ who: "ai", text: "Morning! I booked a meeting with Datadog's VP Eng for Thursday 2pm. I'm now working through the Fintech CTO list — 14 left to contact today." }],
-    rp: [{ who: "ai", text: "The Snowflake proposal draft is ready for your review. I estimated $180K ARR based on their seat count. Want me to walk you through it?" }],
-    ew: [{ who: "ai", text: "Found 35 new Healthcare leads matching the ICP this morning. 9 of them use AWS — should I prioritize those for Sarah's sequence?" }],
-    mt: [{ who: "ai", text: "Sequence B is outperforming: 27% reply rate vs 19% for Sequence A. I suggest shifting the remaining Fintech contacts to B." }],
-  };
+  return {};
 }
 
 export function aiReply(q: string, agent: { task: string; goal: string }): string {

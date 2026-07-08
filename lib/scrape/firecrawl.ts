@@ -32,14 +32,16 @@ function buildQuery(icp: { industry?: string; titles?: string; geo?: string } | 
   return `${who} at ${seg} — leadership team, company directory, LinkedIn profiles`.slice(0, 490);
 }
 
-/** Firecrawl /v2/search — returns public web results with markdown. Synchronous. */
+/** Firecrawl /v2/search — returns public SERP results (title + description snippet
+ * + url). We do NOT scrape page bodies: walled sites (Facebook/Reddit/LinkedIn)
+ * return empty content, and the snippet already carries the buying-intent text. */
 async function firecrawlSearch(query: string, limit: number): Promise<SearchResult[]> {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return [];
   const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ query, limit, scrapeOptions: { formats: [{ type: "markdown" }] } }),
+    body: JSON.stringify({ query, limit }),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Firecrawl ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
@@ -62,15 +64,15 @@ async function planSearch(instruction: string, icp: { industry?: string; titles?
   if (!isGeminiConfigured()) return fallback;
   const icpText = [icp?.titles, icp?.industry, icp?.geo].filter(Boolean).join(", ");
   const system = [
-    "You plan ONE web search query to find SALES LEADS — potential BUYERS/prospects a salesperson can sell to.",
-    "Aim at PUBLIC POSTS or listings where buyers show intent or can be found — people asking for recommendations, 'looking for', 'anyone know', 'need a', buying/hiring intent — NOT vendor/seller profiles, company about-pages, or competitor listicles.",
-    "If the instruction names a platform (Facebook, Reddit, X/Twitter, LinkedIn), target that site's PUBLIC web-accessible content with a site: filter (e.g. site:facebook.com, site:reddit.com).",
+    "You write ONE simple web search query to surface PUBLIC POSTS where potential BUYERS show intent (people asking for recommendations / 'looking for' / 'need a' / 'want to buy').",
+    "Compose it from: buyer-intent phrases + the ideal-customer keywords + location. If the instruction names a platform (Facebook, Reddit, X, LinkedIn), prepend a site: filter (e.g. site:facebook.com).",
+    "CRITICAL: keep it SIMPLE. Do NOT use negative/exclusion operators (never use '-word'). Do NOT exclude words like 'agent', 'realtor', 'broker', 'buy', 'buyer' — buyers use those words when asking for help; over-filtering returns nothing.",
     icpText ? `Ideal customer: ${icpText}.` : "",
     agentGoal ? `Salesperson focus: ${agentGoal}.` : "",
     "Return JSON { query, platform } where platform is the site targeted: 'facebook' | 'reddit' | 'linkedin' | 'x' | 'web'.",
   ].filter(Boolean).join("\n");
   try {
-    const r = await geminiJSON<{ query: string; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 200, temperature: 0.3 });
+    const r = await geminiJSON<{ query: string; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 200, temperature: 0.15 });
     return { query: (r.query || fallback.query).slice(0, 490), platform: (r.platform || "web").toLowerCase() };
   } catch {
     return fallback;
@@ -100,21 +102,25 @@ const PROSPECTS_SCHEMA = {
 async function extractProspects(icpText: string, sells: string, results: SearchResult[], target: number, platformHint: string, instruction: string): Promise<Prospect[]> {
   if (!isGeminiConfigured() || results.length === 0) return [];
   const corpus = results
-    .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\n${(r.markdown ?? r.description ?? "").slice(0, 3000)}`)
+    .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`)
     .join("\n\n---\n\n")
     .slice(0, 22000);
   const system = [
-    "You are building a PROSPECT LIST of potential BUYERS for a salesperson — people (or companies) they could SELL TO.",
+    "You turn PUBLIC posts/listings into SALES LEADS — potential BUYERS a salesperson can reach out to.",
     instruction ? `The salesperson asked: "${instruction}".` : "",
     `The ideal customer (who they sell to): ${icpText}.`,
-    sells ? `The salesperson's focus: ${sells}. Do NOT include anyone who SELLS the same kind of product/service (competitors, agents, vendors).` : "",
-    "These are PUBLIC POSTS / pages. Extract the PEOPLE who show buying intent or fit the ideal customer — e.g. a person asking for recommendations, saying they're 'looking for' / 'need' something, or a company that would be a customer.",
-    `Return up to ${target} distinct real prospects.`,
-    "EXCLUDE (never return these): sellers/agents/vendors/agencies promoting or advertising their own services (they are competitors, not buyers); the platform, page, or group itself; marketplaces and directory/aggregator sites; news, blog, or 'best of' articles; job postings; and generic informational pages. A prospect is someone you would PITCH to — never a seller and never a website/article about the topic.",
-    "For each: name (the person or company — not a page/post title), title (role, '' if unknown), company ('' if unknown),",
-    `profileUrl (the SOURCE_URL it came from), platform (use '${platformHint || "web"}' unless the URL clearly indicates another),`,
-    "and email — ONLY if VISIBLY present in the content, otherwise ''. Never invent names or emails.",
-    "If a source has no genuine buyer (e.g. it's a seller's profile or an article), skip it and return fewer. Return ONLY JSON.",
+    sells ? `The salesperson's focus: ${sells}. NEVER return anyone who SELLS the same product/service (competitors, agents, vendors advertising themselves).` : "",
+    "Each source where someone shows BUYING INTENT or matches the ideal customer is ONE lead — e.g. a person asking for recommendations, saying they're 'looking for' / 'need' / 'want to buy', or a company that would be a customer.",
+    `Return up to ${target} distinct leads.`,
+    "For each lead:",
+    "- name: the poster's real name ONLY if it clearly appears in the title/snippet; otherwise a short human-readable descriptor of who they are (e.g. 'First-time home buyer — Austin'). NEVER fabricate a specific personal name.",
+    "- title: a one-line summary of what they're looking for (their intent).",
+    "- company: '' unless clearly stated.",
+    `- profileUrl: the SOURCE_URL (the post/page link — this is how the salesperson reaches them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
+    "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
+    "INCLUDE a lead even when the name isn't shown — the post link is the contact path.",
+    "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to — never a seller or an article about the topic.",
+    "Return ONLY JSON.",
   ].filter(Boolean).join("\n");
   const turns: Turn[] = [{ role: "user", text: corpus }];
   try {
@@ -136,7 +142,7 @@ export async function runFirecrawlScrape(
   const plan = instruction?.trim()
     ? await planSearch(instruction.trim(), icp, agent.goal)
     : { query: buildQuery(icp, agent.goal), platform: "web" };
-  const limit = Math.max(3, Math.min(target, 4)); // small so search + extract fit maxDuration=60
+  const limit = Math.max(6, Math.min(target + 4, 12)); // SERP-only (no page scrape) is fast → pull more candidates
   const results = await firecrawlSearch(plan.query, limit);
   const icpText = [icp?.titles, icp?.industry, icp?.geo].filter(Boolean).join(", ") || agent.goal;
   const sells = [agent.role, agent.goal].filter(Boolean).join(" — "); // seller context, to exclude competitors

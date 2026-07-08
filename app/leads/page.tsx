@@ -172,6 +172,7 @@ export default function LeadsPage() {
             return (
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                 <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                  {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="font-size:11px;font-weight:600;color:#5122C1;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
                   {(byLead[l.id] || l.workedBy.length > 0) && (
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
                       <LivePulse info={byLead[l.id]} />
@@ -212,7 +213,7 @@ export default function LeadsPage() {
                 <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
-                  {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#5122C1;cursor:pointer" styleHover="text-decoration:underline">Profile ↗</Box>}
+                  {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#5122C1;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
                   <Btn onClick={() => review([c.id], true)} style="margin-left:auto;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Accept</Btn>
                   <Btn onClick={() => review([c.id], false)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Dismiss</Btn>
                 </div>

@@ -7,6 +7,9 @@ import type { LeadDTO, DraftDTO, LiveWorkDTO, TeamLeadPick } from "./types";
 export async function addLead(input: { agentId: string; name: string; title?: string; company?: string; email: string }): Promise<LeadDTO | null> {
   return store.addLead(input);
 }
+export async function importLeadsCsv(csvText: string, agentId: string): Promise<{ added: number; error?: string }> {
+  return store.importLeadsCsv(csvText, agentId);
+}
 export async function listLeads(filter?: { agentId?: string; status?: string; source?: string; review?: string }): Promise<LeadDTO[]> {
   return store.listLeads(filter);
 }

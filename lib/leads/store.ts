@@ -91,6 +91,68 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
   return added;
 }
 
+// Minimal RFC-4180-ish CSV parser → array of rows keyed by lowercased header.
+function parseCsv(text: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let field = "", row: string[] = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(field); field = ""; if (row.some((f) => f !== "")) rows.push(row); row = []; }
+    else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); if (row.some((f) => f !== "")) rows.push(row); }
+  if (rows.length < 2) return [];
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  return rows.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+const LEAD_ALIASES: Record<string, "name" | "email" | "title" | "company"> = {
+  name: "name", "full name": "name", fullname: "name", "full_name": "name", contact: "name", "contact name": "name", lead: "name",
+  email: "email", "e-mail": "email", "email address": "email", "email_address": "email", mail: "email",
+  title: "title", "job title": "title", "job_title": "title", role: "title", position: "title", headline: "title",
+  company: "company", organization: "company", organisation: "company", org: "company", account: "company", employer: "company",
+};
+
+/** Import leads from a CSV (name/email/title/company + common header aliases).
+ *  Imported leads land review='accepted' (they are the user's own contacts) and
+ *  are deduped by email against the agent's existing book. Bounded to 500 rows. */
+export async function importLeadsCsv(csvText: string, agentId: string): Promise<{ added: number; error?: string }> {
+  if (!isDbConfigured()) return { added: 0, error: "Server not configured." };
+  const userId = await uid();
+  if (!userId) return { added: 0, error: "Not signed in." };
+  const rows = parseCsv(csvText).slice(0, 500).map((row) => {
+    const f = { name: "", email: "", title: "", company: "" };
+    for (const [key, val] of Object.entries(row)) {
+      if (!val) continue;
+      const field = LEAD_ALIASES[key];
+      if (field) f[field] = f[field] || val;
+    }
+    if (!f.name.trim() && f.email.trim()) f.name = f.email.split("@")[0]; // display name from email
+    return f;
+  }).filter((f) => f.name.trim() || f.email.trim());
+  if (rows.length === 0) return { added: 0, error: "No rows with a name or email column found." };
+  const db = getDb();
+  const existing = await db.select({ email: leads.email }).from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
+  const seen = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
+  const values: (typeof leads.$inferInsert)[] = [];
+  for (const r of rows) {
+    const email = r.email.trim();
+    if (email && seen.has(email.toLowerCase())) continue; // skip duplicate emails
+    values.push({ userId, agentId, name: r.name.trim(), title: r.title.trim(), company: r.company.trim(), email, status: "new", score: 0, source: "import", review: "accepted" });
+    if (email) seen.add(email.toLowerCase());
+  }
+  if (values.length === 0) return { added: 0 };
+  const inserted = await db.insert(leads).values(values).returning({ id: leads.id, name: leads.name, company: leads.company });
+  await db.insert(activity).values(inserted.map((l) => ({ userId, agentId, type: "lead_added", leadId: l.id, text: `Imported ${l.name}${l.company ? " · " + l.company : ""}` })));
+  return { added: inserted.length };
+}
+
 export async function listLeads(filter?: { agentId?: string; status?: string; source?: string; review?: string }): Promise<LeadDTO[]> {
   if (!isDbConfigured()) return [];
   const userId = await uid();

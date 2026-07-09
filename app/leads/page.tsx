@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads } from "@/lib/leads/actions";
+import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, importLeadsCsv } from "@/lib/leads/actions";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
@@ -44,6 +44,20 @@ export default function LeadsPage() {
     () => leads.filter((l) => (!fAgent || l.agentId === fAgent) && (!fStage || l.status === fStage)),
     [leads, fAgent, fStage]
   );
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const onCsv = async (file: File | undefined) => {
+    if (!file) return;
+    const agentId = fAgent || agents[0]?.id;
+    const a = agentId ? byId(agentId) : undefined;
+    if (!agentId) { showToast("Create an agent first, then import."); return; }
+    showToast("Importing…");
+    const res = await importLeadsCsv(await file.text(), agentId);
+    if (fileRef.current) fileRef.current.value = "";
+    if (res.error) { showToast(res.error); return; }
+    showToast(`Imported ${res.added} lead${res.added === 1 ? "" : "s"}${a ? " for " + a.name.split(" ")[0] : ""}`);
+    refetch();
+  };
 
   const submitAdd = async () => {
     const agentId = form.agentId || agents[0]?.id;
@@ -111,6 +125,8 @@ export default function LeadsPage() {
               </select>
             </>
           )}
+          <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label="Import leads CSV" onChange={(e) => onCsv(e.target.files?.[0])} style={css("display:none")} />
+          <Btn onClick={() => fileRef.current?.click()} style="background:#fff;color:#3F3F46;border:1px solid #E4E4E7;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#F4F4F5">Import CSV</Btn>
           <Btn onClick={() => setShowAdd(true)} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ Add lead</Btn>
         </div>
       </div>

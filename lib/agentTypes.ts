@@ -9,7 +9,7 @@ export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKin
   { id: "research", label: "Lead research", desc: "Enrich prospects with a research brief", jobKind: "research", engineReady: true },
   { id: "outreach", label: "Email drafting", desc: "Qualify leads and draft personalized emails", jobKind: "outreach", engineReady: true },
   { id: "follow-up", label: "Follow-ups", desc: "Re-engage non-repliers and cold leads", jobKind: "follow-up", engineReady: false },
-  { id: "book-meeting", label: "Meeting booking", desc: "Propose times and book on positive replies", jobKind: "book-meeting", engineReady: false },
+  { id: "book-meeting", label: "Meeting booking", desc: "Book meetings with leads onto the calendar", jobKind: "book-meeting", engineReady: true },
   { id: "qualify", label: "Lead qualification", desc: "Score & prioritize the book (hot/warm/cold)", jobKind: "qualify", engineReady: true },
   { id: "proposal", label: "Proposal drafting", desc: "Draft a scoped, priced proposal from your catalog", jobKind: "proposal", engineReady: true },
   { id: "enrich", label: "Contact enrichment", desc: "Fill in missing contact info & firmographics", jobKind: "enrich", engineReady: false },
@@ -34,6 +34,7 @@ export const AGENT_TYPES: AgentType[] = [
   { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal", "match"] },
   { id: "matchmaker", label: "Matchmaker", desc: "Matches leads to the catalog listings that fit them.", capabilities: ["match"] },
   { id: "assessor", label: "Assessor", desc: "Reviews new leads and auto-accepts the good fits — the quality gate.", capabilities: ["assess"] },
+  { id: "meeting", label: "Meeting Booker", desc: "Books meetings with your leads onto the calendar.", capabilities: ["book-meeting"] },
   { id: "custom", label: "Custom", desc: "Build your own — pick the capabilities you want.", capabilities: [], custom: true },
 ];
 

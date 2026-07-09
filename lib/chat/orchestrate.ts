@@ -69,7 +69,7 @@ async function describeWork(userId: string, agentId: string, first: string): Pro
 }
 
 /** Decide who acts + the reply messages, given the detected intent. */
-export async function resolve(userId: string, teamId: string, message: string, intent: Intent): Promise<Resolution> {
+export async function resolve(userId: string, teamId: string, message: string, intent: Intent, opts?: { lastSpeakerId?: string }): Promise<Resolution> {
   const memberIds = await membersOfTeam(userId, teamId);
   const members = (await Promise.all(memberIds.map((id) => agentInfo(userId, id)))).filter(Boolean) as NonNullable<Awaited<ReturnType<typeof agentInfo>>>[];
   const cap = intent.capability;
@@ -78,13 +78,13 @@ export async function resolve(userId: string, teamId: string, message: string, i
 
   // Status inquiry ("@Emily any updates?"): report the agent's real current/last job.
   if (cap === "status" || ((cap === "chat" || cap === "unknown") && looksLikeStatus(message))) {
-    const target = mentioned ?? members[0];
+    const target = mentioned ?? members.find((m) => m.id === opts?.lastSpeakerId) ?? members[0];
     if (!target) return { messages: [{ who: "system", text: "No agents on this team yet." }] };
     return { messages: [{ who: target.id, text: await describeWork(userId, target.id, target.name.split(" ")[0]) }] };
   }
 
   if (cap === "chat" || cap === "unknown") {
-    const responder = members[0];
+    const responder = mentioned ?? members.find((m) => m.id === opts?.lastSpeakerId) ?? members[0];
     return { messages: [{ who: responder?.id ?? "system", text: responder ? `${responder.name.split(" ")[0]} here — I can help the team scrape, research, or draft. What do you need?` : "No agents on this team yet." }] };
   }
 

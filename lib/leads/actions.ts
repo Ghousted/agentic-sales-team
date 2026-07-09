@@ -37,6 +37,9 @@ export async function setStage(id: string, status: string): Promise<void> {
 export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   return store.listDraftsForAgent(agentId);
 }
+export async function listAllDrafts(): Promise<DraftDTO[]> {
+  return store.listAllDrafts();
+}
 export async function markDraftSent(draftId: string): Promise<void> {
   return store.markDraftSent(draftId);
 }

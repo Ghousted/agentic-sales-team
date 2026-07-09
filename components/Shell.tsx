@@ -5,6 +5,7 @@ import { navIcon } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
+import InboxBell from "./InboxBell";
 
 const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/", icon: "home", label: "Dashboard" },
@@ -104,6 +105,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div style={css("font-size:24px;font-weight:600;letter-spacing:-.01em;white-space:nowrap")}>{headerTitle(path)}</div>
           <GlobalSearch />
           <div style={css("display:flex;align-items:center;gap:14px;flex:none")}>
+            <InboxBell />
             <NotificationsBell />
             <Btn
               onClick={() => router.push("/create")}

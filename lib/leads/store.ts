@@ -196,6 +196,26 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   }));
 }
 
+/** Every outreach draft the user has, across all agents — newest first. Powers
+ *  the global drafts inbox in the top bar. */
+export async function listAllDrafts(): Promise<DraftDTO[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const rows = await getDb().select({
+    d: outreachDrafts, leadName: leads.name, leadCompany: leads.company, leadEmail: leads.email,
+    leadProfileUrl: leads.profileUrl, leadPlatform: leads.platform,
+  }).from(outreachDrafts)
+    .innerJoin(leads, eq(outreachDrafts.leadId, leads.id))
+    .where(eq(outreachDrafts.userId, userId))
+    .orderBy(desc(outreachDrafts.createdAt));
+  return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
+    id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
+    rationale: d.rationale, status: d.status, createdAt: d.createdAt.toISOString(),
+    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform,
+  }));
+}
+
 export async function markDraftSent(draftId: string): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();

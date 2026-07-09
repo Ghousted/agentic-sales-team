@@ -10,6 +10,7 @@ import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages } from "./teamMessages";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
+import { scrapeHasTarget, askScrapeText, isAskScrapePrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 
 export interface TeamChatResult {
@@ -55,9 +56,23 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   }
   const pendingAgent = lastSpeaker && lastSpeaker.capabilities.includes("outreach") && isAskWhoPrompt(lastAgentText, lastSpeaker.name)
     ? lastSpeaker : undefined;
+  const pendingScrapeAgent = lastSpeaker && lastSpeaker.capabilities.includes("scrape") && isAskScrapePrompt(lastAgentText)
+    ? lastSpeaker : undefined;
 
   const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })));
   const mentions = parseMentions(message, members);
+
+  // Pending scrape clarification: the agent just asked what to look for, and this
+  // is an unmentioned reply that isn't a different command → use it as the target.
+  if (pendingScrapeAgent && mentions.length === 0 && (intent.capability === "scrape" || intent.capability === "chat" || intent.capability === "unknown")) {
+    const a = pendingScrapeAgent;
+    const enq = await enqueueJob({
+      agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
+      kind: "scrape", capabilities: a.capabilities, target: intent.params.target ?? 10, instruction: message,
+    });
+    if ("error" in enq) return { messages: [{ who: a.id, text: "I wasn't able to start that: " + enq.error }] };
+    return { messages: [{ who: a.id, text: "Understood — searching for that now. I'll post the results here." }], job: { id: enq.jobId, kind: "scrape", agentId: a.id } };
+  }
 
   // Pending-answer path: Outreach just asked "who?", and this is an unmentioned
   // reply that isn't a different command → interpret it as the answer.
@@ -106,6 +121,11 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
       }
     }
     return { messages: [{ who: actor.id, text: askWhoText(actor.name) }] };
+  }
+
+  // Scrape needs a target — ask before running a bare "find leads".
+  if (cap === "scrape" && !scrapeHasTarget(message)) {
+    return { messages: [{ who: actor.id, text: askScrapeText() }] };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.

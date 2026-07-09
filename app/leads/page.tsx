@@ -1,9 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, importLeadsCsv } from "@/lib/leads/actions";
+import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
+import { listMatchesForLead } from "@/lib/matches/actions";
+import type { MatchDTO } from "@/lib/matches/store";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
-import { LEAD_STAGES, type LeadDTO } from "@/lib/leads/types";
+import { LEAD_STAGES, type LeadDTO, type DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { useLiveWork } from "@/lib/useLiveWork";
@@ -16,6 +18,8 @@ const STAGE_COLORS: Record<string, [string, string]> = {
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
 const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
 const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
+const SEC = "font-size:11px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
+const MUTED = "font-size:12.5px;color:#A1A1AA";
 
 export default function LeadsPage() {
   const { agents, byId, showToast } = useApp();
@@ -29,6 +33,17 @@ export default function LeadsPage() {
   const [fStage, setFStage] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", title: "", company: "", email: "", agentId: "" });
+  const [openLead, setOpenLead] = useState<LeadDTO | null>(null);
+  const [leadMatches, setLeadMatches] = useState<MatchDTO[]>([]);
+  const [leadDrafts, setLeadDrafts] = useState<DraftDTO[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const openLeadDetail = useCallback(async (l: LeadDTO) => {
+    setOpenLead(l); setLeadMatches([]); setLeadDrafts([]); setDetailLoading(true);
+    try {
+      const [m, d] = await Promise.all([listMatchesForLead(l.id), listDraftsForLead(l.id)]);
+      setLeadMatches(m); setLeadDrafts(d);
+    } finally { setDetailLoading(false); }
+  }, []);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -187,7 +202,7 @@ export default function LeadsPage() {
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
             return (
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}>{l.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#5122C1">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
                   {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="font-size:11px;font-weight:600;color:#5122C1;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
                   {(byLead[l.id] || l.workedBy.length > 0) && (
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
@@ -225,7 +240,7 @@ export default function LeadsPage() {
             const a = byId(c.agentId);
             return (
               <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}>{c.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#5122C1">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
                 <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
@@ -238,6 +253,80 @@ export default function LeadsPage() {
           })}
         </div>
       )}
+
+      {openLead && (() => {
+        const l = openLead;
+        const ag = byId(l.agentId);
+        const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
+        const rb = l.research;
+        return (
+          <div onClick={() => setOpenLead(null)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
+            <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+              <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3;display:flex;align-items:flex-start;gap:10px")}>
+                <div style={css("flex:1;min-width:0")}>
+                  <div style={css("font-size:16px;font-weight:700")}>{l.name}</div>
+                  <div style={css("font-size:12px;color:#71717A;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center")}>
+                    {l.email && <a href={"mailto:" + l.email} style={css("color:#5122C1;text-decoration:none;font-weight:600")}>{l.email}</a>}
+                    {l.company && <span>{l.company}</span>}
+                    {l.platform && <span style={css(chip("#F1EDFD", "#5122C1"))}>{l.platform}</span>}
+                    {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="color:#5122C1;cursor:pointer;font-weight:600" styleHover="text-decoration:underline">View post ↗</Box>}
+                  </div>
+                </div>
+                <Box onClick={() => setOpenLead(null)} style="font-size:18px;color:#A1A1AA;cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
+              </div>
+              <div style={css("padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px")}>
+                <div style={css("display:flex;flex-wrap:wrap;gap:6px;align-items:center")}>
+                  <span style={css(chip(sc[0], sc[1]))}>{l.status}</span>
+                  <span style={css(chip("#EEE9F8", "#5122C1"))}>score {l.score || 0}</span>
+                  <span style={css(chip("#F4F4F5", "#71717A"))}>{l.source || "manual"}</span>
+                  <span style={css(chip(l.review === "accepted" ? "#E7F7EC" : "#FEF3E7", l.review === "accepted" ? "#1B7A3D" : "#B7791F"))}>{l.review}</span>
+                  {ag && <span style={css("font-size:11.5px;color:#71717A")}>· {ag.name}</span>}
+                </div>
+                {l.title && <div><div style={css(SEC)}>Intent</div><div style={css("font-size:13px;color:#3F3F46;line-height:1.55")}>{l.title}</div></div>}
+                {rb && (
+                  <div>
+                    <div style={css(SEC)}>Research</div>
+                    {rb.summary && <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.55")}>{rb.summary}</div>}
+                    {rb.priorities.length > 0 && <div style={css("font-size:12px;color:#52525B;margin-top:6px")}><b>Priorities:</b> {rb.priorities.join("; ")}</div>}
+                    {rb.hooks.length > 0 && <div style={css("font-size:12px;color:#52525B;margin-top:3px")}><b>Hooks:</b> {rb.hooks.join("; ")}</div>}
+                    {rb.angle && <div style={css("font-size:12px;color:#52525B;margin-top:3px")}><b>Angle:</b> {rb.angle}</div>}
+                  </div>
+                )}
+                <div>
+                  <div style={css(SEC)}>Matches</div>
+                  {detailLoading ? <div style={css(MUTED)}>Loading…</div>
+                    : leadMatches.length === 0 ? <div style={css(MUTED)}>No matches yet — ask a Matchmaker to match this lead to your listings.</div>
+                    : <div style={css("display:flex;flex-direction:column;gap:8px")}>{leadMatches.map((m) => (
+                        <div key={m.id} style={css("border:1px solid #ECECF1;border-radius:12px;padding:11px 13px")}>
+                          <div style={css("display:flex;align-items:center;gap:8px")}>
+                            <div style={css("font-weight:600;font-size:13px;flex:1;min-width:0")}>{m.productName}{m.productPrice ? " · " + m.productPrice : ""}{m.productCategory ? " · " + m.productCategory : ""}</div>
+                            <span style={css(chip(m.score >= 75 ? "#E7F7EC" : m.score >= 50 ? "#FEF6E8" : "#F4F4F5", m.score >= 75 ? "#1B7A3D" : m.score >= 50 ? "#B45309" : "#71717A"))}>{m.score}</span>
+                          </div>
+                          {m.reason && <div style={css("font-size:12px;color:#52525B;margin-top:4px;line-height:1.5")}>{m.reason}</div>}
+                        </div>
+                      ))}</div>}
+                </div>
+                {leadDrafts.length > 0 && (
+                  <div>
+                    <div style={css(SEC)}>Emails</div>
+                    <div style={css("display:flex;flex-direction:column;gap:8px")}>{leadDrafts.map((d) => (
+                      <div key={d.id} style={css("border:1px solid #ECECF1;border-radius:12px;padding:11px 13px")}>
+                        <div style={css("font-size:13px;font-weight:700")}>{d.subject}</div>
+                        <div style={css("font-size:12px;color:#52525B;line-height:1.5;margin-top:4px;white-space:pre-wrap")}>{d.body.length > 200 ? d.body.slice(0, 200) + "…" : d.body}</div>
+                        <div style={css("display:flex;gap:6px;margin-top:8px")}>
+                          {d.leadEmail
+                            ? <Btn onClick={() => window.open("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body), "_blank")} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+                            : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"))} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Copy message</Btn>}
+                        </div>
+                      </div>
+                    ))}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

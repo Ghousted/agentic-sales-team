@@ -352,7 +352,12 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
           const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
           if (!r.ok || data.error) append(job.agentId, "I wasn't able to run that search: " + (data.error ?? "unknown error"));
           else if (data.note === "already running") append(job.agentId, "That search is already in progress. I'll post the results here shortly.");
-          else append(job.agentId, `I found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}. They're in Leads → Pending for your review.`);
+          else {
+            append(job.agentId, `I found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}.`);
+            // The scrape hands off down the chain (assess → match → outreach → you).
+            // Kick the runner so the auto stages run; their messages arrive via the thread poll.
+            try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
+          }
         } catch { append(job.agentId, "That search didn't complete. Please try again."); }
         return;
       }

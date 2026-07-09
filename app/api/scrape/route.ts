@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth/session";
 import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecrawl";
 import { isGeminiConfigured } from "@/lib/ai/gemini";
 import { addScrapedLeads } from "@/lib/leads/store";
+import { chainNext } from "@/lib/pod/orchestrate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     .returning({ id: jobs.id });
   if (claimed.length === 0) return NextResponse.json({ ok: true, leadsFound: 0, note: "already running" });
 
-  const params = (job.params ?? {}) as { agent?: any; target?: number; instruction?: string | null };
+  const params = (job.params ?? {}) as { agent?: any; target?: number; instruction?: string | null; pod?: boolean; teamId?: string | null };
   const agent = params.agent ?? { id: job.agentId, name: "Agent", role: "", goal: "", task: "" };
   const target = typeof params.target === "number" ? params.target : 10;
   const instruction = params.instruction ?? undefined;
@@ -54,6 +55,10 @@ export async function POST(req: Request) {
     const leadsFound = await addScrapedLeads(userId, job.agentId, prospects);
     await db.update(jobs).set({ status: "done", result: { leadsFound }, finishedAt: new Date() })
       .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));
+    // Autonomous chain: hand off to the Assessor (or ask the user to review).
+    if (params.pod && params.teamId) {
+      try { await chainNext(userId, params.teamId, "scrape", leadsFound); } catch (e) { console.error("[scrape] chainNext failed:", e); }
+    }
     return NextResponse.json({ ok: true, leadsFound });
   } catch (e) {
     await db.update(jobs).set({ status: "failed", error: String(e).slice(0, 500), finishedAt: new Date() })

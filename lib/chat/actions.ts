@@ -69,6 +69,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     const enq = await enqueueJob({
       agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
       kind: "scrape", capabilities: a.capabilities, target: intent.params.target ?? 10, instruction: message,
+      pod: true, teamId,
     });
     if ("error" in enq) return { messages: [{ who: a.id, text: "I wasn't able to start that: " + enq.error }] };
     return { messages: [{ who: a.id, text: "Understood — searching for that now. I'll post the results here." }], job: { id: enq.jobId, kind: "scrape", agentId: a.id } };
@@ -139,6 +140,9 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     instruction: cap === "scrape" ? message : undefined,
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
     batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
+    // A team-chat scrape kicks off the autonomous chain (scrape → assess → …).
+    pod: cap === "scrape" ? true : undefined,
+    teamId: cap === "scrape" ? teamId : undefined,
   });
   if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
   return { messages: res.messages, job: { id: enq.jobId, kind: cap, agentId: actor.id } };

@@ -11,7 +11,7 @@ async function uid(): Promise<string | null> {
   return s?.userId ?? null;
 }
 
-export async function enqueueJob(input: { agent: AgentSnapshot; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number; target?: number; instruction?: string }): Promise<{ jobId: string } | { error: string }> {
+export async function enqueueJob(input: { agent: AgentSnapshot; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number; target?: number; instruction?: string; pod?: boolean; teamId?: string }): Promise<{ jobId: string } | { error: string }> {
   if (!isDbConfigured()) return { error: "Server not configured." };
   const userId = await uid();
   if (!userId) return { error: "Not signed in." };
@@ -21,7 +21,7 @@ export async function enqueueJob(input: { agent: AgentSnapshot; kind: string; ca
   }
   const [row] = await getDb().insert(jobs).values({
     userId, agentId: input.agent.id, kind: input.kind, status: "queued",
-    params: { agent: input.agent, leadIds: input.leadIds ?? null, batchSize: input.batchSize ?? 5, target: input.target ?? 10, instruction: input.instruction ?? null },
+    params: { agent: input.agent, leadIds: input.leadIds ?? null, batchSize: input.batchSize ?? 5, target: input.target ?? 10, instruction: input.instruction ?? null, pod: input.pod ?? false, teamId: input.teamId ?? null },
   }).returning({ id: jobs.id });
   return { jobId: row.id };
 }

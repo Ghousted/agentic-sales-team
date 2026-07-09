@@ -5,7 +5,7 @@ import "server-only";
 import { and, desc, eq, inArray, asc } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
+import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
 import { teammatesOf, membersOfTeam } from "@/lib/teams/membership";
 import type { Prospect } from "@/lib/scrape/firecrawl";
 
@@ -395,6 +395,32 @@ export async function applyQualifyResult(userId: string, agentId: string, lead: 
   await db.update(leads).set({ score, updatedAt: new Date() })
     .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name} — ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
+}
+
+/** Pick PENDING (freshly-scraped) teammate-book leads for the Assessor to review,
+ *  or the given ids, oldest first, capped. */
+export async function pickLeadsForAssess(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+  const db = getDb();
+  const mates = await teammatesOf(userId, agentId);
+  if (leadIds && leadIds.length) {
+    return db.select().from(leads)
+      .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), inArray(leads.id, leadIds), eq(leads.review, "pending")))
+      .limit(batchSize);
+  }
+  return db.select().from(leads)
+    .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "pending")))
+    .orderBy(asc(leads.createdAt))
+    .limit(batchSize);
+}
+
+/** Apply one assessment: accept (→ review 'accepted' + fit score) or dismiss, + activity. */
+export async function applyAssessResult(userId: string, agentId: string, lead: LeadRow, result: AssessResult): Promise<void> {
+  const db = getDb();
+  const review = result.accept ? "accepted" : "dismissed";
+  const set: { review: string; updatedAt: Date; score?: number } = { review, updatedAt: new Date() };
+  if (result.accept) set.score = Math.max(1, Math.min(100, Math.round(result.score || 0)));
+  await db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
+  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name} — ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
 }
 
 /** Running research/outreach jobs → who is actively working which leads now

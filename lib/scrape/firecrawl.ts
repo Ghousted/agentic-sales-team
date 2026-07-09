@@ -117,7 +117,7 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     "Each source whose intent is on the SAME side the salesperson wants is ONE lead — e.g. (for buyers) a person asking for recommendations, saying they're 'looking to buy' / 'want to buy' / 'need a', or a company that would be a customer.",
     `Return up to ${target} distinct leads.`,
     "For each lead:",
-    "- name: WHO to reach out to — the poster's real name or @handle/username if it clearly appears (e.g. a Reddit 'u/username' or a Facebook name). If none is visible, use a short label identifying the person by source, e.g. 'Reddit user · r/<subreddit>' (take the subreddit from the SOURCE_URL) or 'Facebook group member'. NEVER use the post's title or a paraphrase of the post as the name, and NEVER fabricate a specific personal name.",
+    "- name: WHO to reach out to — the poster's real name or username. Use a 'u/<username>' handle ONLY if an actual Reddit username is written in the snippet; NEVER invent one, and NEVER turn a subreddit (the 'r/...' part of the URL) into a 'u/...' handle — a subreddit is not a person. If no real poster name/username is visible, use a source label: 'Reddit user · r/<subreddit>' (take the subreddit from the SOURCE_URL) or 'Facebook group member'. NEVER use the post's title or a paraphrase of the post as the name, and NEVER fabricate a specific personal name.",
     "- title: a one-line summary of what they're looking for (their intent).",
     "- company: '' unless clearly stated.",
     `- profileUrl: the SOURCE_URL (the post/page link — this is how the salesperson reaches them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,

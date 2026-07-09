@@ -9,7 +9,7 @@ import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
 import { teamChat } from "./chat/actions";
 import { getJob } from "./jobs/actions";
-import { saveAgent, saveTeam, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
+import { saveAgent, saveTeam, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -121,6 +121,7 @@ interface Ctx {
   addTeamMembers: (teamId: string, ids: string[]) => void;
   sendChat: (text: string) => void;
   sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
+  clearChat: (convId: string) => void;
   createTeam: () => string;
   createAgent: () => void;
   quickCreateAgent: (typeId: string, name: string) => string;
@@ -320,6 +321,12 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again.", false));
   }, [agents, set]);
 
+  // Clear one conversation: empty it locally and delete its persisted messages.
+  const clearChat = useCallback((convId: string) => {
+    set((prev) => ({ chats: { ...prev.chats, [convId]: [] } }));
+    clearMessages(convId).catch((e) => console.error("[clearChat] delete failed:", e));
+  }, [set]);
+
   const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
     const t = (text || "").trim();
     if (!t) return;
@@ -450,7 +457,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

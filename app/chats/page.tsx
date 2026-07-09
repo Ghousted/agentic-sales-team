@@ -12,7 +12,7 @@ import type { TeamLeadPick } from "@/lib/leads/types";
 const SUGGESTIONS = ["What are you working on?", "Summarize today", "Who should we contact next?", "Show hottest prospects"];
 
 function ChatsInner() {
-  const { s, set, agents, teams, byId, sendChat, sendTeamChat } = useApp();
+  const { s, set, agents, teams, byId, sendChat, sendTeamChat, clearChat } = useApp();
   const router = useRouter();
   const params = useSearchParams();
   const wantAgent = params.get("agent");
@@ -44,6 +44,9 @@ function ChatsInner() {
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
   const [leadsLoaded, setLeadsLoaded] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  // Drop the clear-confirm when switching conversations.
+  useEffect(() => { setConfirmClear(false); }, [activeId]);
   useEffect(() => {
     if (!activeTeam) { setTeamLeads([]); setLeadsLoaded(false); return; }
     let alive = true;
@@ -151,6 +154,14 @@ function ChatsInner() {
             <div><div style={css("font-size:13.5px;font-weight:700")}>{activeAgent.name}</div><div style={css("font-size:11px;color:#2FA45C;display:flex;align-items:center;gap:5px")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C")} />{activeAgent.role} · online</div></div>
             <Btn onClick={() => router.push("/agents/" + activeAgent.id)} style="margin-left:auto;background:#F1EDFD;color:#5122C1;border:none;border-radius:99px;padding:6px 14px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">View profile</Btn>
           </>)}
+          {!confirmClear ? (
+            <Btn onClick={() => setConfirmClear(true)} style="flex:none;background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#FBE9E9;color:#C0392B">Clear chat</Btn>
+          ) : (
+            <div style={css("flex:none;display:flex;align-items:center;gap:6px")}>
+              <Btn onClick={() => { clearChat(activeId); setConfirmClear(false); }} style="background:#C0392B;color:#fff;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#A93226">Clear</Btn>
+              <Btn onClick={() => setConfirmClear(false)} style="background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
+            </div>
+          )}
         </div>
 
         <div style={css("flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px")}>

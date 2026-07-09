@@ -180,3 +180,12 @@ export async function appendMessages(agentId: string, msgs: ChatMsg[]): Promise<
   if (!userId) return;
   await getDb().insert(messages).values(msgs.map((m) => ({ userId, agentId, who: m.who, text: m.text })));
 }
+
+/** Permanently delete one conversation's messages (a team thread or an agent
+ *  chat, keyed by convId). Session-scoped, so it only touches the user's own. */
+export async function clearMessages(convId: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  await getDb().delete(messages).where(and(eq(messages.userId, userId), eq(messages.agentId, convId)));
+}

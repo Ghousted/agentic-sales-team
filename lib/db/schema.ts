@@ -164,6 +164,18 @@ export const proposals = pgTable("proposals", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });
+
+// Matchmaker output: one row per lead↔listing pair the Matchmaker judged a fit.
+export const matches = pgTable("matches", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
+  leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  score: integer("score").notNull().default(0), // 0..100 fit
+  reason: text("reason").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 export type ProposalRow = typeof proposals.$inferSelect;
 
 // Real event log (feeds notifications + dashboard/analytics in a later milestone).

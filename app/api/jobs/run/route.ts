@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResearchResult, pickLeadsForQualify, applyQualifyResult } from "@/lib/leads/store";
+import { pickLeadsForRun, applyOutreachResult, pickLeadsForResearch, applyResearchResult, pickLeadsForQualify, applyQualifyResult, pickLeadsForAssess, applyAssessResult } from "@/lib/leads/store";
+import { assessLead } from "@/lib/ai/assess";
 import { draftOutreach } from "@/lib/ai/outreach";
 import { draftResearch } from "@/lib/ai/research";
 import { qualifyLead } from "@/lib/ai/qualify";
@@ -34,7 +35,7 @@ export async function POST() {
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research", "qualify", "proposal", "match"]))).orderBy(asc(jobs.createdAt)).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research", "qualify", "proposal", "match", "assess"]))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
@@ -113,13 +114,27 @@ export async function POST() {
         }
         await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { matched: created, failed } })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else if (candidate.kind === "assess") {
+        const batch = await pickLeadsForAssess(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        let dismissed = 0;
+        for (const lead of batch) {
+          try {
+            const a = await assessLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research });
+            await applyAssessResult(userId, params.agent.id, lead, a);
+            if (a.accept) created++; else dismissed++; // created = accepted (the count that moves forward)
+          } catch (e) { console.error("[jobs/run] assess failed:", e); failed++; }
+        }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { assessed: created + dismissed, accepted: created, dismissed, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       } else {
         await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "Unknown job kind: " + candidate.kind })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       }
 
-      if (params.pod && params.teamId && (candidate.kind === "outreach" || candidate.kind === "research")) {
-        await chainNext(userId, params.teamId, candidate.kind);
+      // Auto-hand-off: after any pod-chain stage, narrate + enqueue the next stage
+      // (or @mention the user at the end). `created` is the stage's forward count.
+      if (params.pod && params.teamId) {
+        await chainNext(userId, params.teamId, candidate.kind, created);
       }
     } catch (e) {
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })

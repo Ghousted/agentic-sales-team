@@ -1,16 +1,45 @@
 import "server-only";
 // Pod orchestration: resolve a team's members/capabilities/approval-modes and
 // enqueue or chain pod-stage jobs. Server-only. No engine work here — it wires
-// the existing research/outreach jobs into an auto-handed-off pipeline.
+// the existing capability jobs into an auto-handed-off pipeline.
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
-import { pickLeadsForResearch, pickLeadsForRun } from "@/lib/leads/store";
+import { pickLeadsForResearch, pickLeadsForRun, pickLeadsForQualify, pickLeadsForAssess } from "@/lib/leads/store";
+import { pickLeadsForMatch } from "@/lib/matches/store";
+import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
+
+// Per-stage phrasing for the hand-off narration.
+const DOING: Record<string, string> = { scrape: "finding leads", assess: "reviewing the new leads", research: "researching the book", qualify: "qualifying the leads", match: "matching leads to listings", outreach: "drafting outreach", proposal: "drafting proposals" };
+const VERB: Record<string, string> = { assess: "review these leads", research: "research these leads", qualify: "qualify the leads", match: "match these leads", outreach: "draft outreach", proposal: "draft proposals" };
+const NOUN: Record<string, string> = { assess: "the review", research: "research", qualify: "qualification", match: "matching", outreach: "outreach", proposal: "proposals" };
+function donePhrase(cap: string, n: number): string {
+  const s = n === 1 ? "" : "s";
+  switch (cap) {
+    case "scrape": return `found ${n} lead${s}`;
+    case "assess": return `accepted ${n} lead${s}`;
+    case "research": return `researched ${n} lead${s}`;
+    case "qualify": return `qualified ${n} lead${s}`;
+    case "match": return `matched ${n} lead${s} to listings`;
+    case "outreach": return `drafted ${n} email${s}`;
+    case "proposal": return `drafted ${n} proposal${s}`;
+    default: return "finished";
+  }
+}
+function finalAction(cap: string): string {
+  switch (cap) {
+    case "outreach": return "review and send them from your inbox (the ✉ up top)";
+    case "proposal": return "review and send the proposals";
+    case "match": return "open a lead to see its matches";
+    case "assess": return "they're in your book now";
+    default: return "it's over to you";
+  }
+}
 
 /** Merge the static seed roster + the user's created agents to look one up. */
 export async function agentInfo(userId: string, agentId: string): Promise<AgentInfo | null> {
@@ -38,9 +67,14 @@ export async function approvalMode(userId: string, agentId: string, capability: 
   return settings?.[capability]?.mode === "ask" ? "ask" : "auto";
 }
 
-/** How many book leads the stage would process now (for the approval count). */
+/** How many book/pending leads the stage would process now (for the approval count). */
 export async function countPending(userId: string, agentId: string, capability: string): Promise<number> {
-  const pick = capability === "research" ? pickLeadsForResearch : pickLeadsForRun;
+  const pick = capability === "research" ? pickLeadsForResearch
+    : capability === "assess" ? pickLeadsForAssess
+    : capability === "qualify" ? pickLeadsForQualify
+    : capability === "match" ? pickLeadsForMatch
+    : capability === "proposal" ? pickLeadsForProposal
+    : pickLeadsForRun; // outreach
   const rows = await pick(userId, agentId, undefined, POD_BATCH);
   return rows.length;
 }
@@ -63,46 +97,72 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
     },
   }).returning({ id: jobs.id });
 
-  const doing = capability === "research" ? "researching the book" : "drafting outreach";
-  const verb = capability === "research" ? "research these leads" : "draft outreach";
   if (mode === "ask") {
     const first = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ${leadCount === 1 ? "is" : "are"} ready to ${verb}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
+    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
   } else {
-    await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${doing} now.`);
+    await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${DOING[capability] ?? capability} now.`);
   }
 }
 
-/** The first pod stage the team can cover + the member responsible. */
+/** The first book stage the team can cover (skips scrape/assess which need
+ *  fresh leads). Used only if a "work the book" trigger is ever re-added. */
 export async function firstStage(userId: string, teamId: string): Promise<{ capability: string; agentId: string } | null> {
   for (const cap of POD_ORDER) {
+    if (cap === "scrape" || cap === "assess") continue;
     const agentId = await memberWithCapability(userId, teamId, cap);
     if (agentId) return { capability: cap, agentId };
   }
   return null;
 }
 
-export function nextStageAfter(capability: string): string | null {
-  const i = (POD_ORDER as readonly string[]).indexOf(capability);
-  return i >= 0 && i + 1 < POD_ORDER.length ? POD_ORDER[i + 1] : null;
+/** The next book stage after `completedKind` that this team can cover. Skips
+ *  scrape (entry) and assess (only reachable right after scrape). */
+export async function nextCoverableStage(userId: string, teamId: string, completedKind: string): Promise<{ capability: string; agentId: string } | null> {
+  const i = (POD_ORDER as readonly string[]).indexOf(completedKind);
+  if (i < 0) return null;
+  for (let j = i + 1; j < POD_ORDER.length; j++) {
+    const cap = POD_ORDER[j];
+    if (cap === "scrape" || cap === "assess") continue;
+    const agentId = await memberWithCapability(userId, teamId, cap);
+    if (agentId) return { capability: cap, agentId };
+  }
+  return null;
 }
 
-/** After a pod stage completes, enqueue the next stage for the right team agent. */
-export async function chainNext(userId: string, teamId: string, completedKind: string): Promise<void> {
-  const nextCap = nextStageAfter(completedKind);
-  if (!nextCap) return;
-  const agentId = await memberWithCapability(userId, teamId, nextCap);
-  if (!agentId) return;
-  // Narrate the hand-off from the finishing agent to the next.
+/** After a pod stage completes, narrate the hand-off and enqueue the next stage —
+ *  or, at the end of the chain, @mention the user for the final action. */
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0): Promise<void> {
   const finisherId = await memberWithCapability(userId, teamId, completedKind);
-  const [finisher, nextInfo] = await Promise.all([
-    finisherId ? agentInfo(userId, finisherId) : Promise.resolve(null),
-    agentInfo(userId, agentId),
-  ]);
-  if (finisher && nextInfo) {
-    const done = completedKind === "research" ? "researching the book" : "drafting outreach";
-    const nextNoun = nextCap === "research" ? "research" : "outreach";
-    await postTeamMessage(userId, teamId, finisher.id, `I've finished ${done}. @${nextInfo.name.split(" ")[0]} — the ${nextNoun} is yours from here.`);
+  const finisher = finisherId ? await agentInfo(userId, finisherId) : null;
+  if (!finisher) return;
+  const first = (info: AgentInfo) => info.name.split(" ")[0];
+
+  // Scrape → the assessor gate (the only stage that turns pending into accepted).
+  if (completedKind === "scrape") {
+    const assessorId = await memberWithCapability(userId, teamId, "assess");
+    if (assessorId) {
+      const info = await agentInfo(userId, assessorId);
+      if (info) {
+        await postTeamMessage(userId, teamId, finisher.id, `Found the new leads. @${first(info)} — over to you to review them.`);
+        await enqueuePodStage(userId, teamId, "assess", assessorId);
+      }
+    } else {
+      const userName = await userFirstName(userId);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName} — review and accept them in Leads → Pending.`);
+    }
+    return;
   }
-  await enqueuePodStage(userId, teamId, nextCap, agentId);
+
+  const next = await nextCoverableStage(userId, teamId, completedKind);
+  if (next) {
+    const info = await agentInfo(userId, next.agentId);
+    if (info) {
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)} — over to you for ${NOUN[next.capability] ?? next.capability}.`);
+      await enqueuePodStage(userId, teamId, next.capability, next.agentId);
+    }
+  } else {
+    const userName = await userFirstName(userId);
+    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName} — ${finalAction(completedKind)}.`);
+  }
 }

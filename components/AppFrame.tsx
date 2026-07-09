@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useApp } from "@/lib/store";
 import Shell from "./Shell";
 import Login from "./Login";
+import Landing from "./Landing";
 import Toast from "./Toast";
 import TeamModal from "./TeamModal";
 
@@ -28,9 +29,11 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
         </>
       );
     }
+    // Marketing front door: the Landing greets logged-out visitors and only
+    // hands off to the auth screen once they pick Get started / Sign in.
     return (
       <>
-        <Login />
+        {s.showAuth ? <Login /> : <Landing />}
         <Toast />
       </>
     );

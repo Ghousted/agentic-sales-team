@@ -14,6 +14,7 @@ import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 
 const days = ["M", "T", "W", "T", "F", "S", "S"];
+const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 
 // Deterministic weekly performance series for a team: seeded by team id and
 // scaled by the members' average score (weekends run lighter). Same team →
@@ -31,7 +32,7 @@ function weekSeries(teamId: string, activity: number): number[] {
 }
 
 export default function TeamDetail() {
-  const { agents, teams, byId, addTeamMembers, deleteTeam, showToast } = useApp();
+  const { agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
@@ -39,6 +40,10 @@ export default function TeamDetail() {
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [eName, setEName] = useState("");
+  const [eIcon, setEIcon] = useState("🚀");
+  const [eGoal, setEGoal] = useState("");
   const { live, byLead } = useLiveWork();
 
   const team = teams.find((t) => t.id === params.id) || teams[0];
@@ -70,6 +75,8 @@ export default function TeamDetail() {
     if (chosen.length) addTeamMembers(team.id, chosen);
     setShowAdd(false);
   };
+  const openEdit = () => { setEName(team.name); setEIcon(team.icon); setEGoal(team.goal); setShowEdit(true); };
+  const saveEdit = () => { updateTeam(team.id, { name: eName, icon: eIcon, goal: eGoal }); setShowEdit(false); };
   const refetchPod = () => {
     if (!team) return;
     listPendingApprovals(team.id).then(setApprovals);
@@ -94,6 +101,7 @@ export default function TeamDetail() {
           <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
+          <Btn onClick={openEdit} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Edit</Btn>
           <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
           {!isSeedTeam && (confirmDel ? (<>
             <Btn onClick={() => { deleteTeam(team.id); router.push("/"); }} style="background:#FEECEC;color:#B91C1C;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FBD9D9">Confirm delete</Btn>
@@ -154,11 +162,12 @@ export default function TeamDetail() {
               ) : members.map((a) => {
                 const m = statusMeta(a!.status);
                 return (
-                  <Box key={a!.id} onClick={() => router.push("/agents/" + a!.id)} style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer" styleHover="background:#FAFAFB">
+                  <Box key={a!.id} noButton onClick={() => router.push("/agents/" + a!.id)} style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer" styleHover="background:#FAFAFB">
                     <div style={css(av(a!, 34))}>{a!.initials}</div>
                     <div><div style={css("font-size:13px;font-weight:600")}>{a!.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a!.role}</div></div>
                     <span style={css("display:inline-flex;align-items:center;gap:5px;margin-left:10px;" + chip(m.bg, m.color))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + m.dot)} />{m.label}</span>
                     <div style={css("margin-left:auto;font-size:12px;font-weight:700;color:#5122C1")}>{a!.score}</div>
+                    <Btn onClick={(e) => { e.stopPropagation(); removeTeamMember(team.id, a!.id); }} aria-label={"Remove " + a!.name} title="Remove from team" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#A1A1AA;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none" styleHover="background:#FEECEC;color:#B91C1C">✕</Btn>
                   </Box>
                 );
               })}
@@ -260,6 +269,40 @@ export default function TeamDetail() {
               <Btn onClick={confirmAdd} disabled={chosen.length === 0} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#5122C1;" + (chosen.length === 0 ? "opacity:.5;cursor:default" : "cursor:pointer")} styleHover={chosen.length === 0 ? "" : "background:#42199E"}>
                 Add{chosen.length ? " " + chosen.length : ""}
               </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit-team modal */}
+      {showEdit && (
+        <div onClick={() => setShowEdit(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
+          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:460px;max-height:84vh;overflow-y:auto;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+            <div style={css("padding:18px 22px;border-bottom:1px solid #F0F0F3")}>
+              <div style={css("font-size:15px;font-weight:700")}>Edit team</div>
+              <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Change the name, icon, or shared goal.</div>
+            </div>
+            <div style={css("padding:20px 22px;display:flex;flex-direction:column;gap:16px")}>
+              <div>
+                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Team name</div>
+                <input aria-label="Team name" value={eName} onChange={(e) => setEName(e.target.value)} placeholder="e.g. EMEA Enterprise" style={css("width:100%;border:none;background:#F2F2F2;border-radius:12px;padding:14px 15px;font-size:14px")} />
+              </div>
+              <div>
+                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Icon</div>
+                <div style={css("display:flex;gap:8px")}>
+                  {ICONS.map((ic) => (
+                    <Box key={ic} onClick={() => setEIcon(ic)} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (eIcon === ic ? "#5122C1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">{ic}</Box>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Shared goal</div>
+                <textarea aria-label="Shared goal" value={eGoal} onChange={(e) => setEGoal(e.target.value)} placeholder="e.g. Book 40 meetings this quarter in EMEA." style={css("width:100%;min-height:70px;border:1px solid #E4E4E7;border-radius:12px;padding:11px 13px;font-size:13px;line-height:1.55;resize:vertical;color:#18181B")} />
+              </div>
+            </div>
+            <div style={css("padding:14px 22px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
+              <Btn onClick={() => setShowEdit(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
+              <Btn onClick={saveEdit} style="color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:700;background:#5122C1;cursor:pointer" styleHover="background:#42199E">Save changes</Btn>
             </div>
           </div>
         </div>

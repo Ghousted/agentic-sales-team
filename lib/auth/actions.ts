@@ -137,17 +137,24 @@ export interface AccountInfo {
   notifications: Record<string, boolean>;
 }
 
-/** Server helper: current user for hydrating the client on load. */
+/** Server helper: current user for hydrating the client on load. Runs during the
+ *  root layout's SSR, so it must never throw: on a session/DB failure it logs and
+ *  returns null (treated as logged-out) rather than crashing the app. */
 export async function currentUser(): Promise<AccountInfo | null> {
   if (!isDbConfigured()) return null;
-  const session = await getSession();
-  if (!session) return null;
-  const [user] = await getDb()
-    .select({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications })
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .limit(1);
-  return user ?? null;
+  try {
+    const session = await getSession();
+    if (!session) return null;
+    const [user] = await getDb()
+      .select({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+    return user ?? null;
+  } catch (e) {
+    console.error("[currentUser] session/db read failed; treating as logged-out:", e);
+    return null;
+  }
 }
 
 /** Update the signed-in user's profile / notification settings. */

@@ -29,60 +29,68 @@ async function uid(): Promise<string | null> {
   return s?.userId ?? null;
 }
 
-/** Load the signed-in user's persisted workspace (for hydrating the store). */
+/** Load the signed-in user's persisted workspace (for hydrating the store).
+ *  Runs during the root layout's SSR, so it must never throw: on any DB/session
+ *  failure it logs and falls back to an empty workspace, letting the dashboard
+ *  render (empty) instead of crashing the whole app. */
 export async function loadWorkspace(): Promise<WorkspaceData> {
   const empty: WorkspaceData = { extraAgents: [], extraTeams: [], removed: [], paused: [], chats: {}, config: {}, teamMembers: {} };
   if (!isDbConfigured()) return empty;
-  const userId = await uid();
-  if (!userId) return empty;
-  const db = getDb();
+  try {
+    const userId = await uid();
+    if (!userId) return empty;
+    const db = getDb();
 
-  const [agentRows, teamRows, stateRows, msgRows, configRows, memberRows] = await Promise.all([
-    db.select().from(agents).where(eq(agents.userId, userId)),
-    db.select().from(teams).where(eq(teams.userId, userId)),
-    db.select().from(agentStates).where(eq(agentStates.userId, userId)),
-    db.select({ agentId: messages.agentId, who: messages.who, text: messages.text })
-      .from(messages).where(eq(messages.userId, userId)).orderBy(asc(messages.id)),
-    db.select().from(agentConfig).where(eq(agentConfig.userId, userId)),
-    db.select().from(teamMembers).where(eq(teamMembers.userId, userId)),
-  ]);
+    const [agentRows, teamRows, stateRows, msgRows, configRows, memberRows] = await Promise.all([
+      db.select().from(agents).where(eq(agents.userId, userId)),
+      db.select().from(teams).where(eq(teams.userId, userId)),
+      db.select().from(agentStates).where(eq(agentStates.userId, userId)),
+      db.select({ agentId: messages.agentId, who: messages.who, text: messages.text })
+        .from(messages).where(eq(messages.userId, userId)).orderBy(asc(messages.id)),
+      db.select().from(agentConfig).where(eq(agentConfig.userId, userId)),
+      db.select().from(teamMembers).where(eq(teamMembers.userId, userId)),
+    ]);
 
-  // Group persisted messages by agent, preserving insertion order.
-  const chats: Chats = {};
-  for (const m of msgRows) {
-    (chats[m.agentId] ??= []).push({ who: m.who as ChatMsg["who"], text: m.text });
-  }
+    // Group persisted messages by agent, preserving insertion order.
+    const chats: Chats = {};
+    for (const m of msgRows) {
+      (chats[m.agentId] ??= []).push({ who: m.who as ChatMsg["who"], text: m.text });
+    }
 
-  const config: Record<string, AgentConfig> = {};
-  for (const c of configRows) {
-    config[c.agentId] = {
-      role: c.role ?? undefined,
-      goal: c.goal ?? undefined,
-      permissions: c.permissions ?? undefined,
-      settings: c.settings ?? undefined,
+    const config: Record<string, AgentConfig> = {};
+    for (const c of configRows) {
+      config[c.agentId] = {
+        role: c.role ?? undefined,
+        goal: c.goal ?? undefined,
+        permissions: c.permissions ?? undefined,
+        settings: c.settings ?? undefined,
+      };
+    }
+
+    const teamMembersMap: Record<string, string[]> = {};
+    for (const m of memberRows) teamMembersMap[m.teamId] = m.members;
+
+    return {
+      chats,
+      config,
+      teamMembers: teamMembersMap,
+      extraAgents: agentRows.map((r) => ({
+        id: r.id, name: r.name, initials: r.initials, role: r.role, color: r.color,
+        status: r.status as StatusKey, task: r.task, score: r.score, goal: r.goal,
+        char: r.char ?? undefined, type: r.type, capabilities: r.capabilities,
+      })),
+      extraTeams: teamRows.map((r) => ({
+        id: r.id, name: r.name, icon: r.icon, iconBg: r.iconBg, desc: r.description,
+        goal: r.goal, members: r.members, activity: r.activity,
+        meetings: r.meetings, pipeline: r.pipeline, leads: r.leads, template: r.template,
+      })),
+      removed: stateRows.filter((r) => r.removed).map((r) => r.agentId),
+      paused: stateRows.filter((r) => r.paused).map((r) => r.agentId),
     };
+  } catch (e) {
+    console.error("[loadWorkspace] load failed; falling back to empty workspace:", e);
+    return empty;
   }
-
-  const teamMembersMap: Record<string, string[]> = {};
-  for (const m of memberRows) teamMembersMap[m.teamId] = m.members;
-
-  return {
-    chats,
-    config,
-    teamMembers: teamMembersMap,
-    extraAgents: agentRows.map((r) => ({
-      id: r.id, name: r.name, initials: r.initials, role: r.role, color: r.color,
-      status: r.status as StatusKey, task: r.task, score: r.score, goal: r.goal,
-      char: r.char ?? undefined, type: r.type, capabilities: r.capabilities,
-    })),
-    extraTeams: teamRows.map((r) => ({
-      id: r.id, name: r.name, icon: r.icon, iconBg: r.iconBg, desc: r.description,
-      goal: r.goal, members: r.members, activity: r.activity,
-      meetings: r.meetings, pipeline: r.pipeline, leads: r.leads, template: r.template,
-    })),
-    removed: stateRows.filter((r) => r.removed).map((r) => r.agentId),
-    paused: stateRows.filter((r) => r.paused).map((r) => r.agentId),
-  };
 }
 
 /** Persist a newly created agent. */
@@ -109,6 +117,25 @@ export async function saveTeam(team: Team): Promise<void> {
     meetings: team.meetings, pipeline: team.pipeline, leads: team.leads,
     template: team.template,
   });
+}
+
+/** Update a team's editable meta (name, icon, goal). Partial: only the provided
+ *  fields are written, so an icon-only edit leaves name/goal untouched. */
+export async function saveTeamMeta(
+  teamId: string,
+  patch: { name?: string; icon?: string; iconBg?: string; desc?: string; goal?: string },
+): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  const set: Record<string, string> = {};
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.icon !== undefined) set.icon = patch.icon;
+  if (patch.iconBg !== undefined) set.iconBg = patch.iconBg;
+  if (patch.desc !== undefined) set.description = patch.desc;
+  if (patch.goal !== undefined) set.goal = patch.goal;
+  if (Object.keys(set).length === 0) return;
+  await getDb().update(teams).set(set).where(and(eq(teams.userId, userId), eq(teams.id, teamId)));
 }
 
 /** Delete a user-created team (and its member override). Seed teams have no row,

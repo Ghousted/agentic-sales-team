@@ -9,7 +9,7 @@ import { signOut as signOutAction } from "./auth/actions";
 import { chatReply } from "./ai/actions";
 import { teamChat } from "./chat/actions";
 import { getJob } from "./jobs/actions";
-import { saveAgent, saveTeam, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
+import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 export interface FeedItem {
   id: string;
@@ -43,6 +43,9 @@ interface WizardState {
 
 interface State extends WizardState {
   authed: boolean;
+  // Logged-out visitors see the marketing Landing first; the auth screen only
+  // takes over once they choose Get started / Sign in (showAuth flips true).
+  showAuth: boolean;
   authMode: "login" | "signup";
   sidebarOpen: boolean;
   chats: Chats;
@@ -87,7 +90,7 @@ const initialWizard: WizardState = {
 
 const initialState: State = {
   ...initialWizard,
-  authed: false, authMode: "login", sidebarOpen: true,
+  authed: false, showAuth: false, authMode: "login", sidebarOpen: true,
   chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false, chatLeadPicks: [],
   feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
@@ -96,6 +99,9 @@ const initialState: State = {
   toggles: { t0: true, t1: true, t2: false },
   workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
+
+// Background tint paired with each team icon (used by create + edit).
+const TEAM_ICON_BG: Record<string, string> = { "🚀": "#F1EDFD", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#F1EDFD" };
 
 const ACTIVITY_POOL: FeedItem[] = [
   { id: "ew", text: "qualified 6 more Healthcare leads", chip: "Leads", chipBg: "#E7F7EC", chipColor: "#1B7A3D" },
@@ -119,6 +125,8 @@ interface Ctx {
   togglePause: (id: string) => void;
   saveConfig: (id: string, cfg: AgentConfig) => void;
   addTeamMembers: (teamId: string, ids: string[]) => void;
+  updateTeam: (teamId: string, patch: { name?: string; icon?: string; goal?: string }) => void;
+  removeTeamMember: (teamId: string, agentId: string) => void;
   sendChat: (text: string) => void;
   sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
   clearChat: (convId: string) => void;
@@ -235,7 +243,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     // Clear this user's workspace from the store so nothing leaks into the next
     // session before the post-login full reload re-hydrates the right data.
     set({
-      authed: false, authMode: "login",
+      authed: false, showAuth: false, authMode: "login",
       extraAgents: [], extraTeams: [], removed: {}, paused: {}, agentConfig: {}, teamMembers: {},
       feedExtra: [], chats: chatsInit(),
     });
@@ -292,9 +300,36 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const added = merged.length - current.length;
     if (added <= 0) return;
     set((prev) => ({ teamMembers: { ...prev.teamMembers, [teamId]: merged } }));
-    showToast(added === 1 ? "1 agent added" : added + " agents added");
+    showToast((added === 1 ? "1 agent added to " : added + " agents added to ") + base.name);
     saveTeamMembersAction(teamId, merged).catch((e) => console.error("[addTeamMembers] persist failed:", e));
   }, [set, showToast]);
+
+  // Edit a team's meta (name, icon, goal). Only user-created teams live in
+  // extraTeams, so this maps over that list and persists just the changed fields.
+  const updateTeam = useCallback((teamId: string, patch: { name?: string; icon?: string; goal?: string }) => {
+    const meta: Partial<Team> = {};
+    if (patch.name !== undefined) meta.name = patch.name.trim() || "New Team";
+    if (patch.goal !== undefined) meta.goal = patch.goal.trim() || "Define a shared goal for this team.";
+    if (patch.icon !== undefined) { meta.icon = patch.icon; meta.iconBg = TEAM_ICON_BG[patch.icon] || "#F1EDFD"; }
+    if (Object.keys(meta).length === 0) return;
+    set((prev) => ({ extraTeams: prev.extraTeams.map((t) => (t.id === teamId ? { ...t, ...meta } : t)) }));
+    const display = meta.name ?? TEAMS_BASE.concat(sRef.current.extraTeams).find((t) => t.id === teamId)?.name ?? "Team";
+    showToast("“" + display + "” updated");
+    saveTeamMetaAction(teamId, meta).catch((e) => console.error("[updateTeam] persist failed:", e));
+  }, [set, showToast]);
+
+  const removeTeamMember = useCallback((teamId: string, agentId: string) => {
+    const st = sRef.current;
+    const base = TEAMS_BASE.concat(st.extraTeams).find((t) => t.id === teamId);
+    if (!base) return;
+    const current = st.teamMembers[teamId] ?? base.members;
+    const next = current.filter((id) => id !== agentId);
+    if (next.length === current.length) return;
+    set((prev) => ({ teamMembers: { ...prev.teamMembers, [teamId]: next } }));
+    const agentName = agents.find((a) => a.id === agentId)?.name ?? "Agent";
+    showToast(agentName + " removed from " + base.name);
+    saveTeamMembersAction(teamId, next).catch((e) => console.error("[removeTeamMember] persist failed:", e));
+  }, [agents, set, showToast]);
 
   const sendChat = useCallback((text: string) => {
     const t = (text || "").trim();
@@ -390,10 +425,9 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const cur = sRef.current;
     const name = cur.tName.trim() || "New Team";
     const members = Object.keys(cur.tSel).filter((k) => cur.tSel[k]);
-    const bgs: Record<string, string> = { "🚀": "#F1EDFD", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#F1EDFD" };
     const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
-      id, name, icon: cur.tIcon, iconBg: bgs[cur.tIcon] || "#F1EDFD",
+      id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#F1EDFD",
       desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
       activity: ["Team created — agents onboarding", "Shared goal set"],
@@ -463,7 +497,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, sendChat, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendChat, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

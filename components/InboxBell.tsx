@@ -54,11 +54,15 @@ export default function InboxBell() {
     <div ref={ref} style={css("position:relative;flex:none")}>
       <Box
         onClick={() => { setOpen((o) => !o); if (!open) refetch(); }}
-        aria-label="Email drafts"
-        style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;font-size:19px;color:#5122C1;cursor:pointer"
+        aria-label={unsent > 0 ? unsent + " email drafts to send" : "Email drafts"}
+        style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;color:#5122C1;cursor:pointer"
+        styleHover="background:#E3DBF9"
       >
-        ✉
-        {unsent > 0 && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #EEE9F8")}>{unsent}</span>}
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="m3.5 6.5 8.5 6 8.5-6" />
+        </svg>
+        {unsent > 0 && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #EEE9F8")}>{unsent}</span>}
       </Box>
 
       {open && (

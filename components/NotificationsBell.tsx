@@ -53,11 +53,15 @@ export default function NotificationsBell() {
     <div ref={ref} style={css("position:relative;flex:none")}>
       <Box
         onClick={toggle}
-        aria-label="Notifications"
-        style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;font-size:18px;color:#5122C1;cursor:pointer"
+        aria-label={unread ? items.length + " new notifications" : "Notifications"}
+        style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;color:#5122C1;cursor:pointer"
+        styleHover="background:#E3DBF9"
       >
-        ◔
-        {unread && <span style={css("position:absolute;top:7px;right:9px;width:9px;height:9px;border-radius:50%;background:#F43F7E;border:2px solid #EEE9F8")} />}
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ transformOrigin: "50% 4px", animation: unread ? "iconRing 1.1s ease-in-out" : undefined }}>
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        {unread && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #EEE9F8")}>{items.length}</span>}
       </Box>
 
       {open && (

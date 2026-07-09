@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { signIn, signUp, requestPasswordReset } from "@/lib/auth/actions";
 import { css, Box, Btn } from "./primitives";
+import Constellation from "./Constellation";
 
 /* Eye / eye-off icon (mdi) for the password reveal toggle. */
 function EyeIcon({ off }: { off: boolean }) {
@@ -107,16 +108,27 @@ export default function Login() {
 
   return (
     <div style={css("position:fixed;left:0;top:0;right:0;bottom:0;background:#fff;z-index:60;display:flex;animation:fadeUp .3s ease")}>
-      {/* ===== left visual panel ===== */}
-      <div style={css("position:relative;width:53%;min-width:520px;flex:none;background:#EEE9F8;border-radius:0 40px 40px 0;overflow:hidden;display:flex;align-items:center;justify-content:center")}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/login-waves.svg" alt="" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/login-collage.png" alt="Sales team collaborating, with AI workflow highlights" style={{ position: "relative", width: "618px", maxWidth: "82%", height: "auto" }} />
+      {/* ===== left visual panel — continues the landing's constellation ===== */}
+      <div style={css("position:relative;width:53%;min-width:520px;flex:none;background:radial-gradient(900px 720px at 62% 26%,#2A1657,#150B33 74%);border-radius:0 40px 40px 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 48px")}>
+        <div aria-hidden="true" style={{ position: "absolute", width: "420px", height: "420px", borderRadius: "50%", background: "#7C3AED", filter: "blur(80px)", opacity: 0.4, top: "-90px", right: "4%", pointerEvents: "none" }} />
+        <div style={css("position:absolute;top:28px;left:32px;z-index:2;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;font-weight:700;letter-spacing:-.01em;color:#fff")}>
+          <span style={{ color: "#C9B8F5" }}>agentic</span> salesforce
+        </div>
+        <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: "440px" }}>
+          <Constellation />
+        </div>
+        <div style={css("position:relative;z-index:2;text-align:center;margin-top:6px;max-width:400px")}>
+          <div style={css("font-family:'Poetsen One',sans-serif;font-size:26px;color:#fff;line-height:1.15;letter-spacing:-.01em")}>A sales team that runs itself.</div>
+          <div style={css("font-size:14px;color:#B9AEE0;margin-top:10px;line-height:1.55")}>Your AI workforce finds, writes, and books — around the clock.</div>
+        </div>
       </div>
 
       {/* ===== right form panel ===== */}
-      <div style={css("flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:80px 64px;overflow-y:auto")}>
+      <div style={css("position:relative;flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:80px 64px;overflow-y:auto")}>
+        <Box as="span" onClick={() => set({ showAuth: false })} aria-label="Back to home" style="position:absolute;top:28px;left:28px;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;color:#717680;cursor:pointer" styleHover="color:#5122c1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+          Home
+        </Box>
         <div style={css("width:100%;max-width:476px;display:flex;flex-direction:column;gap:32px")}>
           {/* header */}
           <div style={css("display:flex;flex-direction:column;gap:24px;align-items:center")}>

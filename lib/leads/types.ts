@@ -84,6 +84,12 @@ export interface ProposalResult {
   productsUsed: string[];
 }
 
+export interface MatchResult {
+  productId: string;
+  score: number; // 0-100 fit
+  reason: string;
+}
+
 // A slim lead shape for the team-chat /lead picker (pending + accepted only).
 export interface TeamLeadPick {
   id: string;

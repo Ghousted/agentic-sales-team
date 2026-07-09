@@ -2,7 +2,7 @@
 // one per jobs.kind), agent-type presets (bundles of capabilities), and team
 // templates (required capabilities). Developer-curated, like AGENTS_BASE.
 
-export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research" | "qualify" | "proposal" | "enrich";
+export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research" | "qualify" | "proposal" | "enrich" | "match";
 
 export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKind: string; engineReady: boolean }[] = [
   { id: "scrape", label: "Lead scraping", desc: "Find & import prospects matching an ICP", jobKind: "scrape", engineReady: true },
@@ -13,6 +13,7 @@ export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKin
   { id: "qualify", label: "Lead qualification", desc: "Score & prioritize the book (hot/warm/cold)", jobKind: "qualify", engineReady: true },
   { id: "proposal", label: "Proposal drafting", desc: "Draft a scoped, priced proposal from your catalog", jobKind: "proposal", engineReady: true },
   { id: "enrich", label: "Contact enrichment", desc: "Fill in missing contact info & firmographics", jobKind: "enrich", engineReady: false },
+  { id: "match", label: "Matchmaking", desc: "Match leads to the catalog listings that fit them", jobKind: "match", engineReady: true },
 ];
 
 export interface AgentType { id: string; label: string; desc: string; capabilities: Capability[]; custom?: boolean }
@@ -29,7 +30,8 @@ export const AGENT_TYPES: AgentType[] = [
   { id: "writer", label: "Outreach Writer", desc: "Pure email drafter.", capabilities: ["outreach"] },
   { id: "followup", label: "Follow-up Agent", desc: "Pure re-engagement for cold leads.", capabilities: ["follow-up"] },
   { id: "qualifier", label: "Lead Qualifier", desc: "Scores & triages the book so the team works the best leads first.", capabilities: ["qualify"] },
-  { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal"] },
+  { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal", "match"] },
+  { id: "matchmaker", label: "Matchmaker", desc: "Matches leads to the catalog listings that fit them.", capabilities: ["match"] },
   { id: "custom", label: "Custom", desc: "Build your own — pick the capabilities you want.", capabilities: [], custom: true },
 ];
 

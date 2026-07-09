@@ -26,9 +26,9 @@ function systemPrompt(a: AgentSnapshot, channel: "email" | "dm", platform?: stri
     `Given ONE prospect, do two things: (1) score their fit for your objective from 0 to 100 and pick the best pipeline stage, (2) write personalized outreach.`,
   ];
   if (channel === "email") {
-    lines.push(`Write a concise, personalized cold EMAIL specific to the prospect's title and company, with a plausible business reason to reach out, aligned with your objective. 90-140 words, plain text, first person as ${a.name}, no placeholder tokens like [Company], and end with a soft call to action. Put the subject line in "subject" and the email body in "body".`);
+    lines.push(`Write a FORMAL, professional cold EMAIL specific to the prospect's title and company, with a plausible business reason to reach out, aligned with your objective. Tone: courteous, polished business English written as a real person — complete sentences, no slang, no emojis, no exclamation marks, no hype. 90-140 words, plain text, first person as ${a.name}. Open with a courteous salutation using the prospect's actual first name (for example, "Dear Maria,"), and close with a professional sign-off on its own line followed by your name, ${a.name}. Never leave placeholder tokens like [Company] or [First Name] — use the real values or omit them; end with a clear but low-pressure call to action. Put a concise, specific subject line in "subject" and the email body in "body".`);
   } else {
-    lines.push(`This prospect has no email — you will reach them by direct message on ${platform || "their platform"}. Write a SHORT, casual direct message (2-4 sentences), first person as ${a.name}, that opens naturally, references something specific about them, and ends with a light ask. No formal email signature, no "Dear ...". Put a one-line context label in "subject" and the message text in "body".`);
+    lines.push(`This prospect has no email — you will reach them by direct message on ${platform || "their platform"}. Write a SHORT, professional and courteous direct message (2-4 sentences), first person as ${a.name}, that opens politely, references something specific about them, and ends with a low-pressure ask. Natural and human, but professional — no slang, emojis, or exclamation marks; no formal letter salutation or signature. Put a one-line context label in "subject" and the message text in "body".`);
   }
   lines.push(`Return ONLY JSON matching the schema.`);
   return lines.join(" ");
@@ -45,9 +45,9 @@ export async function draftOutreach(
 
   if (!isGeminiConfigured()) {
     if (hasEmail) {
-      return { score: 60, stage: "contacted", subject: `Quick idea for ${lead.company || "your team"}`, body: `Hi ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title || "leaders"} on ${agent.goal}. Would a short call next week be worth 15 minutes?\n\nBest,\n${agent.name}`, rationale: "Fallback draft (Gemini not configured)." };
+      return { score: 60, stage: "contacted", subject: `An idea for ${lead.company || "your team"}`, body: `Dear ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title ? lead.title + "s" : "leaders"} on ${agent.goal}, and I believe there may be a worthwhile opportunity for ${lead.company || "your team"}. Would you be open to a brief 15-minute call next week to explore it?\n\nKind regards,\n${agent.name}`, rationale: "Fallback draft (Gemini not configured)." };
     }
-    return { score: 55, stage: "contacted", subject: `Message to ${first}`, body: `Hi ${first}! I'm ${agent.name} — I work on ${agent.goal}. Saw your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""} and thought it might be worth a quick chat. Open to it?`, rationale: "Fallback DM (Gemini not configured)." };
+    return { score: 55, stage: "contacted", subject: `Message to ${first}`, body: `Hello ${first}, I'm ${agent.name}. I work on ${agent.goal}, and I came across your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""}. I'd welcome the chance to have a brief conversation if you're open to it.`, rationale: "Fallback DM (Gemini not configured)." };
   }
 
   const researchBlock = lead.research

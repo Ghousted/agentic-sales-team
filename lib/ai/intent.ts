@@ -4,7 +4,7 @@ import "server-only";
 import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
 
 export interface Intent {
-  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "qualify" | "proposal" | "enrich" | "match" | "status" | "chat" | "unknown";
+  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "qualify" | "proposal" | "enrich" | "match" | "assess" | "status" | "chat" | "unknown";
   params: { industry?: string; titles?: string; geo?: string; target?: number };
   summary: string;
 }
@@ -12,7 +12,7 @@ export interface Intent {
 const SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "status", "chat", "unknown"] },
+    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "assess", "status", "chat", "unknown"] },
     params: {
       type: "object",
       properties: { industry: { type: "string" }, titles: { type: "string" }, geo: { type: "string" }, target: { type: "integer" } },
@@ -35,6 +35,7 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
     "- proposal: draft a proposal or quote for a lead using our products/pricing.",
     "- enrich: fill in a lead's missing contact info (email, title, company).",
     "- match: match existing leads to the products/listings in our catalog that fit them.",
+    "- assess: review new/pending leads and accept the ones that fit our goal (drop the misses).",
     "- status: the user asks for an update/progress on what an agent is doing or recently did — e.g. 'any updates?', 'how's it going?', 'what are you working on?', 'done yet?', 'where are you at?'.",
     "- chat: small talk or general questions — no action.",
     "- unknown: a task request that fits none of the above.",

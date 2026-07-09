@@ -90,6 +90,12 @@ export interface MatchResult {
   reason: string;
 }
 
+export interface AssessResult {
+  accept: boolean;
+  reason: string;
+  score: number; // 0-100 fit-to-goal confidence
+}
+
 // A slim lead shape for the team-chat /lead picker (pending + accepted only).
 export interface TeamLeadPick {
   id: string;

@@ -2,7 +2,7 @@
 // one per jobs.kind), agent-type presets (bundles of capabilities), and team
 // templates (required capabilities). Developer-curated, like AGENTS_BASE.
 
-export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research" | "qualify" | "proposal" | "enrich" | "match";
+export type Capability = "scrape" | "outreach" | "follow-up" | "book-meeting" | "research" | "qualify" | "proposal" | "enrich" | "match" | "assess";
 
 export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKind: string; engineReady: boolean }[] = [
   { id: "scrape", label: "Lead scraping", desc: "Find & import prospects matching an ICP", jobKind: "scrape", engineReady: true },
@@ -14,6 +14,7 @@ export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKin
   { id: "proposal", label: "Proposal drafting", desc: "Draft a scoped, priced proposal from your catalog", jobKind: "proposal", engineReady: true },
   { id: "enrich", label: "Contact enrichment", desc: "Fill in missing contact info & firmographics", jobKind: "enrich", engineReady: false },
   { id: "match", label: "Matchmaking", desc: "Match leads to the catalog listings that fit them", jobKind: "match", engineReady: true },
+  { id: "assess", label: "Lead assessment", desc: "Review new leads and auto-accept the ones that fit", jobKind: "assess", engineReady: true },
 ];
 
 export interface AgentType { id: string; label: string; desc: string; capabilities: Capability[]; custom?: boolean }
@@ -32,6 +33,7 @@ export const AGENT_TYPES: AgentType[] = [
   { id: "qualifier", label: "Lead Qualifier", desc: "Scores & triages the book so the team works the best leads first.", capabilities: ["qualify"] },
   { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal", "match"] },
   { id: "matchmaker", label: "Matchmaker", desc: "Matches leads to the catalog listings that fit them.", capabilities: ["match"] },
+  { id: "assessor", label: "Assessor", desc: "Reviews new leads and auto-accepts the good fits — the quality gate.", capabilities: ["assess"] },
   { id: "custom", label: "Custom", desc: "Build your own — pick the capabilities you want.", capabilities: [], custom: true },
 ];
 

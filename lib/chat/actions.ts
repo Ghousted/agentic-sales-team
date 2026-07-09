@@ -20,7 +20,7 @@ export interface TeamChatResult {
 type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
 
 // Capabilities whose jobs consume specific leads (so /lead picks apply to them).
-const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal"]);
+const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal", "match"]);
 
 const onItText = (_name: string) => `Understood. I'll begin drafting the outreach now.`;
 

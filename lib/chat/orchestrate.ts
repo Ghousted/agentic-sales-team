@@ -50,8 +50,8 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
     .where(and(eq(jobs.userId, userId), eq(jobs.agentId, agentId)))
     .orderBy(desc(jobs.createdAt)).limit(1);
   if (!job) return `I'm not working on anything at the moment. I can find leads, run research, or draft outreach whenever you'd like.`;
-  const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number };
-  const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind;
+  const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number };
+  const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind === "match" ? "matching leads to listings" : job.kind;
   if (job.status === "running" || job.status === "queued") {
     const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? ` — ${r.leadsFound} found so far` : "";
     return `I'm currently ${doing}${prog}. I'll post the results here once it's complete.`;
@@ -62,6 +62,7 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
     const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}, now in Leads → Pending for your review`
       : job.kind === "research" ? `researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}`
       : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, now in the Emails tab`
+      : job.kind === "match" ? `matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to listings`
       : "completed my last task";
     return `I've just finished ${doing}: ${summary}.`;
   }
@@ -125,6 +126,6 @@ function actWith(actor: { id: string; name: string; role: string; goal: string; 
   if (!engineReady(cap)) {
     return { messages: [{ who: actor.id, text: `${CAPABILITIES.find((c) => c.id === cap)?.label ?? cap} isn't available yet, so I'm unable to run it at the moment.` }] };
   }
-  const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : cap === "qualify" ? "qualifying the leads" : cap === "proposal" ? "drafting a proposal" : "drafting outreach";
+  const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : cap === "qualify" ? "qualifying the leads" : cap === "proposal" ? "drafting a proposal" : cap === "match" ? "matching leads to listings" : "drafting outreach";
   return { messages: [{ who: actor.id, text: `Understood. I'm ${verb} now${intent.summary ? " (" + intent.summary + ")" : ""}.` }], actor, capability: cap };
 }

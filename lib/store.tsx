@@ -364,9 +364,10 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         try { job = await getJob(res.job!.id); }
         catch { if (waited >= 40) { append(res.job!.agentId, "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
         if (!job) return;
-        const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; steps?: number };
+        const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number; steps?: number };
         if (job.status === "done") {
           const done = res.job!.kind === "research" ? `I've researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
+            : res.job!.kind === "match" ? `I matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to listings. Open a lead to see its matches.`
             : `I've drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}. They're in the Emails tab.`;
           append(res.job!.agentId, done);
           return;

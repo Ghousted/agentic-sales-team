@@ -8,6 +8,8 @@ import { draftResearch } from "@/lib/ai/research";
 import { qualifyLead } from "@/lib/ai/qualify";
 import { draftProposal } from "@/lib/ai/proposal";
 import { pickLeadsForProposal, addProposal } from "@/lib/proposals/store";
+import { pickLeadsForMatch, addMatches } from "@/lib/matches/store";
+import { matchLead } from "@/lib/ai/match";
 import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import { chainNext } from "@/lib/pod/orchestrate";
@@ -32,7 +34,7 @@ export async function POST() {
 
   for (let i = 0; i < MAX_JOBS_PER_INVOCATION; i++) {
     const [candidate] = await db.select().from(jobs)
-      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research", "qualify", "proposal"]))).orderBy(asc(jobs.createdAt)).limit(1);
+      .where(and(eq(jobs.userId, userId), eq(jobs.status, "queued"), inArray(jobs.kind, ["outreach", "research", "qualify", "proposal", "match"]))).orderBy(asc(jobs.createdAt)).limit(1);
     if (!candidate) break;
 
     // Atomic claim: the status='queued' guard means two runners can't grab it.
@@ -98,6 +100,18 @@ export async function POST() {
           } catch (e) { console.error("[jobs/run] proposal failed:", e); failed++; }
         }
         await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { proposals: created, failed } })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      } else if (candidate.kind === "match") {
+        const batch = await pickLeadsForMatch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        for (const lead of batch) {
+          try {
+            const listings = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 8);
+            const m = await matchLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, listings);
+            await addMatches(userId, params.agent.id, lead.id, m);
+            created++;
+          } catch (e) { console.error("[jobs/run] match failed:", e); failed++; }
+        }
+        await db.update(jobs).set({ status: "done", finishedAt: new Date(), result: { matched: created, failed } })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       } else {
         await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "Unknown job kind: " + candidate.kind })

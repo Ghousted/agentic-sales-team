@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
@@ -10,6 +10,35 @@ import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
 
 const SUGGESTIONS = ["What are you working on?", "Summarize today", "Who should we contact next?", "Show hottest prospects"];
+
+// Navigational phrases an agent might use → the page they open. Longest first so
+// "Leads → Pending" wins over "leads". Keys are lowercased.
+const NAV_ROUTES: Record<string, string> = {
+  "leads → pending": "/leads", "the leads": "/leads", "the lead": "/leads", "a lead": "/leads", "leads": "/leads", "lead": "/leads",
+  "the catalog": "/products", "catalog": "/products", "listings": "/products", "products": "/products",
+};
+const NAV_ALT = Object.keys(NAV_ROUTES).sort((a, b) => b.length - a.length).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+
+/** Render a chat message with @mentions highlighted (Messenger-style) and, for
+ *  agent messages, navigational phrases turned into clickable links. */
+function renderRich(text: string, mine: boolean, router: { push: (href: string) => void }): ReactNode[] {
+  const re = new RegExp("(@[\\w'-]+)" + (mine ? "" : `|\\b(?:${NAV_ALT})\\b`), "gi");
+  const out: ReactNode[] = [];
+  let last = 0, k = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("@")) {
+      out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#EEE9F8;color:#5122C1;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
+    } else {
+      const route = NAV_ROUTES[tok.toLowerCase()];
+      out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#5122C1;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
 function ChatsInner() {
   const { s, set, agents, teams, byId, sendChat, sendTeamChat, clearChat } = useApp();
@@ -176,7 +205,7 @@ function ChatsInner() {
                 {speaker && <div style={css(av(speaker, 26) + ";flex:none;margin-top:2px")}>{speaker.initials}</div>}
                 <div style={css("display:flex;flex-direction:column;max-width:62%;gap:2px")}>
                   {speaker && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{speaker.name.split(" ")[0]}</div>}
-                  <div style={css((mine ? "background:#5122C1;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{clean}</div>
+                  <div style={css((mine ? "background:#5122C1;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{renderRich(clean, mine, router)}</div>
                   {showApprove && (
                     <div style={css("display:flex;gap:8px;margin-top:6px;padding-left:2px")}>
                       <Btn onClick={() => onApprove(am![1])} style="background:#E7F7EC;color:#1B7A3D;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6EFDD">Approve</Btn>

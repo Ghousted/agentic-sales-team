@@ -40,6 +40,9 @@ export async function setStage(id: string, status: string): Promise<void> {
 export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   return store.listDraftsForAgent(agentId);
 }
+export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
+  return store.listDraftsForLead(leadId);
+}
 export async function listAllDrafts(): Promise<DraftDTO[]> {
   return store.listAllDrafts();
 }

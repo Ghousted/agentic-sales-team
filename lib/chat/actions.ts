@@ -13,7 +13,7 @@ import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./out
 import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, pendingMeetingLeadIds } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { parseMeetingTime } from "@/lib/ai/meetingTime";
-import { bookMeeting } from "@/lib/meetings/store";
+import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
@@ -72,10 +72,11 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     const a = pendingMeeting.agent;
     const teamLeads = await listTeamLeadsForPicker(teamId);
     const names = pendingMeeting.leadIds.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
-    const { iso, label } = await parseMeetingTime(message);
+    const settings = await meetingSettings(userId, a.id);
+    const { iso, label } = await parseMeetingTime(message, settings);
     if (!iso) return { messages: [{ who: a.id, text: askWhenText(names, pendingMeeting.leadIds) }] };
-    for (const id of pendingMeeting.leadIds) await bookMeeting(userId, a.id, id, iso, label);
-    return { messages: [{ who: a.id, text: `Booked — a meeting with ${names} on ${label}. It's on your calendar.` }] };
+    for (const id of pendingMeeting.leadIds) await bookMeeting(userId, a.id, id, iso, label, settings.type);
+    return { messages: [{ who: a.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }] };
   }
 
   // Pending scrape clarification: the agent just asked what to look for, and this
@@ -153,10 +154,11 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     await setLeadReview(bmPicks, "accepted"); // picking = approving
     const teamLeads = await listTeamLeadsForPicker(teamId);
     const names = bmPicks.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
-    const { iso, label } = await parseMeetingTime(message);
+    const settings = await meetingSettings(userId, actor.id);
+    const { iso, label } = await parseMeetingTime(message, settings);
     if (!iso) return { messages: [{ who: actor.id, text: askWhenText(names, bmPicks) }] };
-    for (const id of bmPicks) await bookMeeting(userId, actor.id, id, iso, label);
-    return { messages: [{ who: actor.id, text: `Booked — a meeting with ${names} on ${label}. It's on your calendar.` }] };
+    for (const id of bmPicks) await bookMeeting(userId, actor.id, id, iso, label, settings.type);
+    return { messages: [{ who: actor.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }] };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.

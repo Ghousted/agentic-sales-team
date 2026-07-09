@@ -8,7 +8,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import { templateById, type Capability } from "@/lib/agentTypes";
 import { listLeadsForAgents } from "@/lib/leads/actions";
 import type { LeadDTO } from "@/lib/leads/types";
-import { workTheBook, listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
+import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import type { ApprovalDTO } from "@/lib/pod/types";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
@@ -38,7 +38,6 @@ export default function TeamDetail() {
   const [pick, setPick] = useState<Record<string, boolean>>({});
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
-  const [working, setWorking] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const { live, byLead } = useLiveWork();
 
@@ -76,16 +75,6 @@ export default function TeamDetail() {
     listPendingApprovals(team.id).then(setApprovals);
     if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
   };
-  const runBook = async () => {
-    if (!team || working) return;
-    setWorking(true);
-    const res = await workTheBook(team.id);
-    if (res.error) showToast(res.error);
-    else if (res.needsApproval) showToast("Sent for your approval below");
-    else { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ } showToast("Working the book…"); }
-    setWorking(false);
-    refetchPod();
-  };
   const approve = async (id: string) => { await approveJob(id); try { await fetch("/api/jobs/run", { method: "POST" }); } catch {} refetchPod(); };
   const reject = async (id: string) => { await rejectJob(id); refetchPod(); };
 
@@ -105,7 +94,6 @@ export default function TeamDetail() {
           <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
-          <Btn onClick={runBook} style={"background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;" + (working ? "opacity:.6" : "")} styleHover="background:#42199E">{working ? "Working…" : "Work the book"}</Btn>
           <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
           {!isSeedTeam && (confirmDel ? (<>
             <Btn onClick={() => { deleteTeam(team.id); router.push("/"); }} style="background:#FEECEC;color:#B91C1C;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FBD9D9">Confirm delete</Btn>

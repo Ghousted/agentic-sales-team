@@ -67,9 +67,9 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   const verb = capability === "research" ? "research these leads" : "draft outreach";
   if (mode === "ask") {
     const first = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${verb}. Approve and I'll start. ⟦approve:${row.id}⟧`);
+    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ${leadCount === 1 ? "is" : "are"} ready to ${verb}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
   } else {
-    await postTeamMessage(userId, teamId, info.id, `On it — ${doing} now.`);
+    await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${doing} now.`);
   }
 }
 
@@ -102,7 +102,7 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   if (finisher && nextInfo) {
     const done = completedKind === "research" ? "researching the book" : "drafting outreach";
     const nextNoun = nextCap === "research" ? "research" : "outreach";
-    await postTeamMessage(userId, teamId, finisher.id, `Done ${done} — @${nextInfo.name.split(" ")[0]}, over to you for ${nextNoun}.`);
+    await postTeamMessage(userId, teamId, finisher.id, `I've finished ${done}. @${nextInfo.name.split(" ")[0]} — the ${nextNoun} is yours from here.`);
   }
   await enqueuePodStage(userId, teamId, nextCap, agentId);
 }

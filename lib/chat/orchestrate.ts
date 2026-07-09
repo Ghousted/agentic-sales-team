@@ -44,28 +44,28 @@ const looksLikeStatus = (m: string): boolean =>
   /\b(update|updates|status|progress|how('?s| is| are| goes| going)|going|working on|doing|done yet|finished|any news|where.*(at|up to)|what'?s happening)\b/i.test(m);
 
 /** A one-line, in-character report of an agent's current or most-recent job. */
-async function describeWork(userId: string, agentId: string, first: string): Promise<string> {
-  if (!isDbConfigured()) return `${first} here — nothing running right now.`;
+async function describeWork(userId: string, agentId: string): Promise<string> {
+  if (!isDbConfigured()) return `There is nothing running at the moment.`;
   const [job] = await getDb().select().from(jobs)
     .where(and(eq(jobs.userId, userId), eq(jobs.agentId, agentId)))
     .orderBy(desc(jobs.createdAt)).limit(1);
-  if (!job) return `${first} here — I'm not running anything right now. Want me to find leads, research, or draft outreach?`;
+  if (!job) return `I'm not working on anything at the moment. I can find leads, run research, or draft outreach whenever you'd like.`;
   const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number };
   const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind;
   if (job.status === "running" || job.status === "queued") {
     const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? ` — ${r.leadsFound} found so far` : "";
-    return `${first} here — I'm ${doing} right now${prog}. I'll post the results here when it's done.`;
+    return `I'm currently ${doing}${prog}. I'll post the results here once it's complete.`;
   }
-  if (job.status === "needs_approval") return `${first} here — a ${doing} run is queued up, waiting on your approval.`;
-  if (job.status === "failed") return `${first} here — my last ${doing} run hit a snag. Want me to try again?`;
+  if (job.status === "needs_approval") return `A ${doing} run is queued and awaiting your approval.`;
+  if (job.status === "failed") return `My last ${doing} run encountered an error. Would you like me to try it again?`;
   if (job.status === "done") {
-    const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"} — they're in Leads → Pending to review`
+    const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}, now in Leads → Pending for your review`
       : job.kind === "research" ? `researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}`
-      : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"} — in the Emails tab`
-      : "wrapped up my last task";
-    return `${first} here — just finished ${doing}: ${summary}.`;
+      : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, now in the Emails tab`
+      : "completed my last task";
+    return `I've just finished ${doing}: ${summary}.`;
   }
-  return `${first} here — my last ${doing} task is ${job.status}.`;
+  return `My last ${doing} task is ${job.status}.`;
 }
 
 /** Decide who acts + the reply messages, given the detected intent. */
@@ -80,12 +80,12 @@ export async function resolve(userId: string, teamId: string, message: string, i
   if (cap === "status" || ((cap === "chat" || cap === "unknown") && looksLikeStatus(message))) {
     const target = mentioned ?? members.find((m) => m.id === opts?.lastSpeakerId) ?? members[0];
     if (!target) return { messages: [{ who: "system", text: "No agents on this team yet." }] };
-    return { messages: [{ who: target.id, text: await describeWork(userId, target.id, target.name.split(" ")[0]) }] };
+    return { messages: [{ who: target.id, text: await describeWork(userId, target.id) }] };
   }
 
   if (cap === "chat" || cap === "unknown") {
     const responder = mentioned ?? members.find((m) => m.id === opts?.lastSpeakerId) ?? members[0];
-    return { messages: [{ who: responder?.id ?? "system", text: responder ? `${responder.name.split(" ")[0]} here — I can help the team scrape, research, or draft. What do you need?` : "No agents on this team yet." }] };
+    return { messages: [{ who: responder?.id ?? "system", text: responder ? `I can help the team find leads, run research, or draft outreach. What would you like me to do?` : "No agents on this team yet." }] };
   }
 
   const capLabel = CAPABILITIES.find((c) => c.id === cap)?.label ?? cap;
@@ -122,10 +122,9 @@ export async function resolve(userId: string, teamId: string, message: string, i
 }
 
 function actWith(actor: { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }, cap: string, intent: Intent): Resolution {
-  const first = actor.name.split(" ")[0];
   if (!engineReady(cap)) {
-    return { messages: [{ who: actor.id, text: `${first} here — ${CAPABILITIES.find((c) => c.id === cap)?.label ?? cap} isn't wired up yet, so I can't run it. Coming soon!` }] };
+    return { messages: [{ who: actor.id, text: `${CAPABILITIES.find((c) => c.id === cap)?.label ?? cap} isn't available yet, so I'm unable to run it at the moment.` }] };
   }
   const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : cap === "qualify" ? "qualifying the leads" : cap === "proposal" ? "drafting a proposal" : "drafting outreach";
-  return { messages: [{ who: actor.id, text: `On it — ${verb}${intent.summary ? " (" + intent.summary + ")" : ""}. 🔍` }], actor, capability: cap };
+  return { messages: [{ who: actor.id, text: `Understood. I'm ${verb} now${intent.summary ? " (" + intent.summary + ")" : ""}.` }], actor, capability: cap };
 }

@@ -22,7 +22,7 @@ type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
 // Capabilities whose jobs consume specific leads (so /lead picks apply to them).
 const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal"]);
 
-const onItText = (name: string) => `${(name || "").split(" ")[0] || "I"} here — on it, drafting outreach. 🔍`;
+const onItText = (_name: string) => `Understood. I'll begin drafting the outreach now.`;
 
 /** Approve any picked leads, then enqueue an outreach job for the target. Shared
  *  by the fresh-request gate and the pending-answer path. */
@@ -79,7 +79,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     }
     if (!target) return { messages: [{ who: pendingAgent.id, text: askWhoAgainText(pendingAgent.name) }] };
     const enq = await startOutreach(pendingAgent, target);
-    if ("error" in enq) return { messages: [{ who: pendingAgent.id, text: "…couldn't start that: " + enq.error }] };
+    if ("error" in enq) return { messages: [{ who: pendingAgent.id, text: "I wasn't able to start that: " + enq.error }] };
     return { messages: [{ who: pendingAgent.id, text: onItText(pendingAgent.name) }], job: { id: enq.jobId, kind: "outreach", agentId: pendingAgent.id } };
   }
 
@@ -93,7 +93,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   if (cap === "outreach") {
     if (picks.length) {
       const enq = await startOutreach(actor, { leadIds: picks });
-      if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "…couldn't start that: " + enq.error }]) };
+      if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
       return { messages: res.messages, job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
     }
     // no picks: ask who, unless "all" with at least one accepted lead.
@@ -101,7 +101,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
       const teamLeads = await listTeamLeadsForPicker(teamId);
       if (teamLeads.some((l) => l.review === "accepted")) {
         const enq = await startOutreach(actor, { all: true });
-        if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "…couldn't start that: " + enq.error }]) };
+        if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
         return { messages: res.messages, job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
       }
     }
@@ -120,7 +120,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
     batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
   });
-  if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "…couldn't start that: " + enq.error }]) };
+  if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
   return { messages: res.messages, job: { id: enq.jobId, kind: cap, agentId: actor.id } };
 }
 

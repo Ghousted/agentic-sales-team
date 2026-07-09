@@ -318,7 +318,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     };
     chatReply({ agent: { name: agent.name, role: agent.role, goal: agent.goal, task: agent.task }, history, message: t })
       .then((reply) => appendAi(reply, true))
-      .catch(() => appendAi("Sorry, I couldn’t respond just now. Please try again.", false));
+      .catch(() => appendAi("I'm sorry — I wasn't able to respond just now. Please try again.", false));
   }, [agents, set]);
 
   // Clear one conversation: empty it locally and delete its persisted messages.
@@ -350,10 +350,10 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         try {
           const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
           const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
-          if (!r.ok || data.error) append(job.agentId, "That scrape didn't run: " + (data.error ?? "unknown error"));
-          else if (data.note === "already running") append(job.agentId, "That scrape is already running — hang tight.");
-          else append(job.agentId, `Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} — in Leads → Pending to accept.`);
-        } catch { append(job.agentId, "That scrape failed — please try again."); }
+          if (!r.ok || data.error) append(job.agentId, "I wasn't able to run that search: " + (data.error ?? "unknown error"));
+          else if (data.note === "already running") append(job.agentId, "That search is already in progress. I'll post the results here shortly.");
+          else append(job.agentId, `I found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}. They're in Leads → Pending for your review.`);
+        } catch { append(job.agentId, "That search didn't complete. Please try again."); }
         return;
       }
       // research / outreach: run in the Node runner, then poll getJob (unchanged below)
@@ -362,22 +362,22 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       const poll = async (): Promise<void> => {
         let job;
         try { job = await getJob(res.job!.id); }
-        catch { if (waited >= 40) { append(res.job!.agentId, "Lost track of that run — check the agent."); return; } waited++; setTimeout(poll, 2500); return; }
+        catch { if (waited >= 40) { append(res.job!.agentId, "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
         if (!job) return;
         const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; steps?: number };
         if (job.status === "done") {
-          const done = res.job!.kind === "research" ? `Researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
-            : `Drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"} — in the Emails tab.`;
+          const done = res.job!.kind === "research" ? `I've researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
+            : `I've drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}. They're in the Emails tab.`;
           append(res.job!.agentId, done);
           return;
         }
-        if (job.status === "failed") { append(res.job!.agentId, "That run failed — check the agent."); return; }
-        if (waited >= 40) { append(res.job!.agentId, "Still working in the background — check back shortly."); return; }
+        if (job.status === "failed") { append(res.job!.agentId, "That run didn't complete. Please check the agent's page."); return; }
+        if (waited >= 40) { append(res.job!.agentId, "I'm still working on it in the background. Please check back shortly."); return; }
         waited++;
         setTimeout(poll, 2500);
       };
       poll();
-    }).catch(() => { set({ chatTyping: false }); append("system", "Sorry — I couldn't process that just now."); });
+    }).catch(() => { set({ chatTyping: false }); append("system", "I'm sorry — I wasn't able to process that just now."); });
   }, [set]);
 
   const createTeam = useCallback((): string => {

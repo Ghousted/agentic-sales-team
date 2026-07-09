@@ -2,17 +2,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box } from "@/components/primitives";
-import { buildCalendar, buildMonthGrid } from "@/lib/calendar";
-import { listActivity } from "@/lib/workspace/statsActions";
-import type { ActivityItem } from "@/lib/workspace/stats";
+import { buildCalendarFromMeetings, buildMonthGrid } from "@/lib/calendar";
+import { listMeetings } from "@/lib/meetings/actions";
+import type { MeetingDTO } from "@/lib/meetings/store";
 
 const WEEK_LABELS = ["Last week", "This week", "Next week", "In 2 weeks"];
 
 export default function CalendarPage() {
   const { agents } = useApp();
-  const [events, setEvents] = useState<ActivityItem[]>([]);
-  useEffect(() => { listActivity(200).then(setEvents); }, []);
-  const cal = useMemo(() => buildCalendar(events, agents), [events, agents]);
+  const [events, setEvents] = useState<MeetingDTO[]>([]);
+  useEffect(() => { listMeetings().then(setEvents).catch(() => {}); }, []);
+  const cal = useMemo(() => buildCalendarFromMeetings(events, agents), [events, agents]);
   const [view, setView] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -48,9 +48,9 @@ export default function CalendarPage() {
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("font-size:13px;color:#71717A")}>Every agent&rsquo;s meetings and reach outs, in one glance</div>
+      <div style={css("font-size:13px;color:#71717A")}>Meetings your agents have booked, and with whom</div>
       {cal.events.length === 0 && (
-        <div style={css("font-size:12.5px;color:#A1AEBE;margin-top:-10px")}>No activity yet — it fills as your agents work.</div>
+        <div style={css("font-size:12.5px;color:#A1AEBE;margin-top:-10px")}>No meetings yet — ask the Meeting agent to book one (e.g. “@Meeting set a meeting with /lead”).</div>
       )}
 
       {/* summary cards */}

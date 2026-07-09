@@ -10,8 +10,10 @@ import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages } from "./teamMessages";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { scrapeHasTarget, askScrapeText, isAskScrapePrompt } from "./clarify";
+import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, pendingMeetingLeadIds } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
+import { parseMeetingTime } from "@/lib/ai/meetingTime";
+import { bookMeeting } from "@/lib/meetings/store";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
@@ -58,9 +60,23 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     ? lastSpeaker : undefined;
   const pendingScrapeAgent = lastSpeaker && lastSpeaker.capabilities.includes("scrape") && isAskScrapePrompt(lastAgentText)
     ? lastSpeaker : undefined;
+  const meetIds = lastSpeaker && lastSpeaker.capabilities.includes("book-meeting") ? pendingMeetingLeadIds(lastAgentText) : null;
+  const pendingMeeting = meetIds && lastSpeaker ? { agent: lastSpeaker, leadIds: meetIds } : null;
 
   const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })));
   const mentions = parseMentions(message, members);
+
+  // Pending meeting: the Meeting agent asked "when?" — this unmentioned reply is
+  // the time. Parse it and book (re-ask if it isn't a usable time).
+  if (pendingMeeting && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
+    const a = pendingMeeting.agent;
+    const teamLeads = await listTeamLeadsForPicker(teamId);
+    const names = pendingMeeting.leadIds.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
+    const { iso, label } = await parseMeetingTime(message);
+    if (!iso) return { messages: [{ who: a.id, text: askWhenText(names, pendingMeeting.leadIds) }] };
+    for (const id of pendingMeeting.leadIds) await bookMeeting(userId, a.id, id, iso, label);
+    return { messages: [{ who: a.id, text: `Booked — a meeting with ${names} on ${label}. It's on your calendar.` }] };
+  }
 
   // Pending scrape clarification: the agent just asked what to look for, and this
   // is an unmentioned reply that isn't a different command → use it as the target.
@@ -127,6 +143,20 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   // Scrape needs a target — ask before running a bare "find leads".
   if (cap === "scrape" && !scrapeHasTarget(message)) {
     return { messages: [{ who: actor.id, text: askScrapeText() }] };
+  }
+
+  // Book-meeting is interactive: needs a lead (/lead pick) + a time. Ask for
+  // whichever is missing; book immediately once both are known.
+  if (cap === "book-meeting") {
+    const bmPicks = (leadIds ?? []).filter(Boolean);
+    if (!bmPicks.length) return { messages: [{ who: actor.id, text: "Who should I set the meeting with? Type /lead to pick the lead." }] };
+    await setLeadReview(bmPicks, "accepted"); // picking = approving
+    const teamLeads = await listTeamLeadsForPicker(teamId);
+    const names = bmPicks.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
+    const { iso, label } = await parseMeetingTime(message);
+    if (!iso) return { messages: [{ who: actor.id, text: askWhenText(names, bmPicks) }] };
+    for (const id of bmPicks) await bookMeeting(userId, actor.id, id, iso, label);
+    return { messages: [{ who: actor.id, text: `Booked — a meeting with ${names} on ${label}. It's on your calendar.` }] };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.

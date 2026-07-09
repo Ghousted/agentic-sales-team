@@ -48,6 +48,43 @@ function toCalEvent(a: ActivityItem, agent: Agent | undefined): CalEvent {
   };
 }
 
+interface MeetingLike { agentId: string; leadName: string; whenAt: string; whenLabel: string }
+
+/** Build the calendar from booked meetings only — each placed at its real time,
+ *  labelled with the lead ("with whom"). This is the sole calendar source. */
+export function buildCalendarFromMeetings(meetings: MeetingLike[], agents: Agent[]): CalendarModel {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  const cal: CalEvent[] = meetings.map((m) => {
+    const d = new Date(m.whenAt);
+    const agent = byId.get(m.agentId);
+    return {
+      createdAt: m.whenAt,
+      dayIdx: (d.getDay() + 6) % 7,
+      hourIdx: Math.max(0, Math.min(9, d.getHours() - 8)),
+      title: m.leadName,
+      initials: agent?.initials ?? "?",
+      avStyle: agent ? av(agent, 24) : "",
+      colors: ["#F1EDFD", "#5122C1"],
+    };
+  });
+  const weekRows = CAL_HOURS.map((hour, hourIdx) => ({
+    hour,
+    cells: CAL_DAY_LABELS.map((_, dayIdx) => cal.filter((e) => e.dayIdx === dayIdx && e.hourIdx === hourIdx)),
+  }));
+  const now = Date.now();
+  const weekMs = 7 * 24 * 3600 * 1000;
+  const upcoming = meetings.filter((m) => new Date(m.whenAt).getTime() >= now).length;
+  const thisWeek = meetings.filter((m) => { const t = new Date(m.whenAt).getTime(); return t >= now && t < now + weekMs; }).length;
+  const leadCount = new Set(meetings.map((m) => m.leadName)).size;
+  const summary: CalSummary[] = [
+    { label: "Meetings", value: String(meetings.length), emoji: "🗓", bg: "#F1EDFD" },
+    { label: "Upcoming", value: String(upcoming), emoji: "⏭", bg: "#E7F7EC" },
+    { label: "This week", value: String(thisWeek), emoji: "📅", bg: "#FEF6E8" },
+    { label: "Leads", value: String(leadCount), emoji: "🧑", bg: "#E9F5FE" },
+  ];
+  return { summary, hours: CAL_HOURS, dayLabels: CAL_DAY_LABELS, weekRows, events: cal };
+}
+
 /** Build the week grid + summary from real events (agents used for avatars). */
 export function buildCalendar(events: ActivityItem[], agents: Agent[]): CalendarModel {
   const byId = new Map(agents.map((a) => [a.id, a]));

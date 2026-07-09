@@ -198,7 +198,7 @@ function ChatsInner() {
             const mine = m.who === "me";
             const speaker = !mine && activeTeam ? byId(m.who) : null;
             const am = m.text.match(APPROVE_RE);
-            const clean = am ? m.text.replace(APPROVE_RE, "").trim() : m.text;
+            const clean = m.text.replace(APPROVE_RE, "").replace(/⟦meet:[^⟧]*⟧/, "").trim();
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
               <div key={i} style={css("display:flex;gap:8px;justify-content:" + (mine ? "flex-end" : "flex-start"))}>

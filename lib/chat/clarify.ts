@@ -32,3 +32,17 @@ export function askScrapeText(): string {
 export function isAskScrapePrompt(text: string): boolean {
   return text === askScrapeText();
 }
+
+/** The "when?" clarifying prompt for a meeting. Carries the picked lead ids in a
+ *  hidden ⟦meet:…⟧ marker (stripped in the chat UI) so the next reply can book. */
+export function askWhenText(leadLabel: string, leadIds: string[]): string {
+  return `When should I set the meeting with ${leadLabel}? For example "tomorrow 2pm" or "next Tuesday 10am". ⟦meet:${leadIds.join(",")}⟧`;
+}
+
+/** Extract the pending-meeting lead ids from a ⟦meet:…⟧ marker, or null. */
+export function pendingMeetingLeadIds(text: string): string[] | null {
+  const m = text.match(/⟦meet:([^⟧]*)⟧/);
+  if (!m) return null;
+  const ids = m[1].split(",").map((s) => s.trim()).filter(Boolean);
+  return ids.length ? ids : null;
+}

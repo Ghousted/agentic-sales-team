@@ -31,6 +31,11 @@ const SECTIONS: [string, string, string?][] = [
   ["settings", "Configuration"],
 ];
 
+// Booking-window hours + a small select style for the Meeting agent's settings.
+const HOURS = Array.from({ length: 11 }, (_, i) => i + 8); // 8 AM … 6 PM
+const fmtHour = (h: number) => (h === 12 ? "12 PM" : h > 12 ? `${h - 12} PM` : `${h} AM`);
+const MSEL = "border:1px solid #E4E4E7;border-radius:8px;padding:6px 9px;font-size:12px;color:#18181B;background:#fff;outline:none;cursor:pointer";
+
 // [key, label, default] — key is the stable id stored in agent_config.permissions.
 const PERM_DEFS: [string, string, boolean][] = [
   ["emails", "Send emails autonomously", true],
@@ -225,6 +230,11 @@ export default function AgentDetail() {
   const setCapMode = (cap: string, mode: "auto" | "ask") => {
     const cur = s.agentConfig[sel.id]?.settings ?? {};
     saveConfig(sel.id, { settings: { ...cur, [cap]: { ...(cur[cap] ?? {}), mode } } });
+  };
+  const capSetting = (cap: string) => (s.agentConfig[sel.id]?.settings?.[cap] ?? {}) as Record<string, unknown>;
+  const setCapSetting = (cap: string, patch: Record<string, unknown>) => {
+    const cur = s.agentConfig[sel.id]?.settings ?? {};
+    saveConfig(sel.id, { settings: { ...cur, [cap]: { ...(cur[cap] ?? {}), ...patch } } });
   };
 
   const gotoTab = (key: string) => {
@@ -548,11 +558,35 @@ export default function AgentDetail() {
         {sel.capabilities && sel.capabilities.length > 0 && (
           <div>
             <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Autonomy</div>
-            <div style={css("font-size:11px;color:#A1A1AA;margin-bottom:8px")}>How this agent runs each capability inside a team pod.</div>
+            <div style={css("font-size:11px;color:#A1A1AA;margin-bottom:8px")}>How this agent runs each capability. Batch stages run Auto or Ask; meeting booking has its own settings.</div>
             <div style={css("display:flex;flex-direction:column;gap:8px")}>
               {sel.capabilities.map((cap) => {
-                const mode = capMode(cap);
                 const label = CAPABILITIES.find((c) => c.id === cap)?.label ?? cap;
+                if (cap === "book-meeting") {
+                  const cs = capSetting(cap);
+                  const val = <T,>(k: string, d: T): T => (cs[k] === undefined ? d : (cs[k] as T));
+                  return (
+                    <div key={cap} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:9px")}>
+                      <div style={css("font-size:12.5px;font-weight:600;color:#3F3F46")}>{label}</div>
+                      <div style={css("display:flex;gap:8px;flex-wrap:wrap;align-items:center")}>
+                        <input value={String(val("type", "Meeting"))} onChange={(e) => setCapSetting(cap, { type: e.target.value })} placeholder="Meeting type (e.g. Discovery call)" style={css(MSEL + ";flex:1;min-width:150px;cursor:text")} />
+                        <select value={String(val("duration", 30))} onChange={(e) => setCapSetting(cap, { duration: Number(e.target.value) })} style={css(MSEL)}>
+                          {[15, 30, 45, 60].map((d) => <option key={d} value={d}>{d} min</option>)}
+                        </select>
+                      </div>
+                      <div style={css("display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:#71717A")}>
+                        <span>Book between</span>
+                        <select value={String(val("windowStart", 9))} onChange={(e) => setCapSetting(cap, { windowStart: Number(e.target.value) })} style={css(MSEL)}>{HOURS.map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}</select>
+                        <span>and</span>
+                        <select value={String(val("windowEnd", 17))} onChange={(e) => setCapSetting(cap, { windowEnd: Number(e.target.value) })} style={css(MSEL)}>{HOURS.map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}</select>
+                        <label style={css("display:flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto")}>
+                          <input type="checkbox" checked={cs.weekdaysOnly !== false} onChange={(e) => setCapSetting(cap, { weekdaysOnly: e.target.checked })} /> weekdays only
+                        </label>
+                      </div>
+                    </div>
+                  );
+                }
+                const mode = capMode(cap);
                 return (
                   <div key={cap} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
                     <div style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px")}>

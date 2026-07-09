@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
 import { listMatchesForLead } from "@/lib/matches/actions";
+import { bookMeetingForLead } from "@/lib/meetings/actions";
 import type { MatchDTO } from "@/lib/matches/store";
 import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO } from "@/lib/leads/types";
@@ -37,8 +38,19 @@ export default function LeadsPage() {
   const [leadMatches, setLeadMatches] = useState<MatchDTO[]>([]);
   const [leadDrafts, setLeadDrafts] = useState<DraftDTO[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [bookingWhen, setBookingWhen] = useState("");
+  const [booking, setBooking] = useState(false);
+  const bookMeetingNow = async () => {
+    if (!openLead || !bookingWhen.trim() || booking) return;
+    setBooking(true);
+    const res = await bookMeetingForLead(openLead.id, bookingWhen.trim());
+    setBooking(false);
+    if (res.error) { showToast(res.error); return; }
+    showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
+    setBookingWhen("");
+  };
   const openLeadDetail = useCallback(async (l: LeadDTO) => {
-    setOpenLead(l); setLeadMatches([]); setLeadDrafts([]); setDetailLoading(true);
+    setOpenLead(l); setLeadMatches([]); setLeadDrafts([]); setBookingWhen(""); setDetailLoading(true);
     try {
       const [m, d] = await Promise.all([listMatchesForLead(l.id), listDraftsForLead(l.id)]);
       setLeadMatches(m); setLeadDrafts(d);
@@ -281,6 +293,13 @@ export default function LeadsPage() {
                   <span style={css(chip("#F4F4F5", "#71717A"))}>{l.source || "manual"}</span>
                   <span style={css(chip(l.review === "accepted" ? "#E7F7EC" : "#FEF3E7", l.review === "accepted" ? "#1B7A3D" : "#B7791F"))}>{l.review}</span>
                   {ag && <span style={css("font-size:11.5px;color:#71717A")}>· {ag.name}</span>}
+                </div>
+                <div>
+                  <div style={css(SEC)}>Book a meeting</div>
+                  <div style={css("display:flex;gap:8px;align-items:center;flex-wrap:wrap")}>
+                    <input value={bookingWhen} onChange={(e) => setBookingWhen(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bookMeetingNow(); }} placeholder='e.g. "tomorrow 2pm" or "next Tue 10am"' style={css(FIELD + ";flex:1;min-width:180px")} />
+                    <Btn onClick={bookMeetingNow} style={"background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#42199E">{booking ? "Booking…" : "Book"}</Btn>
+                  </div>
                 </div>
                 {l.title && <div><div style={css(SEC)}>Intent</div><div style={css("font-size:13px;color:#3F3F46;line-height:1.55")}>{l.title}</div></div>}
                 {rb && (

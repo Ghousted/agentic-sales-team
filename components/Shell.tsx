@@ -53,7 +53,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       {/* ================= SIDEBAR ================= */}
       <div style={css("width:" + (sbOpen ? 240 : 70) + "px;flex:none;border-right:1px solid #ECECF1;display:flex;flex-direction:column;padding:16px " + (sbOpen ? 12 : 10) + "px;gap:3px;background:#FFFFFF;transition:width .25s ease;overflow:hidden")}>
         <div style={css("display:flex;align-items:flex-start;padding:8px 4px 2px 8px;margin-bottom:16px")}>
-          <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15;color:#18181B;" + (sbOpen ? "" : "display:none"))}>
+          <div
+            onClick={() => router.push("/")}
+            role="link"
+            aria-label="Go to dashboard"
+            style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15;color:#18181B;cursor:pointer;" + (sbOpen ? "" : "display:none"))}
+          >
             <span style={{ color: "#5122C1" }}>agent</span>ic<br />salesforce
           </div>
           <Box

@@ -103,7 +103,7 @@ Migrations use a **custom runner** — apply with `pnpm db:migrate` (`node scrip
 
 Migration `0012` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates the products HNSW cosine index — **pgvector must be enabled** on your database (it is on Neon).
 
-Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`.
+Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`. #redeploy trigger
 
 ## Deployment
 

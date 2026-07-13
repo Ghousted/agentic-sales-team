@@ -208,15 +208,22 @@ function ChatsInner() {
               </div>
             );
           })}
-          {s.chatTyping && (
-            <div style={css("display:flex;justify-content:flex-start")}>
-              <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;padding:12px 16px;display:flex;gap:4px")}>
-                <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite")} />
-                <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .15s")} />
-                <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .3s")} />
+          {s.chatTyping && (() => {
+            const typer = typeof s.chatTyping === "string" ? byId(s.chatTyping) : null;
+            return (
+              <div style={css("display:flex;gap:8px;justify-content:flex-start;animation:fadeUp .2s ease")}>
+                {typer && <div style={css(av(typer, 26) + ";flex:none;margin-top:2px")}>{typer.initials}</div>}
+                <div style={css("display:flex;flex-direction:column;gap:2px")}>
+                  {typer && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{typer.name.split(" ")[0]}</div>}
+                  <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;padding:12px 16px;display:flex;gap:4px")}>
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite")} />
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .15s")} />
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .3s")} />
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         <div style={css("padding:14px 20px;background:#FAFAFB;flex:none;position:relative")}>

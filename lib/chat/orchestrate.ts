@@ -13,6 +13,11 @@ import type { Intent } from "@/lib/ai/intent";
 export interface ChatOutMsg { who: string; text: string } // who = speaker agentId
 export interface Resolution {
   messages: ChatOutMsg[];
+  // Routing line(s) the mentioned/coordinating agent says BEFORE the actor replies
+  // — e.g. the Assessor assessing "@Assessor setup a meeting" and rerouting to the
+  // Meeting agent. Kept separate from `messages` (the actor's own reply) so a
+  // clarifying question still gets the hand-off prefixed instead of dropping it.
+  handoff?: ChatOutMsg[];
   actor?: { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] };
   capability?: string;
 }
@@ -106,9 +111,11 @@ export async function resolve(userId: string, teamId: string, message: string, i
   }
   const teammate = members.find((m) => m.capabilities.includes(cap));
   if (mentioned && teammate) {
-    // mentioned can't; a teammate can → hand off
+    // The mentioned agent can't do this, but a teammate can. The mentioned agent
+    // assesses the request and reroutes — it speaks first (res.handoff), then the
+    // capable teammate replies (res.messages).
     const res = actWith(teammate, cap, intent);
-    res.messages.unshift({ who: mentioned.id, text: `That's not my area — @${first(teammate.name)} handles ${capLabel.toLowerCase()}. ${first(teammate.name)}, can you take this?` });
+    res.handoff = [{ who: mentioned.id, text: `This needs ${capLabel.toLowerCase()} — that's @${first(teammate.name)}'s area, not mine. Routing this over to them.` }];
     return res;
   }
   if (teammate) {
@@ -122,7 +129,7 @@ export async function resolve(userId: string, teamId: string, message: string, i
     if (info) {
       const res = actWith(info, cap, intent);
       const speaker = mentioned ?? members[0];
-      res.messages.unshift({ who: speaker?.id ?? outsider.id, text: `No one here does ${capLabel.toLowerCase()} — @${first(info.name)} can. Handing off.` });
+      res.handoff = [{ who: speaker?.id ?? outsider.id, text: `No one on this team handles ${capLabel.toLowerCase()} — @${first(info.name)} does. Routing this over to them.` }];
       return res;
     }
   }
@@ -134,6 +141,18 @@ function actWith(actor: { id: string; name: string; role: string; goal: string; 
   if (!engineReady(cap)) {
     return { messages: [{ who: actor.id, text: `${CAPABILITIES.find((c) => c.id === cap)?.label ?? cap} isn't available yet, so I'm unable to run it at the moment.` }] };
   }
-  const verb = cap === "scrape" ? "finding leads" : cap === "research" ? "researching the team's leads" : cap === "qualify" ? "qualifying the leads" : cap === "proposal" ? "drafting a proposal" : cap === "match" ? "matching leads to listings" : "drafting outreach";
+  const VERBS: Record<string, string> = {
+    scrape: "finding leads",
+    research: "researching the team's leads",
+    qualify: "qualifying the leads",
+    proposal: "drafting a proposal",
+    match: "matching leads to listings",
+    outreach: "drafting outreach",
+    "book-meeting": "booking the meeting",
+    assess: "reviewing the new leads",
+    "follow-up": "re-engaging the cold leads",
+    enrich: "enriching the leads",
+  };
+  const verb = VERBS[cap] ?? "working on it";
   return { messages: [{ who: actor.id, text: `Understood. I'm ${verb} now${intent.summary ? " (" + intent.summary + ")" : ""}.` }], actor, capability: cap };
 }

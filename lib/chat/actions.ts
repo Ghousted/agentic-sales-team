@@ -155,7 +155,11 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   }
 
   const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
-  if (!res.actor || !res.capability) return { messages: res.messages };
+  // The rerouting agent (e.g. the mentioned Assessor) speaks first; prepend its
+  // line to whatever the capable actor replies — including a clarifying question,
+  // which used to be returned alone and dropped the hand-off.
+  const pre = res.handoff ?? [];
+  if (!res.actor || !res.capability) return { messages: [...pre, ...res.messages] };
   const actor = res.actor;
   const cap = res.capability;
   const picks = (leadIds ?? []).filter(Boolean);
@@ -164,32 +168,32 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   if (cap === "outreach") {
     if (picks.length) {
       const enq = await startOutreach(actor, { leadIds: picks });
-      if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
-      return { messages: res.messages, job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
+      if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+      return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
     }
     // no picks: ask who, unless "all" with at least one accepted lead.
     if (isAllRequest(message)) {
       const teamLeads = await listTeamLeadsForPicker(teamId);
       if (teamLeads.some((l) => l.review === "accepted")) {
         const enq = await startOutreach(actor, { all: true });
-        if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
-        return { messages: res.messages, job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
+        if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+        return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
       }
     }
-    return { messages: [{ who: actor.id, text: askWhoText(actor.name) }] };
+    return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
 
   // Scrape needs a target — ask before running a bare "find leads".
   if (cap === "scrape" && !scrapeHasTarget(message)) {
-    return { messages: [{ who: actor.id, text: askScrapeText() }] };
+    return { messages: [...pre, { who: actor.id, text: askScrapeText() }] };
   }
 
   // Book-meeting is interactive: needs a lead (/lead pick) + a time. Ask for
   // whichever is missing; book immediately once both are known.
   if (cap === "book-meeting") {
     const bmPicks = (leadIds ?? []).filter(Boolean);
-    if (!bmPicks.length) return { messages: [{ who: actor.id, text: askMeetingWhoText() }] };
-    return { messages: await resolveTimeAndBook(userId, actor, teamId, bmPicks, message) };
+    if (!bmPicks.length) return { messages: [...pre, { who: actor.id, text: askMeetingWhoText() }] };
+    return { messages: [...pre, ...(await resolveTimeAndBook(userId, actor, teamId, bmPicks, message))] };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.
@@ -207,8 +211,8 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     pod: cap === "scrape" ? true : undefined,
     teamId: cap === "scrape" ? teamId : undefined,
   });
-  if ("error" in enq) return { messages: res.messages.concat([{ who: actor.id, text: "I wasn't able to start that: " + enq.error }]) };
-  return { messages: res.messages, job: { id: enq.jobId, kind: cap, agentId: actor.id } };
+  if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: cap, agentId: actor.id } };
 }
 
 export async function listTeamMessages(teamId: string): Promise<{ who: string; text: string }[]> {

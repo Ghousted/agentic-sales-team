@@ -8,7 +8,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import { listWorkbook, listDraftsForAgent, markDraftSent } from "@/lib/leads/actions";
 import { enqueueOutreachJob, enqueueJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
-import { CAPABILITIES } from "@/lib/agentTypes";
+import { CAPABILITIES, AGENT_TYPES } from "@/lib/agentTypes";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import Link from "next/link";
@@ -36,13 +36,10 @@ const HOURS = Array.from({ length: 11 }, (_, i) => i + 8); // 8 AM … 6 PM
 const fmtHour = (h: number) => (h === 12 ? "12 PM" : h > 12 ? `${h - 12} PM` : `${h} AM`);
 const MSEL = "border:1px solid #E4E4E7;border-radius:8px;padding:6px 9px;font-size:12px;color:#18181B;background:#fff;outline:none;cursor:pointer";
 
-// [key, label, default] — key is the stable id stored in agent_config.permissions.
-const PERM_DEFS: [string, string, boolean][] = [
-  ["emails", "Send emails autonomously", true],
-  ["meetings", "Book meetings on your calendar", true],
-  ["calls", "Make phone calls", false],
-];
-const ROLE_OPTIONS = ["SDR", "BDR", "Account Executive", "Sales Manager", "Customer Success", "Recruiter"];
+// Role choices mirror the current agent-type catalog so the dropdown reflects
+// every kind of agent the app can build (Assessor, Meeting Booker, …), not a
+// stale hand-picked subset. "Custom" is excluded — it isn't a role.
+const ROLE_OPTIONS = AGENT_TYPES.filter((t) => !t.custom).map((t) => t.label);
 const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
   replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
@@ -59,12 +56,6 @@ function relTime(iso: string): string { return new Date(iso).toLocaleDateString(
 // Lead-qualification tier chip from the persisted score: [bg, fg, label].
 const tierChip = (score: number): [string, string, string] => score >= 75 ? ["#FEECEC", "#B91C1C", "Hot"] : score >= 50 ? ["#FEF6E8", "#B45309", "Warm"] : score > 0 ? ["#E9F5FE", "#0369A1", "Cold"] : ["#F4F4F5", "#A1A1AA", "—"];
 
-function permsFrom(saved?: Record<string, boolean>): Record<string, boolean> {
-  const base: Record<string, boolean> = {};
-  for (const [key, , def] of PERM_DEFS) base[key] = def;
-  return { ...base, ...(saved ?? {}) };
-}
-
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
   return <div id={id} style={css("font-family:'Poetsen One',sans-serif;font-size:15px;font-weight:700;margin-top:4px")}>{children}</div>;
 }
@@ -78,18 +69,16 @@ export default function AgentDetail() {
 
   const sel = byId(params.id) || agents[0];
 
-  // Editable Configuration state, seeded from the (config-applied) agent + saved
-  // permissions. Reset whenever the viewed agent changes (route stays mounted).
+  // Editable Configuration state (role + goal), seeded from the config-applied
+  // agent. Reset whenever the viewed agent changes (route stays mounted).
   const selId = sel?.id;
   const [cfgRole, setCfgRole] = useState(sel?.role ?? "");
   const [cfgGoal, setCfgGoal] = useState(sel?.goal ?? "");
-  const [cfgPerms, setCfgPerms] = useState<Record<string, boolean>>(() => permsFrom(selId ? s.agentConfig[selId]?.permissions : undefined));
   useEffect(() => {
     if (!selId) return;
     setTab("overview");
     setCfgRole(sel.role);
     setCfgGoal(sel.goal);
-    setCfgPerms(permsFrom(s.agentConfig[selId]?.permissions));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selId]);
 
@@ -536,23 +525,15 @@ export default function AgentDetail() {
             style={css("width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#3F3F46;line-height:1.6;resize:vertical;font-family:inherit;outline:none")}
           />
         </div>
-        <div><div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Prospect targeting</div><div style={css("display:flex;gap:6px;flex-wrap:wrap")}>{["SaaS", "51–200 employees", "CTO / VP Eng", "North America"].map((tg) => <span key={tg} style={css("font-size:11.5px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:4px 12px")}>{tg}</span>)}</div></div>
         <div>
-          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Permissions</div>
-          <div style={css("display:flex;flex-direction:column;gap:8px")}>
-            {PERM_DEFS.map(([key, label]) => {
-              const on = !!cfgPerms[key];
-              return (
-                <div key={key} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
-                  <Box
-                    onClick={() => setCfgPerms((p) => ({ ...p, [key]: !p[key] }))}
-                    aria-label={"Toggle " + label}
-                    style={"margin-left:auto;width:34px;height:20px;border-radius:99px;padding:2px;display:flex;cursor:pointer;transition:background .15s;background:" + (on ? "#5122C1" : "#E4E4E7") + ";justify-content:" + (on ? "flex-end" : "flex-start")}
-                  ><span style={css("width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)")} /></Box>
-                </div>
-              );
-            })}
-          </div>
+          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Capabilities</div>
+          {caps.length === 0 ? (
+            <div style={css("font-size:12px;color:#A1A1AA")}>No capabilities — this agent coordinates the team only.</div>
+          ) : (
+            <div style={css("display:flex;gap:6px;flex-wrap:wrap")}>
+              {caps.map((c) => <span key={c} style={css("font-size:11.5px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:4px 12px")}>{CAPABILITIES.find((x) => x.id === c)?.label ?? c}</span>)}
+            </div>
+          )}
         </div>
         {sel.capabilities && sel.capabilities.length > 0 && (
           <div>
@@ -598,7 +579,7 @@ export default function AgentDetail() {
             </div>
           </div>
         )}
-        <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal, permissions: cfgPerms })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
+        <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
       </div>
     </div>
   );

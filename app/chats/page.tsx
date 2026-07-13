@@ -74,6 +74,11 @@ function ChatsInner() {
   const activeTeam = teamById(activeId);
   const teamMembers = (activeTeam?.members.map((id) => byId(id)).filter(Boolean) ?? []) as NonNullable<ReturnType<typeof byId>>[];
   const messages = s.chats[activeId] || [];
+  // Track how many messages are shown + whether a staggered reveal is running, so
+  // the live poll can reveal newly-arrived hand-off lines one at a time.
+  const revealingRef = useRef(false);
+  const shownRef = useRef(0);
+  shownRef.current = messages.length;
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
@@ -117,24 +122,54 @@ function ChatsInner() {
   };
 
   // Live-poll the open team thread so agent-written hand-offs / approvals appear.
+  // New messages (e.g. the pod chain narrating stage → stage) are revealed one at
+  // a time behind a per-agent typing indicator, so they read like a live
+  // conversation instead of all popping in at once. Thread history is hydrated
+  // instantly on the first tick.
   useEffect(() => {
     if (!activeTeam) return;
     const teamId = activeTeam.id;
     let alive = true;
+    let firstTick = true;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const replyDelay = (t: string) => Math.min(2000, Math.max(650, Math.round((t || "").length * 18)));
     const tick = async () => {
+      if (revealingRef.current) return; // a reveal is running — let it finish
+      let msgs: { who: string; text: string }[];
+      let pend: { id: string }[];
+      try { [msgs, pend] = await Promise.all([listTeamMessages(teamId), listPendingApprovals(teamId)]); }
+      catch { return; } // transient — try again next tick
+      if (!alive) return;
+      setPendingIds(new Set(pend.map((p) => p.id)));
+      const shown = shownRef.current;
+      const wasFirst = firstTick;
+      firstTick = false;
+      if (msgs.length <= shown) return;
+      if (wasFirst) {
+        // Initial hydration for this thread — show history instantly, no typing.
+        set((prev) => ({ chats: { ...prev.chats, [teamId]: msgs } }));
+        return;
+      }
+      // Reveal the new tail sequentially, with a typing indicator per agent.
+      revealingRef.current = true;
       try {
-        const [msgs, pend] = await Promise.all([listTeamMessages(teamId), listPendingApprovals(teamId)]);
-        if (!alive) return;
-        set((prev) => {
-          const local = prev.chats[teamId] || [];
-          return msgs.length > local.length ? { chats: { ...prev.chats, [teamId]: msgs } } : prev;
-        });
-        setPendingIds(new Set(pend.map((p) => p.id)));
-      } catch { /* transient — try again next tick */ }
+        for (const m of msgs.slice(shown)) {
+          if (!alive) return;
+          if (m.who !== "me" && m.who !== "system") {
+            set({ chatTyping: m.who });
+            await sleep(replyDelay(m.text));
+            if (!alive) return;
+          }
+          set((prev) => ({ chatTyping: false, chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
+        }
+      } finally {
+        revealingRef.current = false;
+        set({ chatTyping: false });
+      }
     };
     tick();
     const iv = setInterval(tick, 4000);
-    return () => { alive = false; clearInterval(iv); };
+    return () => { alive = false; revealingRef.current = false; clearInterval(iv); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTeam?.id, set]);
 

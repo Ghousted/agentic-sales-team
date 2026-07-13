@@ -4,7 +4,7 @@
 // has to open each agent to send.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { listAllDrafts, markDraftSent, discardDraft, clearSentDrafts } from "@/lib/leads/actions";
+import { listAllDrafts, markDraftSent, discardDraft, clearSentDrafts, clearAllDrafts } from "@/lib/leads/actions";
 import type { DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
@@ -62,6 +62,11 @@ export default function InboxBell() {
     const n = await clearSentDrafts();
     if (n > 0) showToast(`Cleared ${n} sent draft${n === 1 ? "" : "s"}`);
   };
+  const clearAll = async () => {
+    setDrafts([]);
+    const n = await clearAllDrafts();
+    if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+  };
 
   return (
     <div ref={ref} style={css("position:relative;flex:none")}>
@@ -82,10 +87,14 @@ export default function InboxBell() {
         <div style={css("position:absolute;top:56px;right:0;width:400px;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.14);z-index:40;overflow:hidden")}>
           <div style={css("display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
             <div style={css("font-size:13.5px;font-weight:700")}>Email drafts</div>
+            <div style={css("flex:1")} />
             {sentCount > 0 && (
-              <Btn onClick={clearSent} style="margin-left:auto;background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear sent</Btn>
+              <Btn onClick={clearSent} style="background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear sent</Btn>
             )}
-            <div style={css((sentCount > 0 ? "" : "margin-left:auto;") + "font-size:11px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
+            {drafts.length > 0 && (
+              <Btn onClick={clearAll} style="background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear all</Btn>
+            )}
+            <div style={css("font-size:11px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
           </div>
           <div style={css("max-height:70vh;overflow-y:auto")}>
             {drafts.length === 0 ? (

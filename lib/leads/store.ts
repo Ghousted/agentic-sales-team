@@ -298,7 +298,7 @@ export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
     leadProfileUrl: leads.profileUrl, leadPlatform: leads.platform,
   }).from(outreachDrafts)
     .innerJoin(leads, eq(outreachDrafts.leadId, leads.id))
-    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.leadId, leadId)))
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.leadId, leadId), eq(outreachDrafts.dismissed, false)))
     .orderBy(desc(outreachDrafts.createdAt));
   return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
@@ -340,6 +340,32 @@ export async function clearSentDrafts(): Promise<number> {
   if (!userId) return 0;
   const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
     .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.status, "sent"), eq(outreachDrafts.dismissed, false)))
+    .returning({ id: outreachDrafts.id });
+  return rows.length;
+}
+
+/** Hide every draft (sent or not) from the inbox in one shot ("Clear all").
+ *  Soft-hide only, so analytics drafted/sent counts are unaffected. Returns how
+ *  many were cleared so the caller can toast a count. */
+export async function clearAllDrafts(): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  const userId = await uid();
+  if (!userId) return 0;
+  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false)))
+    .returning({ id: outreachDrafts.id });
+  return rows.length;
+}
+
+/** Hide every draft for a single lead ("Clear all" in the lead detail modal).
+ *  Soft-hide only, so analytics drafted/sent counts are unaffected. Returns how
+ *  many were cleared so the caller can toast a count. */
+export async function clearDraftsForLead(leadId: string): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  const userId = await uid();
+  if (!userId) return 0;
+  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.leadId, leadId), eq(outreachDrafts.dismissed, false)))
     .returning({ id: outreachDrafts.id });
   return rows.length;
 }

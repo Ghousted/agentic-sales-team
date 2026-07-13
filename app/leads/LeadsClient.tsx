@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, deleteLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
+import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, deleteLeads, importLeadsCsv, listDraftsForLead, clearDraftsForLead } from "@/lib/leads/actions";
 import { listMatchesForLead } from "@/lib/matches/actions";
 import { bookMeetingForLead } from "@/lib/meetings/actions";
 import type { MatchDTO } from "@/lib/matches/store";
@@ -58,6 +58,12 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       setLeadMatches(m); setLeadDrafts(d);
     } finally { setDetailLoading(false); }
   }, []);
+
+  const clearLeadDrafts = useCallback(async (leadId: string) => {
+    setLeadDrafts([]);
+    const n = await clearDraftsForLead(leadId);
+    if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+  }, [showToast]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -346,7 +352,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 </div>
                 {leadDrafts.length > 0 && (
                   <div>
-                    <div style={css(SEC)}>Emails</div>
+                    <div style={css("display:flex;align-items:center;gap:8px;margin-bottom:6px")}>
+                      <div style={css(SEC + ";margin-bottom:0")}>Emails</div>
+                      <Btn onClick={() => openLead && clearLeadDrafts(openLead.id)} style="margin-left:auto;background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear all</Btn>
+                    </div>
                     <div style={css("display:flex;flex-direction:column;gap:8px")}>{leadDrafts.map((d) => (
                       <div key={d.id} style={css("border:1px solid #ECECF1;border-radius:12px;padding:11px 13px")}>
                         <div style={css("font-size:13px;font-weight:700")}>{d.subject}</div>

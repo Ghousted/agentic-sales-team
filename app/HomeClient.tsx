@@ -5,8 +5,6 @@ import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
-import { getWorkspaceStats } from "@/lib/workspace/statsActions";
-import { listActivity } from "@/lib/workspace/statsActions";
 import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 
 const hubTypes: Record<string, string> = { sk: "meeting", mt: "email", ew: "research", rp: "writing", al: "call", nc: "analytics", ps: "idle", lm: "alert" };
@@ -17,13 +15,12 @@ const hubIcons: Record<string, [string, string, string]> = {
   idle: ["◌", "breathe 3s ease-in-out infinite", "#A1A1AA"], alert: ["⚠", "iconPop 1.8s ease-in-out infinite", "#EF4444"],
 };
 
-export default function Home() {
+export default function HomeClient({ initialStats, initialActs }: { initialStats: WorkspaceStats | null; initialActs: ActivityItem[] }) {
   const { s, set, agents, teams, byId } = useApp();
   const router = useRouter();
   const [dims, setDims] = useState({ w: 1280, h: 800 });
-  const [ws, setWs] = useState<WorkspaceStats | null>(null);
-  const [acts, setActs] = useState<ActivityItem[]>([]);
-  useEffect(() => { getWorkspaceStats().then(setWs); listActivity(6).then(setActs); }, []);
+  const ws = initialStats;
+  const acts = initialActs;
   const paMap = new Map((ws?.perAgent ?? []).map((p) => [p.agentId, p]));
   const maxOut = Math.max(1, ...(ws?.perAgent ?? []).map((p) => p.leadsWorked));
 

@@ -14,12 +14,12 @@ const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;paddi
 const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
 const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
 
-export default function ProductsPage() {
+export default function ProductsClient({ initialProducts, initialFolders }: { initialProducts: ProductDTO[]; initialFolders: FolderDTO[] }) {
   const { showToast } = useApp();
-  const [items, setItems] = useState<ProductDTO[]>([]);
-  const [folders, setFolders] = useState<FolderDTO[]>([]);
+  const [items, setItems] = useState<ProductDTO[]>(initialProducts);
+  const [folders, setFolders] = useState<FolderDTO[]>(initialFolders);
   const [folder, setFolder] = useState<string | null>(null); // null = All products
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showFolder, setShowFolder] = useState(false);
   const [form, setForm] = useState({ name: "", category: "", price: "", description: "" });
@@ -33,7 +33,13 @@ export default function ProductsPage() {
     const [rows, fs] = await Promise.all([listProducts(folder === UNFILED ? null : folder), listFolders()]);
     setItems(rows); setFolders(fs); setLoading(false);
   }, [folder]);
-  useEffect(() => { refresh(); }, [refresh]);
+  // Data is server-seeded for the initial (All) view; skip the mount fetch and
+  // only refetch when the selected folder changes.
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return; }
+    refresh();
+  }, [refresh]);
 
   const onCsv = async (file: File | undefined) => {
     if (!file) return;

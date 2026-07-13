@@ -1,17 +1,15 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box } from "@/components/primitives";
 import { buildCalendarFromMeetings, buildMonthGrid } from "@/lib/calendar";
-import { listMeetings } from "@/lib/meetings/actions";
 import type { MeetingDTO } from "@/lib/meetings/store";
 
 const WEEK_LABELS = ["Last week", "This week", "Next week", "In 2 weeks"];
 
-export default function CalendarPage() {
+export default function CalendarClient({ initialEvents }: { initialEvents: MeetingDTO[] }) {
   const { agents } = useApp();
-  const [events, setEvents] = useState<MeetingDTO[]>([]);
-  useEffect(() => { listMeetings().then(setEvents).catch(() => {}); }, []);
+  const events = initialEvents;
   const cal = useMemo(() => buildCalendarFromMeetings(events, agents), [events, agents]);
   const [view, setView] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);

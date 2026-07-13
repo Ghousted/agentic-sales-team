@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, deleteLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
 import { listMatchesForLead } from "@/lib/matches/actions";
@@ -22,13 +22,13 @@ const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9p
 const SEC = "font-size:11px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
 const MUTED = "font-size:12.5px;color:#A1A1AA";
 
-export default function LeadsPage() {
+export default function LeadsClient({ initialLeads, initialCandidates }: { initialLeads: LeadDTO[]; initialCandidates: LeadDTO[] }) {
   const { agents, byId, showToast } = useApp();
   const { byLead } = useLiveWork();
-  const [leads, setLeads] = useState<LeadDTO[]>([]);
-  const [candidates, setCandidates] = useState<LeadDTO[]>([]);
+  const [leads, setLeads] = useState<LeadDTO[]>(initialLeads);
+  const [candidates, setCandidates] = useState<LeadDTO[]>(initialCandidates);
   const [view, setView] = useState<"active" | "pending">("active");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState<string | null>(null); // agentId being run, or "all"
   const [fAgent, setFAgent] = useState("");
   const [fStage, setFStage] = useState("");
@@ -66,8 +66,6 @@ export default function LeadsPage() {
     setCandidates(cands);
     setLoading(false);
   }, []);
-
-  useEffect(() => { refetch(); }, [refetch]);
 
   const filtered = useMemo(
     () => leads.filter((l) => (!fAgent || l.agentId === fAgent) && (!fStage || l.status === fStage)),

@@ -1,8 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
-import { getWorkspaceStats, listActivity } from "@/lib/workspace/statsActions";
 import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 import { av, chip } from "@/lib/visuals";
 import { css, Box } from "@/components/primitives";
@@ -23,14 +21,13 @@ function relTime(iso: string): string {
 
 const compareColors = ["#5122C1", "#F43F7E", "#F59E0B", "#0EA5E9"];
 
-export default function AnalyticsPage() {
+export default function AnalyticsClient({ initialStats, initialActs }: { initialStats: WorkspaceStats | null; initialActs: ActivityItem[] }) {
   const { agents, teams, byId } = useApp();
   const router = useRouter();
   const activeCount = agents.filter((a) => a.status === "working").length;
 
-  const [ws, setWs] = useState<WorkspaceStats | null>(null);
-  const [acts, setActs] = useState<ActivityItem[]>([]);
-  useEffect(() => { getWorkspaceStats().then(setWs); listActivity(8).then(setActs); }, []);
+  const ws = initialStats;
+  const acts = initialActs;
   const paMap = new Map((ws?.perAgent ?? []).map((p) => [p.agentId, p]));
 
   // ----- Real aggregates derived from the live agents + teams -----

@@ -12,13 +12,13 @@ export function isAllRequest(message: string): boolean {
 /** The reply that asks the user who to write to when no leads were picked. The
  *  speaker's name is shown by the UI, so the copy stays clean and in first person. */
 export function askWhoText(_agentName: string): string {
-  return `Who would you like me to write to? Type /lead to choose specific leads, or say "outreach all" to reach everyone in your book.`;
+  return `Who would you like me to write to? You can name the leads, or tell me to reach everyone in the book.`;
 }
 
 /** The re-ask used when a reply to "who?" can't be resolved to any lead. Kept as
  *  a distinct, exact string so isAskWhoPrompt still detects the pending state. */
 export function askWhoAgainText(_agentName: string): string {
-  return `I wasn't able to tell which lead you meant. Type /lead to choose, name them (for example, "Maria"), or say "outreach all".`;
+  return `I wasn't sure which lead you meant. Could you tell me their name, or say everyone to reach the whole book?`;
 }
 
 /** True if `text` is one of the agent's ask-who prompts (initial or re-ask) —

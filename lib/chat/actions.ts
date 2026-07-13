@@ -10,7 +10,7 @@ import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages } from "./teamMessages";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, pendingMeetingLeadIds } from "./clarify";
+import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { parseMeetingTime } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
@@ -38,6 +38,29 @@ async function startOutreach(actor: Member, target: { leadIds?: string[]; all?: 
   return enqueueJob({ agent, kind: "outreach", capabilities: actor.capabilities });
 }
 
+/** Resolve `phrase` to a meeting time for `leadIds` and reply with one of three
+ *  outcomes, each keeping the flow alive via the ⟦meet:…⟧ marker:
+ *   - no usable date        → ask "when?"        (marker carries the lead ids)
+ *   - a day but no clock time → ask "what time?" (marker also carries the date)
+ *   - a full date + time     → book it.
+ *  Shared by the fresh request, the "who?" answer, and the "when/what time?" answers. */
+async function resolveTimeAndBook(userId: string, actor: Member, teamId: string, leadIds: string[], phrase: string): Promise<ChatOutMsg[]> {
+  await setLeadReview(leadIds, "accepted"); // picking = approving
+  const teamLeads = await listTeamLeadsForPicker(teamId);
+  const names = leadIds.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
+  const settings = await meetingSettings(userId, actor.id);
+  const { iso, label, hasTime } = await parseMeetingTime(phrase, settings);
+  if (!iso) return [{ who: actor.id, text: askWhenText(names, leadIds) }];
+  if (!hasTime) {
+    // Format the day from the parsed date only — never reuse `label`, which carries
+    // the defaulted placeholder time (e.g. "9:00–9:30 AM") we're asking to replace.
+    const day = new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return [{ who: actor.id, text: askWhatTimeText(names, day, leadIds, iso.slice(0, 10)) }];
+  }
+  for (const id of leadIds) await bookMeeting(userId, actor.id, id, iso, label, settings.type);
+  return [{ who: actor.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }];
+}
+
 export async function teamChat(teamId: string, message: string, leadIds?: string[]): Promise<TeamChatResult> {
   const s = await getSession();
   const userId = s?.userId;
@@ -60,23 +83,38 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     ? lastSpeaker : undefined;
   const pendingScrapeAgent = lastSpeaker && lastSpeaker.capabilities.includes("scrape") && isAskScrapePrompt(lastAgentText)
     ? lastSpeaker : undefined;
-  const meetIds = lastSpeaker && lastSpeaker.capabilities.includes("book-meeting") ? pendingMeetingLeadIds(lastAgentText) : null;
-  const pendingMeeting = meetIds && lastSpeaker ? { agent: lastSpeaker, leadIds: meetIds } : null;
+  const meetState = lastSpeaker && lastSpeaker.capabilities.includes("book-meeting") ? pendingMeeting(lastAgentText) : null;
+  const pendingMeet = meetState && lastSpeaker ? { agent: lastSpeaker, ...meetState } : null;
+  const pendingMeetingWho = lastSpeaker && lastSpeaker.capabilities.includes("book-meeting") && isAskMeetingWhoPrompt(lastAgentText)
+    ? lastSpeaker : undefined;
 
   const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })));
   const mentions = parseMentions(message, members);
 
-  // Pending meeting: the Meeting agent asked "when?" — this unmentioned reply is
-  // the time. Parse it and book (re-ask if it isn't a usable time).
-  if (pendingMeeting && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
-    const a = pendingMeeting.agent;
-    const teamLeads = await listTeamLeadsForPicker(teamId);
-    const names = pendingMeeting.leadIds.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
-    const settings = await meetingSettings(userId, a.id);
-    const { iso, label } = await parseMeetingTime(message, settings);
-    if (!iso) return { messages: [{ who: a.id, text: askWhenText(names, pendingMeeting.leadIds) }] };
-    for (const id of pendingMeeting.leadIds) await bookMeeting(userId, a.id, id, iso, label, settings.type);
-    return { messages: [{ who: a.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }] };
+  // Pending meeting time: the Meeting agent asked "when?" or "what time?" — this
+  // unmentioned reply is the answer. When a day is already known (the marker
+  // carries it), prepend it so a bare "2pm" lands on that day. resolveTimeAndBook
+  // books, or re-asks for whichever detail is still missing.
+  if (pendingMeet && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
+    const phrase = pendingMeet.date ? `${pendingMeet.date} ${message}` : message;
+    return { messages: await resolveTimeAndBook(userId, pendingMeet.agent, teamId, pendingMeet.leadIds, phrase) };
+  }
+
+  // Pending meeting "who?": the Meeting agent asked which lead to book with, and
+  // this reply names/picks the lead. Resolve it (an explicit /lead pick, else the
+  // free-text name) and move on to asking "when?" (or book if a time is already
+  // given). Without this, a lead-pick reply falls through to converse() and the
+  // booking loses its lead.
+  if (pendingMeetingWho && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
+    const a = pendingMeetingWho;
+    let ids = (leadIds ?? []).filter(Boolean);
+    if (!ids.length) {
+      const teamLeads = await listTeamLeadsForPicker(teamId);
+      const r = await resolveTargetLeads(message, teamLeads);
+      if (r.mode === "some" && r.leadIds.length) ids = r.leadIds;
+    }
+    if (!ids.length) return { messages: [{ who: a.id, text: askMeetingWhoText() }] };
+    return { messages: await resolveTimeAndBook(userId, a, teamId, ids, message) };
   }
 
   // Pending scrape clarification: the agent just asked what to look for, and this
@@ -116,7 +154,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
     return { messages: [{ who: pendingAgent.id, text: onItText(pendingAgent.name) }], job: { id: enq.jobId, kind: "outreach", agentId: pendingAgent.id } };
   }
 
-  const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id });
+  const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
   if (!res.actor || !res.capability) return { messages: res.messages };
   const actor = res.actor;
   const cap = res.capability;
@@ -150,15 +188,8 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   // whichever is missing; book immediately once both are known.
   if (cap === "book-meeting") {
     const bmPicks = (leadIds ?? []).filter(Boolean);
-    if (!bmPicks.length) return { messages: [{ who: actor.id, text: "Who should I set the meeting with? Type /lead to pick the lead." }] };
-    await setLeadReview(bmPicks, "accepted"); // picking = approving
-    const teamLeads = await listTeamLeadsForPicker(teamId);
-    const names = bmPicks.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
-    const settings = await meetingSettings(userId, actor.id);
-    const { iso, label } = await parseMeetingTime(message, settings);
-    if (!iso) return { messages: [{ who: actor.id, text: askWhenText(names, bmPicks) }] };
-    for (const id of bmPicks) await bookMeeting(userId, actor.id, id, iso, label, settings.type);
-    return { messages: [{ who: actor.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }] };
+    if (!bmPicks.length) return { messages: [{ who: actor.id, text: askMeetingWhoText() }] };
+    return { messages: await resolveTimeAndBook(userId, actor, teamId, bmPicks, message) };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
+import { addLead as addLeadAction, listLeads as listLeadsAction, setStage as setStageAction, listCandidates, acceptLeads, dismissLeads, deleteLeads, importLeadsCsv, listDraftsForLead } from "@/lib/leads/actions";
 import { listMatchesForLead } from "@/lib/matches/actions";
 import { bookMeetingForLead } from "@/lib/meetings/actions";
 import type { MatchDTO } from "@/lib/matches/store";
@@ -40,6 +40,8 @@ export default function LeadsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [bookingWhen, setBookingWhen] = useState("");
   const [booking, setBooking] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null); // lead id armed for delete
+  const delTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bookMeetingNow = async () => {
     if (!openLead || !bookingWhen.trim() || booking) return;
     setBooking(true);
@@ -128,6 +130,22 @@ export default function LeadsPage() {
     const next = LEAD_STAGES[Math.min(LEAD_STAGES.length - 1, idx + 1)];
     if (next === l.status) return;
     await setStageAction(l.id, next);
+    refetch();
+  };
+
+  // Two-click delete: first click arms (button flips to "Delete?"), second
+  // click within the window removes the lead. Auto-disarms after 3s.
+  const del = async (l: LeadDTO) => {
+    if (delTimer.current) clearTimeout(delTimer.current);
+    if (confirmDel !== l.id) {
+      setConfirmDel(l.id);
+      delTimer.current = setTimeout(() => setConfirmDel(null), 3000);
+      return;
+    }
+    setConfirmDel(null);
+    await deleteLeads([l.id]);
+    if (openLead?.id === l.id) setOpenLead(null);
+    showToast("Lead deleted");
     refetch();
   };
 
@@ -230,6 +248,7 @@ export default function LeadsPage() {
                 <div style={css("display:flex;gap:6px")}>
                   <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#EEE9F8;color:#5122C1;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#E3DBF9">{running === l.id ? "Running…" : "Run outreach"}</Btn>
                   <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
+                  <Btn onClick={() => del(l)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
                 </div>
               </div>
             );
@@ -259,6 +278,7 @@ export default function LeadsPage() {
                   {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#5122C1;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
                   <Btn onClick={() => review([c.id], true)} style="margin-left:auto;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Accept</Btn>
                   <Btn onClick={() => review([c.id], false)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Dismiss</Btn>
+                  <Btn onClick={() => del(c)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === c.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === c.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === c.id ? "Delete?" : "Delete"}</Btn>
                 </div>
               </div>
             );
@@ -284,6 +304,7 @@ export default function LeadsPage() {
                     {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="color:#5122C1;cursor:pointer;font-weight:600" styleHover="text-decoration:underline">View post ↗</Box>}
                   </div>
                 </div>
+                <Btn onClick={() => del(l)} style={"flex:none;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
                 <Box onClick={() => setOpenLead(null)} style="font-size:18px;color:#A1A1AA;cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
               </div>
               <div style={css("padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px")}>

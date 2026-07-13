@@ -6,19 +6,9 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { typeById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
-import { chatReply } from "./ai/actions";
 import { teamChat } from "./chat/actions";
 import { getJob } from "./jobs/actions";
 import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
-
-export interface FeedItem {
-  id: string;
-  text: string;
-  chip: string;
-  chipBg: string;
-  chipColor: string;
-  time?: string;
-}
 
 interface WizardState {
   wStep: number;
@@ -53,7 +43,6 @@ interface State extends WizardState {
   chatInput: string;
   chatTyping: boolean;
   chatLeadPicks: { id: string; name: string }[];
-  feedExtra: FeedItem[];
   hubTick: number;
   countT: number;
   hubTeam: string;
@@ -92,7 +81,7 @@ const initialState: State = {
   ...initialWizard,
   authed: false, showAuth: false, authMode: "login", sidebarOpen: true,
   chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false, chatLeadPicks: [],
-  feedExtra: [], hubTick: 0, countT: 1, hubTeam: "all",
+  hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
   showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom", tGapName: {},
@@ -102,14 +91,6 @@ const initialState: State = {
 
 // Background tint paired with each team icon (used by create + edit).
 const TEAM_ICON_BG: Record<string, string> = { "🚀": "#F1EDFD", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#F1EDFD" };
-
-const ACTIVITY_POOL: FeedItem[] = [
-  { id: "ew", text: "qualified 6 more Healthcare leads", chip: "Leads", chipBg: "#E7F7EC", chipColor: "#1B7A3D" },
-  { id: "mt", text: "got an open from Ramp — 2nd in 24h", chip: "Signal", chipBg: "#E9F5FE", chipColor: "#0369A1" },
-  { id: "sk", text: "sent a follow-up to Plaid’s CTO", chip: "Outreach", chipBg: "#FEF6E8", chipColor: "#B45309" },
-  { id: "al", text: "scheduled a call with Brex for Friday", chip: "Meeting", chipBg: "#FDF0F5", chipColor: "#DB2777" },
-  { id: "nc", text: "rebalanced lead assignments across the SDR team", chip: "Ops", chipBg: "#F1EDFD", chipColor: "#5122C1" },
-];
 
 interface Ctx {
   s: State;
@@ -127,7 +108,6 @@ interface Ctx {
   addTeamMembers: (teamId: string, ids: string[]) => void;
   updateTeam: (teamId: string, patch: { name?: string; icon?: string; goal?: string }) => void;
   removeTeamMember: (teamId: string, agentId: string) => void;
-  sendChat: (text: string) => void;
   sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
   clearChat: (convId: string) => void;
   createTeam: () => string;
@@ -245,7 +225,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set({
       authed: false, showAuth: false, authMode: "login",
       extraAgents: [], extraTeams: [], removed: {}, paused: {}, agentConfig: {}, teamMembers: {},
-      feedExtra: [], chats: chatsInit(),
+      chats: chatsInit(),
     });
   }, [set]);
 
@@ -330,31 +310,6 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     showToast(agentName + " removed from " + base.name);
     saveTeamMembersAction(teamId, next).catch((e) => console.error("[removeTeamMember] persist failed:", e));
   }, [agents, set, showToast]);
-
-  const sendChat = useCallback((text: string) => {
-    const t = (text || "").trim();
-    if (!t) return;
-    const convId = sRef.current.convId;
-    const agent = agents.find((a) => a.id === convId) || agents[0];
-    const history = (sRef.current.chats[convId] || []).map((m) => ({ who: m.who, text: m.text }));
-    set((prev) => ({
-      chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "me", text: t }]) },
-      chatInput: "",
-      chatTyping: true,
-    }));
-    // Persist the user's message immediately (fire-and-forget).
-    appendMessages(convId, [{ who: "me", text: t }]).catch((e) => console.error("[sendChat] persist user msg failed:", e));
-    const appendAi = (reply: string, persist: boolean) => {
-      set((prev) => ({
-        chats: { ...prev.chats, [convId]: (prev.chats[convId] || []).concat([{ who: "ai", text: reply }]) },
-        chatTyping: false,
-      }));
-      if (persist) appendMessages(convId, [{ who: "ai", text: reply }]).catch((e) => console.error("[sendChat] persist ai msg failed:", e));
-    };
-    chatReply({ agent: { name: agent.name, role: agent.role, goal: agent.goal, task: agent.task }, history, message: t })
-      .then((reply) => appendAi(reply, true))
-      .catch(() => appendAi("I'm sorry — I wasn't able to respond just now. Please try again.", false));
-  }, [agents, set]);
 
   // Clear one conversation: empty it locally and delete its persisted messages.
   const clearChat = useCallback((convId: string) => {
@@ -477,17 +432,11 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     return id;
   }, [set]);
 
-  // Lifecycle: count-up + hub tick + live activity, running once authenticated.
+  // Lifecycle: count-up + hub tick, running once authenticated.
   useEffect(() => {
     if (!s.authed) return;
     const hub = setInterval(() => set((prev) => ({ hubTick: prev.hubTick + 1 })), 3200);
-    let i = 0;
-    const feed = setInterval(() => {
-      const p = ACTIVITY_POOL[i % ACTIVITY_POOL.length];
-      i++;
-      set((prev) => ({ feedExtra: ([{ ...p, time: "now" }] as FeedItem[]).concat(prev.feedExtra).slice(0, 3) }));
-    }, 9000);
-    return () => { clearInterval(hub); clearInterval(feed); };
+    return () => { clearInterval(hub); };
   }, [s.authed, set]);
 
   useEffect(() => () => {
@@ -497,7 +446,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendChat, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

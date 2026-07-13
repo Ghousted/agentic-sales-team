@@ -83,3 +83,39 @@ export async function listActivity(limit = 30): Promise<ActivityItem[]> {
     .where(eq(activity.userId, userId)).orderBy(desc(activity.createdAt)).limit(limit);
   return rows.map((a) => ({ agentId: a.agentId, type: a.type, text: a.text, createdAt: a.createdAt.toISOString() }));
 }
+
+// ── Notifications bell ───────────────────────────────────────────────────────
+// The bell reads its own view of the activity log so a user can clear it without
+// touching the dashboard/analytics/calendar (which all read listActivity raw).
+// Each row carries its `id` so a single notification can be dismissed.
+export interface NotificationItem extends ActivityItem { id: string }
+
+export async function listNotifications(limit = 30): Promise<NotificationItem[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const rows = await getDb().select().from(activity)
+    .where(and(eq(activity.userId, userId), eq(activity.dismissed, false)))
+    .orderBy(desc(activity.createdAt)).limit(limit);
+  return rows.map((a) => ({ id: a.id, agentId: a.agentId, type: a.type, text: a.text, createdAt: a.createdAt.toISOString() }));
+}
+
+/** Clear one notification from the bell (soft-hide; the row stays for analytics). */
+export async function dismissNotification(id: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  await getDb().update(activity).set({ dismissed: true })
+    .where(and(eq(activity.id, id), eq(activity.userId, userId)));
+}
+
+/** Clear every current notification. Returns how many were cleared. */
+export async function clearAllNotifications(): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  const userId = await uid();
+  if (!userId) return 0;
+  const rows = await getDb().update(activity).set({ dismissed: true })
+    .where(and(eq(activity.userId, userId), eq(activity.dismissed, false)))
+    .returning({ id: activity.id });
+  return rows.length;
+}

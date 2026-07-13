@@ -147,6 +147,9 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   body: text("body").notNull(),
   rationale: text("rationale").notNull().default(""),
   status: text("status").notNull().default("draft"), // draft|sent
+  // Hidden from the top-bar Email-drafts inbox (Discard / Clear sent). Soft-hide
+  // only — analytics counts still read every row, so this never rewinds a total.
+  dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });
@@ -198,6 +201,10 @@ export const activity = pgTable("activity", {
   type: text("type").notNull(), // lead_added|lead_qualified|email_drafted|email_sent
   leadId: uuid("lead_id"),
   text: text("text").notNull(),
+  // Cleared from the Notifications bell only. The dashboard/analytics/calendar
+  // read the raw log via listActivity (unfiltered), so clearing never drops a
+  // metric or a calendar entry — only listNotifications honors this flag.
+  dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

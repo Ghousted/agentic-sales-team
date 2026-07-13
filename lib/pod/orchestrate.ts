@@ -33,9 +33,9 @@ function donePhrase(cap: string, n: number): string {
 }
 function finalAction(cap: string): string {
   switch (cap) {
-    case "outreach": return "review and send them from your inbox (the ✉ up top)";
-    case "proposal": return "review and send the proposals";
-    case "match": return "open a lead to see its matches";
+    case "outreach": return "the drafts are ready for you to review and send";
+    case "proposal": return "the proposals are ready for you to review and send";
+    case "match": return "I've matched them to your catalog";
     case "assess": return "they're in your book now";
     default: return "it's over to you";
   }
@@ -105,17 +105,6 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   }
 }
 
-/** The first book stage the team can cover (skips scrape/assess which need
- *  fresh leads). Used only if a "work the book" trigger is ever re-added. */
-export async function firstStage(userId: string, teamId: string): Promise<{ capability: string; agentId: string } | null> {
-  for (const cap of POD_ORDER) {
-    if (cap === "scrape" || cap === "assess") continue;
-    const agentId = await memberWithCapability(userId, teamId, cap);
-    if (agentId) return { capability: cap, agentId };
-  }
-  return null;
-}
-
 /** The next book stage after `completedKind` that this team can cover. Skips
  *  scrape (entry) and assess (only reachable right after scrape). */
 export async function nextCoverableStage(userId: string, teamId: string, completedKind: string): Promise<{ capability: string; agentId: string } | null> {
@@ -149,7 +138,7 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
       }
     } else {
       const userName = await userFirstName(userId);
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName} — review and accept them in Leads → Pending.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName} — they're waiting for you to review and accept.`);
     }
     return;
   }

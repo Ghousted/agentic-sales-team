@@ -7,6 +7,7 @@ import { AGENTS_BASE, TEAMS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import { CAPABILITIES } from "@/lib/agentTypes";
+import { converse } from "./converse";
 import type { Intent } from "@/lib/ai/intent";
 
 export interface ChatOutMsg { who: string; text: string } // who = speaker agentId
@@ -59,10 +60,10 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
   if (job.status === "needs_approval") return `A ${doing} run is queued and awaiting your approval.`;
   if (job.status === "failed") return `My last ${doing} run encountered an error. Would you like me to try it again?`;
   if (job.status === "done") {
-    const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}, now in Leads → Pending for your review`
+    const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}, waiting for your review`
       : job.kind === "research" ? `researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}`
-      : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, now in the Emails tab`
-      : job.kind === "match" ? `matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to listings`
+      : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, ready for you to review and send`
+      : job.kind === "match" ? `matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to your catalog`
       : "completed my last task";
     return `I've just finished ${doing}: ${summary}.`;
   }
@@ -70,7 +71,7 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
 }
 
 /** Decide who acts + the reply messages, given the detected intent. */
-export async function resolve(userId: string, teamId: string, message: string, intent: Intent, opts?: { lastSpeakerId?: string }): Promise<Resolution> {
+export async function resolve(userId: string, teamId: string, message: string, intent: Intent, opts?: { lastSpeakerId?: string; history?: { who: string; text: string }[] }): Promise<Resolution> {
   const memberIds = await membersOfTeam(userId, teamId);
   const members = (await Promise.all(memberIds.map((id) => agentInfo(userId, id)))).filter(Boolean) as NonNullable<Awaited<ReturnType<typeof agentInfo>>>[];
   const cap = intent.capability;
@@ -86,7 +87,14 @@ export async function resolve(userId: string, teamId: string, message: string, i
 
   if (cap === "chat" || cap === "unknown") {
     const responder = mentioned ?? members.find((m) => m.id === opts?.lastSpeakerId) ?? members[0];
-    return { messages: [{ who: responder?.id ?? "system", text: responder ? `I can help the team find leads, run research, or draft outreach. What would you like me to do?` : "No agents on this team yet." }] };
+    if (!responder) return { messages: [{ who: "system", text: "No agents on this team yet." }] };
+    const text = await converse({
+      responder,
+      roster: members.map((m) => ({ id: m.id, name: m.name, capabilities: m.capabilities })),
+      history: opts?.history ?? [],
+      message,
+    });
+    return { messages: [{ who: responder.id, text }] };
   }
 
   const capLabel = CAPABILITIES.find((c) => c.id === cap)?.label ?? cap;

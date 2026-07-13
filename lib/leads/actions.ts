@@ -31,6 +31,9 @@ export async function acceptLeads(ids: string[]): Promise<void> {
 export async function dismissLeads(ids: string[]): Promise<void> {
   return store.setLeadReview(ids, "dismissed");
 }
+export async function deleteLeads(ids: string[]): Promise<void> {
+  return store.deleteLeads(ids);
+}
 export async function getLead(id: string): Promise<LeadDTO | null> {
   return store.getLead(id);
 }
@@ -48,6 +51,12 @@ export async function listAllDrafts(): Promise<DraftDTO[]> {
 }
 export async function markDraftSent(draftId: string): Promise<void> {
   return store.markDraftSent(draftId);
+}
+export async function discardDraft(draftId: string): Promise<void> {
+  return store.discardDraft(draftId);
+}
+export async function clearSentDrafts(): Promise<number> {
+  return store.clearSentDrafts();
 }
 export async function liveWork(): Promise<LiveWorkDTO[]> {
   return store.getLiveWork();

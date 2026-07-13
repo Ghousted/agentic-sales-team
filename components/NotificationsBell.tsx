@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/store";
-import { listActivity } from "@/lib/workspace/statsActions";
-import type { ActivityItem } from "@/lib/workspace/stats";
+import { listNotifications, dismissNotification, clearAllNotifications } from "@/lib/workspace/statsActions";
+import type { NotificationItem } from "@/lib/workspace/stats";
 import { av, chip } from "@/lib/visuals";
-import { css, Box } from "./primitives";
+import { css, Box, Btn } from "./primitives";
 
 const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
@@ -23,7 +23,7 @@ function relTime(iso: string): string {
 }
 
 export default function NotificationsBell() {
-  const { s, byId, agents } = useApp();
+  const { byId, agents, showToast } = useApp();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -39,14 +39,28 @@ export default function NotificationsBell() {
     return () => document.removeEventListener("click", onClickAway);
   }, [open]);
 
-  const [acts, setActs] = useState<ActivityItem[]>([]);
-  useEffect(() => { listActivity(12).then(setActs); }, []);
+  const [acts, setActs] = useState<NotificationItem[]>([]);
+  useEffect(() => { listNotifications(12).then(setActs); }, []);
   const items = acts.map((f) => ({ f, a: byId(f.agentId) })).filter((x) => x.a);
   const unread = !seen && items.length > 0;
 
   const toggle = () => {
     setOpen((o) => !o);
     setSeen(true);
+  };
+
+  // Clearing is a soft-hide: the row leaves the bell but stays in the activity
+  // log, so the dashboard/analytics/calendar are unaffected. Update state first
+  // for an instant response, then persist.
+  const dismiss = (id: string) => {
+    setActs((prev) => prev.filter((a) => a.id !== id));
+    dismissNotification(id).catch(() => {});
+  };
+  const clearAll = () => {
+    setActs([]);
+    clearAllNotifications()
+      .then((n) => { if (n > 0) showToast(`Cleared ${n} notification${n === 1 ? "" : "s"}`); })
+      .catch(() => {});
   };
 
   return (
@@ -66,30 +80,35 @@ export default function NotificationsBell() {
 
       {open && (
           <div style={css("position:absolute;top:56px;right:0;width:360px;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.14);z-index:40;overflow:hidden")}>
-            <div style={css("display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
+            <div style={css("display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
               <div style={css("font-size:13.5px;font-weight:700")}>Notifications</div>
-              <div style={css("margin-left:auto;font-size:11px;font-weight:600;color:#1B7A3D;background:#E7F7EC;border-radius:99px;padding:2px 9px")}>{agents.filter((a) => a.status === "working").length} live</div>
+              {items.length > 0 && (
+                <Btn onClick={clearAll} style="margin-left:auto;background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear all</Btn>
+              )}
+              <div style={css((items.length > 0 ? "" : "margin-left:auto;") + "font-size:11px;font-weight:600;color:#1B7A3D;background:#E7F7EC;border-radius:99px;padding:2px 9px")}>{agents.filter((a) => a.status === "working").length} live</div>
             </div>
             <div style={css("max-height:60vh;overflow-y:auto")}>
               {items.length === 0 ? (
                 <div style={css("padding:16px;font-size:12.5px;color:#A1A1AA")}>No recent activity.</div>
               ) : (
-                items.map(({ f, a }, i) => (
-                  <Link
-                    key={i}
-                    href={"/agents/" + a!.id}
-                    onClick={() => setOpen(false)}
-                    style={{ ...css("display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid #F4F4F6;cursor:pointer;text-decoration:none") }}
-                  >
-                    <div style={css(av(a!, 32))}>{a!.initials}</div>
-                    <div style={css("font-size:12.5px;color:#52525B;min-width:0;flex:1")}>
-                      <strong style={{ color: "#18181B", fontWeight: 600 }}>{a!.name}</strong> {f.text}
-                    </div>
-                    <div style={css("display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none")}>
-                      <span style={css(chip(actChip(f.type).bg, actChip(f.type).fg))}>{actChip(f.type).label}</span>
-                      <span style={css("font-size:10.5px;color:#A1A1AA")}>{relTime(f.createdAt)}</span>
-                    </div>
-                  </Link>
+                items.map(({ f, a }) => (
+                  <div key={f.id} style={css("display:flex;align-items:stretch;border-bottom:1px solid #F4F4F6")}>
+                    <Link
+                      href={"/agents/" + a!.id}
+                      onClick={() => setOpen(false)}
+                      style={{ ...css("display:flex;align-items:center;gap:11px;padding:11px 0 11px 16px;flex:1;min-width:0;cursor:pointer;text-decoration:none") }}
+                    >
+                      <div style={css(av(a!, 32))}>{a!.initials}</div>
+                      <div style={css("font-size:12.5px;color:#52525B;min-width:0;flex:1")}>
+                        <strong style={{ color: "#18181B", fontWeight: 600 }}>{a!.name}</strong> {f.text}
+                      </div>
+                      <div style={css("display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none")}>
+                        <span style={css(chip(actChip(f.type).bg, actChip(f.type).fg))}>{actChip(f.type).label}</span>
+                        <span style={css("font-size:10.5px;color:#A1A1AA")}>{relTime(f.createdAt)}</span>
+                      </div>
+                    </Link>
+                    <Btn onClick={() => dismiss(f.id)} aria-label="Clear notification" title="Clear" style="flex:none;align-self:stretch;background:transparent;border:none;color:#D4D4D8;cursor:pointer;padding:0 12px;font-size:17px;line-height:1" styleHover="color:#F43F7E">×</Btn>
+                  </div>
                 ))
               )}
             </div>

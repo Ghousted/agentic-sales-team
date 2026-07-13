@@ -41,10 +41,6 @@ export const AGENT_TYPES: AgentType[] = [
 export function typeById(id: string): AgentType | undefined {
   return AGENT_TYPES.find((t) => t.id === id);
 }
-export function capabilitiesForType(id: string): Capability[] {
-  return typeById(id)?.capabilities ?? [];
-}
-
 export interface TeamTemplate { id: string; label: string; desc: string; requiredCapabilities: Capability[] }
 
 export const TEAM_TEMPLATES: TeamTemplate[] = [

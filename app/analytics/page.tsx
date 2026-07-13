@@ -22,11 +22,9 @@ function relTime(iso: string): string {
 }
 
 const compareColors = ["#5122C1", "#F43F7E", "#F59E0B", "#0EA5E9"];
-const filters = ["Last 30 days", "All teams", "All roles"];
-const timeSlots = ["3:00p", "4:30p", "6:00p", "7:15p"];
 
 export default function AnalyticsPage() {
-  const { s, agents, teams, byId, showToast } = useApp();
+  const { agents, teams, byId } = useApp();
   const router = useRouter();
   const activeCount = agents.filter((a) => a.status === "working").length;
 
@@ -57,20 +55,13 @@ export default function AnalyticsPage() {
   const maxTeamLeads = Math.max(1, ...teams.map(teamLeads));
 
   // Upcoming tasks = what the working agents are actually doing right now.
-  const upcoming = agents.filter((a) => a.status === "working").slice(0, 4).map((a, i) => ({
+  const upcoming = agents.filter((a) => a.status === "working").slice(0, 4).map((a) => ({
     label: a.name.split(" ")[0] + " · " + a.task,
-    time: timeSlots[i] || "—",
     c: a.color,
   }));
 
   // Activity feed: real workspace activity; drop any deleted agents.
   const feed = acts.map((f) => ({ f, a: byId(f.agentId) })).filter((x) => x.a).slice(0, 6);
-
-  // Recent conversations = agents the user has actually chatted with.
-  const recentConvs = Object.keys(s.chats)
-    .map((id) => byId(id))
-    .filter((a) => a && (s.chats[a.id] || []).length > 0)
-    .slice(0, 4);
 
   const ranking = agents.slice().sort((a, b) => (paMap.get(b.id)?.leadsWorked ?? 0) - (paMap.get(a.id)?.leadsWorked ?? 0)).slice(0, 5);
 
@@ -78,9 +69,6 @@ export default function AnalyticsPage() {
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:20px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         <div style={css("font-size:13px;color:#71717A")}>{ws?.activeAgents ?? 0} agents active · {ws?.leadsWorked ?? 0} leads worked · {ws?.sent ?? 0} emails sent</div>
-        <div style={css("margin-left:auto;display:flex;gap:8px")}>
-          {filters.map((f) => <Box key={f} onClick={() => showToast("Filter: " + f)} style="font-size:12.5px;font-weight:600;color:#5122C1;background:#EEE9F8;border:none;border-radius:99px;padding:8px 16px;cursor:pointer" styleHover="background:#E3DBF9">{f} ⌄</Box>)}
-        </div>
       </div>
 
       {/* metric cards */}
@@ -115,22 +103,7 @@ export default function AnalyticsPage() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:15px 18px;box-shadow:0 1px 3px rgba(24,24,27,.04)")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:11px")}>Upcoming tasks</div>
             <div style={css("display:flex;flex-direction:column;gap:10px")}>
-              {upcoming.map((u) => <div key={u.label} style={css("display:flex;gap:9px;align-items:center;font-size:12px;color:#3F3F46")}><span style={css("width:8px;height:8px;border-radius:3px;background:" + u.c + ";flex:none")} />{u.label}<span style={css("margin-left:auto;color:#A1A1AA;font-size:11px")}>{u.time}</span></div>)}
-            </div>
-          </div>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:15px 18px;box-shadow:0 1px 3px rgba(24,24,27,.04)")}>
-            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:11px")}>Recent conversations</div>
-            <div style={css("display:flex;flex-direction:column;gap:11px")}>
-              {recentConvs.map((a) => {
-                const msgs = s.chats[a!.id] || [];
-                const last = msgs[msgs.length - 1];
-                return (
-                  <Box key={a!.id} onClick={() => router.push("/chats?agent=" + a!.id)} style="display:flex;gap:10px;align-items:center;cursor:pointer;border-radius:10px;padding:4px;margin:-4px" styleHover="background:#F8F7FB">
-                    <div style={css(av(a!, 26))}>{a!.initials}</div>
-                    <div style={css("min-width:0")}><div style={css("font-size:12px;font-weight:600")}>{a!.name}</div><div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{(last ? last.text : "").slice(0, 38)}…</div></div>
-                  </Box>
-                );
-              })}
+              {upcoming.map((u) => <div key={u.label} style={css("display:flex;gap:9px;align-items:center;font-size:12px;color:#3F3F46")}><span style={css("width:8px;height:8px;border-radius:3px;background:" + u.c + ";flex:none")} />{u.label}</div>)}
             </div>
           </div>
           <Box onClick={() => router.push("/chats")} style="background:#1B1140;border-radius:16px;padding:16px 18px;color:#fff;cursor:pointer;transition:transform .15s" styleHover="transform:translateY(-2px)">

@@ -66,13 +66,6 @@ export default function AgentsPage() {
                     Delete
                   </Btn>
                   <Btn
-                    onClick={(e) => { e.stopPropagation(); router.push("/chats?agent=" + a.id); }}
-                    style="background:#F1EDFD;color:#5122C1;border:none;border-radius:99px;padding:6px 13px;font-size:11.5px;font-weight:600;cursor:pointer"
-                    styleHover="background:#E3DBF9"
-                  >
-                    Chat
-                  </Btn>
-                  <Btn
                     onClick={(e) => { e.stopPropagation(); router.push("/agents/" + a.id); }}
                     style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:6px 13px;font-size:11.5px;font-weight:600;cursor:pointer"
                     styleHover="background:#3F3F46"

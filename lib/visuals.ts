@@ -8,32 +8,6 @@ export function hashId(id: string): number {
   return h;
 }
 
-const faceCache: Record<number, string> = {};
-export function faceUrl(seed: number): string {
-  if (faceCache[seed]) return faceCache[seed];
-  const skins = ["#F3C7A5", "#EBB68F", "#D69C6F", "#B07548", "#8A5433"];
-  const hairs = ["#241F3D", "#141416", "#4A3428", "#75512F", "#C79B5F", "#E7D9C5"];
-  const skin = skins[(seed * 7 + 2) % skins.length];
-  const hair = hairs[(seed * 3 + 1) % hairs.length];
-  const styleN = seed % 5;
-  const shirt = '<path d="M15 64 Q18 48 32 48 Q46 48 49 64 Z" fill="#4C1CC7"/>';
-  const neck = '<rect x="27" y="36" width="10" height="15" rx="5" fill="' + skin + '"/>';
-  const head = '<ellipse cx="32" cy="26.5" rx="13.5" ry="14" fill="' + skin + '"/>';
-  const eyes =
-    '<circle cx="26.5" cy="27" r="1.7" fill="#221C33"/><circle cx="37.5" cy="27" r="1.7" fill="#221C33"/><path d="M27.5 33 Q32 36.5 36.5 33" stroke="#221C33" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M23.8 23 Q26.4 21.6 29 22.8" stroke="#221C33" stroke-width="1.2" fill="none" stroke-linecap="round"/><path d="M35 22.8 Q37.6 21.6 40.2 23" stroke="#221C33" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
-  const fringe = '<path d="M19 25 Q20.5 13 32 13 Q43.5 13 45 25 Q38.5 16.5 32 16.5 Q25.5 16.5 19 25 Z" fill="' + hair + '"/>';
-  const short = '<path d="M18.5 26 Q18 11 32 11 Q46 11 45.5 26 Q41 15.5 32 15.5 Q23 15.5 18.5 26 Z" fill="' + hair + '"/>';
-  let back = "";
-  let top = fringe;
-  if (styleN === 0) top = short;
-  if (styleN === 1) back = '<path d="M17 58 Q14 19 32 11 Q50 19 47 58 Z" fill="' + hair + '"/>';
-  if (styleN === 2) back = '<path d="M18 46 Q15.5 12 32 12 Q48.5 12 46 46 Q39 49 32 49 Q25 49 18 46 Z" fill="' + hair + '"/>';
-  if (styleN === 3) top = short + '<circle cx="32" cy="8.5" r="5" fill="' + hair + '"/>';
-  if (styleN === 4) top = '<path d="M18 26 Q13.5 15 23 11.5 Q27 6.5 35 8.5 Q45.5 7 45.5 17 Q49 23 45 27 Q40 15.5 32 15.5 Q23.5 15.5 18 26 Z" fill="' + hair + '"/>';
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' + shirt + back + neck + head + top + eyes + "</svg>";
-  return (faceCache[seed] = 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")');
-}
-
 // ---- character avatars ----
 // Agents are represented by the illustrated business characters from the design's
 // sprite sheet (public/agents-sprite.png). CHAR_HEADS are pixel-exact head+shoulder

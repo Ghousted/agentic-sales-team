@@ -1,6 +1,6 @@
 "use client";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
@@ -8,8 +8,6 @@ import { listTeamMessages } from "@/lib/chat/actions";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
-
-const SUGGESTIONS = ["What are you working on?", "Summarize today", "Who should we contact next?", "Show hottest prospects"];
 
 // Navigational phrases an agent might use → the page they open. Longest first so
 // "Leads → Pending" wins over "leads". Keys are lowercased.
@@ -22,7 +20,7 @@ const NAV_ALT = Object.keys(NAV_ROUTES).sort((a, b) => b.length - a.length).map(
 /** Render a chat message with @mentions highlighted (Messenger-style) and, for
  *  agent messages, navigational phrases turned into clickable links. */
 function renderRich(text: string, mine: boolean, router: { push: (href: string) => void }): ReactNode[] {
-  const re = new RegExp("(@[\\w'-]+)" + (mine ? "" : `|\\b(?:${NAV_ALT})\\b`), "gi");
+  const re = new RegExp("(@[\\w'-]+)|(«[^»]+»)" + (mine ? "" : `|\\b(?:${NAV_ALT})\\b`), "gi");
   const out: ReactNode[] = [];
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
@@ -30,6 +28,9 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
     const tok = m[0];
     if (tok.startsWith("@")) {
       out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#EEE9F8;color:#5122C1;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
+    } else if (tok.startsWith("«")) {
+      // Inline lead reference — show the name (drop the « » delimiters) as a pill.
+      out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#EEE9F8;color:#5122C1") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
     } else {
       const route = NAV_ROUTES[tok.toLowerCase()];
       out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#5122C1;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
@@ -40,40 +41,51 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
   return out;
 }
 
-function ChatsInner() {
-  const { s, set, agents, teams, byId, sendChat, sendTeamChat, clearChat } = useApp();
-  const router = useRouter();
-  const params = useSearchParams();
-  const wantAgent = params.get("agent");
+/** Render composer text with @mentions highlighted (same purple as sent
+ *  messages) for the input backdrop. Uses box-shadow (not padding) so the
+ *  highlight stays perfectly aligned with the transparent input's caret. */
+function renderComposer(text: string): ReactNode[] {
+  // Highlight @mentions and inline «lead» tokens. The « » delimiters stay in the
+  // rendered text so its width matches the transparent input (caret alignment).
+  const re = /@[\w'-]+|«[^»]+»/g;
+  const out: ReactNode[] = [];
+  let last = 0, k = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<span key={k++} style={css("background:#EEE9F8;color:#5122C1;border-radius:4px;box-shadow:0 0 0 2px #EEE9F8")}>{m[0]}</span>);
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
-  // Open a specific agent's conversation when arriving via ?agent=id.
-  useEffect(() => {
-    if (!wantAgent || !byId(wantAgent)) return;
-    set((prev) => {
-      const chats = { ...prev.chats };
-      if (!chats[wantAgent]) chats[wantAgent] = [{ who: "ai", text: "Hi! Ask me anything about my work, prospects, or results." }];
-      return { chats, convId: wantAgent };
-    });
-  }, [wantAgent, byId, set]);
+function ChatsInner() {
+  const { s, set, teams, byId, sendTeamChat, clearChat } = useApp();
+  const router = useRouter();
 
   const teamById = (id: string) => teams.find((t) => t.id === id);
-  const agentConvIds = Object.keys(s.chats).filter((id) => byId(id));
-  // The stored convId can point at a deleted agent (e.g. the default). Fall back
-  // to the first valid conversation so the header and messages stay in sync.
-  const activeId = byId(s.convId) || teamById(s.convId) ? s.convId : (teams[0]?.id ?? agentConvIds[0] ?? s.convId);
+  // The stored convId can point at a deleted team; fall back to the first team so
+  // the header and messages stay in sync.
+  const activeId = teamById(s.convId) ? s.convId : (teams[0]?.id ?? s.convId);
   useEffect(() => {
-    if (!byId(s.convId) && !teamById(s.convId)) { const next = teams[0]?.id ?? agentConvIds[0]; if (next) set({ convId: next }); }
+    if (!teamById(s.convId)) { const next = teams[0]?.id; if (next) set({ convId: next }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.convId, agentConvIds, byId, set]);
+  }, [s.convId, teams, set]);
   const activeTeam = teamById(activeId);
-  const activeAgent = byId(activeId) || agents[0];
-  const teamMembers = activeTeam ? activeTeam.members.map((id) => byId(id)).filter(Boolean) as typeof agents : [];
+  const teamMembers = (activeTeam?.members.map((id) => byId(id)).filter(Boolean) ?? []) as NonNullable<ReturnType<typeof byId>>[];
   const messages = s.chats[activeId] || [];
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
   const [leadsLoaded, setLeadsLoaded] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  // Keep the highlight backdrop scrolled in lockstep with the input so long
+  // messages line up as the caret runs past the right edge.
+  useEffect(() => {
+    if (inputRef.current && backdropRef.current) backdropRef.current.scrollLeft = inputRef.current.scrollLeft;
+  }, [s.chatInput]);
   // Drop the clear-confirm when switching conversations.
   useEffect(() => { setConfirmClear(false); }, [activeId]);
   useEffect(() => {
@@ -84,10 +96,14 @@ function ChatsInner() {
     return () => { alive = false; };
   }, [activeTeam]);
   const addPick = (l: TeamLeadPick) => set((prev) => ({
-    chatInput: prev.chatInput.replace(/\/lead[^\s]*$/i, ""),
+    // Insert the lead inline in the message (like an @mention) so the AI reads the
+    // reference in context; ids are kept in chatLeadPicks for the backend to resolve.
+    chatInput: prev.chatInput.replace(/\/lead[^\s]*$/i, "«" + l.name + "» "),
     chatLeadPicks: prev.chatLeadPicks.some((p) => p.id === l.id) ? prev.chatLeadPicks : prev.chatLeadPicks.concat([{ id: l.id, name: l.name }]),
   }));
-  const removePick = (id: string) => set((prev) => ({ chatLeadPicks: prev.chatLeadPicks.filter((p) => p.id !== id) }));
+  // The leads actually sent = picks whose inline «name» token is still in the text,
+  // so deleting the token drops the lead and the message stays the source of truth.
+  const activeLeadIds = () => s.chatLeadPicks.filter((p) => s.chatInput.includes("«" + p.name + "»")).map((p) => p.id);
 
   const APPROVE_RE = /⟦approve:([0-9a-f-]{36})⟧/;
   const onApprove = async (jobId: string) => {
@@ -122,15 +138,14 @@ function ChatsInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTeam?.id, set]);
 
-  // Zero conversations (no agents and no teams) — show an empty state instead of
-  // dereferencing an undefined activeAgent.
-  if (!activeTeam && !activeAgent) {
+  // No teams yet — chatting happens with a team, so prompt the user to make one.
+  if (!activeTeam) {
     return (
       <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;animation:fadeUp .3s ease")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
         <div style={css("font-size:15px;font-weight:700")}>No conversations yet</div>
-        <div style={css("font-size:12.5px;color:#A1A1AA;max-width:340px")}>Create an agent or a team to start chatting with your AI workforce.</div>
-        <Btn onClick={() => router.push("/create")} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create an agent</Btn>
+        <div style={css("font-size:12.5px;color:#A1A1AA;max-width:340px")}>Create a team to start chatting with your AI workforce.</div>
+        <Btn onClick={() => set({ showTeamModal: true })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create a team</Btn>
       </div>
     );
   }
@@ -141,30 +156,13 @@ function ChatsInner() {
       <div style={css("width:260px;flex:none;border-right:1px solid #ECECF1;background:#fff;display:flex;flex-direction:column")}>
         <div style={css("padding:16px 16px 10px;font-size:14px;font-weight:700")}>Conversations</div>
         <div style={css("display:flex;flex-direction:column;padding:0 8px;gap:2px")}>
-          {teams.length > 0 && (<>
-            <div style={css("padding:6px 12px;font-size:10.5px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em")}>Teams</div>
-            {teams.map((t) => {
-              const msgs = s.chats[t.id]; const last = msgs && msgs[msgs.length - 1];
-              return (
-                <Box key={t.id} onClick={() => set({ convId: t.id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;" + (t.id === activeId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
-                  <div style={css("width:32px;height:32px;border-radius:10px;background:" + t.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:16px;flex:none")}>{t.icon}</div>
-                  <div style={css("min-width:0")}><div style={css("font-size:12.5px;font-weight:600")}>{t.name}</div><div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{last ? last.text : t.members.length + " agents"}</div></div>
-                </Box>
-              );
-            })}
-            <div style={css("padding:6px 12px;font-size:10.5px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;margin-top:6px")}>Agents</div>
-          </>)}
-          {agentConvIds.map((id) => {
-            const a = byId(id)!;
-            const msgs = s.chats[id];
-            const last = msgs[msgs.length - 1];
+          <div style={css("padding:6px 12px;font-size:10.5px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em")}>Teams</div>
+          {teams.map((t) => {
+            const msgs = s.chats[t.id]; const last = msgs && msgs[msgs.length - 1];
             return (
-              <Box key={id} onClick={() => set({ convId: id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;transition:background .12s;" + (id === activeId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
-                <div style={css(av(a, 32))}>{a.initials}</div>
-                <div style={css("min-width:0")}>
-                  <div style={css("font-size:12.5px;font-weight:600")}>{a.name}</div>
-                  <div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{last ? last.text : ""}</div>
-                </div>
+              <Box key={t.id} onClick={() => set({ convId: t.id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;" + (t.id === activeId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
+                <div style={css("width:32px;height:32px;border-radius:10px;background:" + t.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:16px;flex:none")}>{t.icon}</div>
+                <div style={css("min-width:0")}><div style={css("font-size:12.5px;font-weight:600")}>{t.name}</div><div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{last ? last.text : t.members.length + " agents"}</div></div>
               </Box>
             );
           })}
@@ -174,15 +172,9 @@ function ChatsInner() {
       {/* chat area */}
       <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;background:#FAFAFB")}>
         <div style={css("display:flex;align-items:center;gap:11px;padding:13px 20px;background:#fff;border-bottom:1px solid #ECECF1;flex:none")}>
-          {activeTeam ? (<>
-            <div style={css("width:34px;height:34px;border-radius:11px;background:" + activeTeam.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:17px;flex:none")}>{activeTeam.icon}</div>
-            <div><div style={css("font-size:13.5px;font-weight:700")}>{activeTeam.name}</div><div style={css("font-size:11px;color:#71717A")}>{teamMembers.map((a) => a!.name.split(" ")[0]).join(", ")}</div></div>
-            <div style={css("margin-left:auto;display:flex")}>{teamMembers.slice(0, 5).map((a, i) => <div key={a!.id} style={css(av(a!, 26) + ";border:2px solid #fff;margin-left:" + (i ? "-8" : "0") + "px")}>{a!.initials}</div>)}</div>
-          </>) : (<>
-            <div style={css(av(activeAgent, 34))}>{activeAgent.initials}</div>
-            <div><div style={css("font-size:13.5px;font-weight:700")}>{activeAgent.name}</div><div style={css("font-size:11px;color:#2FA45C;display:flex;align-items:center;gap:5px")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C")} />{activeAgent.role} · online</div></div>
-            <Btn onClick={() => router.push("/agents/" + activeAgent.id)} style="margin-left:auto;background:#F1EDFD;color:#5122C1;border:none;border-radius:99px;padding:6px 14px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">View profile</Btn>
-          </>)}
+          <div style={css("width:34px;height:34px;border-radius:11px;background:" + activeTeam.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:17px;flex:none")}>{activeTeam.icon}</div>
+          <div><div style={css("font-size:13.5px;font-weight:700")}>{activeTeam.name}</div><div style={css("font-size:11px;color:#71717A")}>{teamMembers.map((a) => a.name.split(" ")[0]).join(", ")}</div></div>
+          <div style={css("margin-left:auto;display:flex")}>{teamMembers.slice(0, 5).map((a, i) => <div key={a.id} style={css(av(a, 26) + ";border:2px solid #fff;margin-left:" + (i ? "-8" : "0") + "px")}>{a.initials}</div>)}</div>
           {!confirmClear ? (
             <Btn onClick={() => setConfirmClear(true)} style="flex:none;background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#FBE9E9;color:#C0392B">Clear chat</Btn>
           ) : (
@@ -196,7 +188,7 @@ function ChatsInner() {
         <div style={css("flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px")}>
           {messages.map((m, i) => {
             const mine = m.who === "me";
-            const speaker = !mine && activeTeam ? byId(m.who) : null;
+            const speaker = !mine ? byId(m.who) : null;
             const am = m.text.match(APPROVE_RE);
             const clean = m.text.replace(APPROVE_RE, "").replace(/⟦meet:[^⟧]*⟧/, "").trim();
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
@@ -266,40 +258,42 @@ function ChatsInner() {
               </div>
             );
           })()}
-          {!activeTeam && (
-            <div style={css("display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap")}>
-              {SUGGESTIONS.map((q) => <Box key={q} onClick={() => sendChat(q)} style="font-size:11.5px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:5px 13px;cursor:pointer;font-weight:600" styleHover="background:#E3DBF9">{q}</Box>)}
-            </div>
-          )}
-          {activeTeam && s.chatLeadPicks.length > 0 && (
-            <div style={css("display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center")}>
-              <span style={css("font-size:11px;color:#A1A1AA;font-weight:600")}>To:</span>
-              {s.chatLeadPicks.map((p) => (
-                <span key={p.id} style={css("display:inline-flex;align-items:center;gap:6px;background:#F1EDFD;color:#5122C1;border-radius:99px;padding:4px 10px;font-size:11.5px;font-weight:600")}>
-                  {p.name}
-                  <span onClick={() => removePick(p.id)} style={css("cursor:pointer;font-weight:700;opacity:.7")}>✕</span>
-                </span>
-              ))}
-            </div>
-          )}
           <div style={css("display:flex;gap:10px;background:#fff;border:1px solid #ECECF1;border-radius:99px;padding:6px 6px 6px 18px;box-shadow:0 1px 3px rgba(24,24,27,.05)")}>
-            <input
-              aria-label="Message"
-              value={s.chatInput}
-              onChange={(e) => set({ chatInput: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                if (activeTeam) {
-                  const mm = s.chatInput.match(/@([\w'-]*)$/);
-                  const hit = mm ? teamMembers.find((a) => a!.name.toLowerCase().includes(mm[1].toLowerCase())) : undefined;
-                  if (mm && mm[1] && hit) { e.preventDefault(); set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + hit!.name.split(" ")[0] + " ") }); return; }
-                  sendTeamChat(activeTeam.id, s.chatInput, s.chatLeadPicks.map((p) => p.id));
-                } else { sendChat(s.chatInput); }
-              }}
-              placeholder={activeTeam ? "Message the team — @mention an agent, /lead to pick leads…" : "Message " + activeAgent.name.split(" ")[0] + "…"}
-              style={css("flex:1;border:none;outline:none;font-size:13px;background:transparent;color:#18181B")}
-            />
-            <Btn onClick={() => { activeTeam ? sendTeamChat(activeTeam.id, s.chatInput, s.chatLeadPicks.map((p) => p.id)) : sendChat(s.chatInput); }} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Send ↑</Btn>
+            <div style={css("flex:1;min-width:0;position:relative;display:flex;align-items:center")}>
+              <div ref={backdropRef} aria-hidden style={css("position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;pointer-events:none;font-size:13px;color:#18181B")}>
+                <span style={css("white-space:pre;line-height:20px")}>{renderComposer(s.chatInput)}</span>
+              </div>
+              <input
+                ref={inputRef}
+                aria-label="Message"
+                value={s.chatInput}
+                onChange={(e) => set({ chatInput: e.target.value })}
+                onScroll={(e) => { if (backdropRef.current) backdropRef.current.scrollLeft = e.currentTarget.scrollLeft; }}
+                onKeyDown={(e) => {
+                  // Backspace over a whole «lead» token removes it in one press
+                  // (a plain input would otherwise chip away at it char-by-char).
+                  if (e.key === "Backspace" && inputRef.current && inputRef.current.selectionStart === inputRef.current.selectionEnd) {
+                    const caret = inputRef.current.selectionStart ?? 0;
+                    const tok = s.chatInput.slice(0, caret).match(/«[^«»]*»$/);
+                    if (tok) { e.preventDefault(); set({ chatInput: s.chatInput.slice(0, caret - tok[0].length) + s.chatInput.slice(caret) }); return; }
+                  }
+                  // Tab / Enter accept the top @mention suggestion in team chats.
+                  // Tab always accepts; Enter accepts only when a query follows
+                  // the "@", otherwise it sends.
+                  if (activeTeam && (e.key === "Tab" || e.key === "Enter")) {
+                    const mm = s.chatInput.match(/@([\w'-]*)$/);
+                    const hit = mm ? teamMembers.find((a) => a!.name.toLowerCase().includes(mm[1].toLowerCase())) : undefined;
+                    if (hit && (e.key === "Tab" || mm![1])) { e.preventDefault(); set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + hit!.name.split(" ")[0] + " ") }); return; }
+                    if (e.key === "Tab") return; // nothing to complete — let Tab move focus
+                  }
+                  if (e.key !== "Enter") return;
+                  sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds());
+                }}
+                placeholder="Message the team — @mention an agent, /lead to pick leads…"
+                style={css("flex:1;min-width:0;border:none;outline:none;font-size:13px;line-height:20px;background:transparent;position:relative;z-index:1;caret-color:#18181B;color:" + (s.chatInput ? "transparent" : "#18181B"))}
+              />
+            </div>
+            <Btn onClick={() => sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds())} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Send ↑</Btn>
           </div>
         </div>
       </div>
@@ -308,9 +302,5 @@ function ChatsInner() {
 }
 
 export default function ChatsPage() {
-  return (
-    <Suspense fallback={null}>
-      <ChatsInner />
-    </Suspense>
-  );
+  return <ChatsInner />;
 }

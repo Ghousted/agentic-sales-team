@@ -4,24 +4,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { firstStage, enqueuePodStage, approvalMode } from "./orchestrate";
 import type { ApprovalDTO } from "./types";
 import { postTeamMessage } from "@/lib/chat/teamMessages";
 
 async function uid(): Promise<string | null> {
   const s = await getSession();
   return s?.userId ?? null;
-}
-
-export async function workTheBook(teamId: string): Promise<{ started: boolean; needsApproval?: boolean; error?: string }> {
-  if (!isDbConfigured()) return { started: false, error: "Server not configured." };
-  const userId = await uid();
-  if (!userId) return { started: false, error: "Not signed in." };
-  const first = await firstStage(userId, teamId);
-  if (!first) return { started: false, error: "This team has no research or outreach agent to run the pod." };
-  const mode = await approvalMode(userId, first.agentId, first.capability);
-  await enqueuePodStage(userId, teamId, first.capability, first.agentId);
-  return { started: true, needsApproval: mode === "ask" };
 }
 
 export async function listPendingApprovals(teamId: string): Promise<ApprovalDTO[]> {

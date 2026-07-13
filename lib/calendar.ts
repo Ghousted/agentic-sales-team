@@ -1,8 +1,7 @@
-// Calendar model built from real activity events (lib/workspace listActivity),
-// placed by their real timestamps. No fabricated events.
+// Calendar model built from real agent-booked meetings, placed by their real
+// timestamps. No fabricated events.
 import type { Agent } from "./types";
 import { av } from "./visuals";
-import type { ActivityItem } from "./workspace/stats";
 
 export interface CalEvent {
   createdAt: string;           // ISO — the real event time
@@ -27,27 +26,6 @@ export interface MonthModel { label: string; weeks: MonthCell[][]; }
 const CAL_HOURS = ["8 AM", "9 AM", "10 AM", "11 AM", "Noon", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM"];
 const CAL_DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const TYPE_META: Record<string, { label: string; colors: [string, string] }> = {
-  lead_added: { label: "Lead", colors: ["#E7F7EC", "#1B7A3D"] },
-  lead_researched: { label: "Research", colors: ["#F1EDFD", "#5122C1"] },
-  email_drafted: { label: "Draft", colors: ["#FEF6E8", "#B45309"] },
-  email_sent: { label: "Sent", colors: ["#E9F5FE", "#0369A1"] },
-};
-
-function toCalEvent(a: ActivityItem, agent: Agent | undefined): CalEvent {
-  const d = new Date(a.createdAt);
-  const dayIdx = (d.getDay() + 6) % 7;               // Mon-first
-  const hourIdx = Math.max(0, Math.min(9, d.getHours() - 8)); // clamp to 8AM-5PM band
-  const meta = TYPE_META[a.type] ?? { label: a.type, colors: ["#F4F4F5", "#71717A"] as [string, string] };
-  return {
-    createdAt: a.createdAt, dayIdx, hourIdx,
-    title: (meta.label + " · " + a.text).slice(0, 60),
-    initials: agent?.initials ?? "?",
-    avStyle: agent ? av(agent, 24) : "",
-    colors: meta.colors,
-  };
-}
-
 interface MeetingLike { agentId: string; leadName: string; whenAt: string; whenLabel: string }
 
 /** Build the calendar from booked meetings only — each placed at its real time,
@@ -81,26 +59,6 @@ export function buildCalendarFromMeetings(meetings: MeetingLike[], agents: Agent
     { label: "Upcoming", value: String(upcoming), emoji: "⏭", bg: "#E7F7EC" },
     { label: "This week", value: String(thisWeek), emoji: "📅", bg: "#FEF6E8" },
     { label: "Leads", value: String(leadCount), emoji: "🧑", bg: "#E9F5FE" },
-  ];
-  return { summary, hours: CAL_HOURS, dayLabels: CAL_DAY_LABELS, weekRows, events: cal };
-}
-
-/** Build the week grid + summary from real events (agents used for avatars). */
-export function buildCalendar(events: ActivityItem[], agents: Agent[]): CalendarModel {
-  const byId = new Map(agents.map((a) => [a.id, a]));
-  const cal = events.map((e) => toCalEvent(e, byId.get(e.agentId)));
-  const weekRows = CAL_HOURS.map((hour, hourIdx) => ({
-    hour,
-    cells: CAL_DAY_LABELS.map((_, dayIdx) => cal.filter((e) => e.dayIdx === dayIdx && e.hourIdx === hourIdx)),
-  }));
-  const activeAgents = new Set(events.map((e) => e.agentId)).size;
-  const drafts = events.filter((e) => e.type === "email_drafted").length;
-  const sent = events.filter((e) => e.type === "email_sent").length;
-  const summary: CalSummary[] = [
-    { label: "Events", value: String(events.length), emoji: "🗓", bg: "#E7F7EC" },
-    { label: "Drafts", value: String(drafts), emoji: "✍️", bg: "#FEF6E8" },
-    { label: "Sent", value: String(sent), emoji: "📨", bg: "#E9F5FE" },
-    { label: "Active agents", value: String(activeAgents), emoji: "🤖", bg: "#F1EDFD" },
   ];
   return { summary, hours: CAL_HOURS, dayLabels: CAL_DAY_LABELS, weekRows, events: cal };
 }

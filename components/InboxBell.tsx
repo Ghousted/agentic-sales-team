@@ -4,7 +4,7 @@
 // has to open each agent to send.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
-import { listAllDrafts, markDraftSent } from "@/lib/leads/actions";
+import { listAllDrafts, markDraftSent, discardDraft, clearSentDrafts } from "@/lib/leads/actions";
 import type { DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
@@ -36,6 +36,7 @@ export default function InboxBell() {
   }, [open]);
 
   const unsent = drafts.filter((d) => d.status !== "sent").length;
+  const sentCount = drafts.filter((d) => d.status === "sent").length;
 
   const openInMail = (d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
@@ -48,6 +49,18 @@ export default function InboxBell() {
   const markSent = async (d: DraftDTO) => {
     setDrafts((prev) => prev.map((x) => (x.id === d.id ? { ...x, status: "sent" } : x)));
     await markDraftSent(d.id);
+  };
+  // Discard/Clear-sent soft-hide the draft from this inbox; the row stays in the
+  // table so the analytics drafted/sent counts never move.
+  const discard = async (d: DraftDTO) => {
+    setDrafts((prev) => prev.filter((x) => x.id !== d.id));
+    await discardDraft(d.id);
+    showToast("Draft discarded");
+  };
+  const clearSent = async () => {
+    setDrafts((prev) => prev.filter((x) => x.status !== "sent"));
+    const n = await clearSentDrafts();
+    if (n > 0) showToast(`Cleared ${n} sent draft${n === 1 ? "" : "s"}`);
   };
 
   return (
@@ -67,9 +80,12 @@ export default function InboxBell() {
 
       {open && (
         <div style={css("position:absolute;top:56px;right:0;width:400px;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.14);z-index:40;overflow:hidden")}>
-          <div style={css("display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
+          <div style={css("display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
             <div style={css("font-size:13.5px;font-weight:700")}>Email drafts</div>
-            <div style={css("margin-left:auto;font-size:11px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
+            {sentCount > 0 && (
+              <Btn onClick={clearSent} style="margin-left:auto;background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear sent</Btn>
+            )}
+            <div style={css((sentCount > 0 ? "" : "margin-left:auto;") + "font-size:11px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
           </div>
           <div style={css("max-height:70vh;overflow-y:auto")}>
             {drafts.length === 0 ? (
@@ -97,6 +113,7 @@ export default function InboxBell() {
                         {d.leadProfileUrl && <Btn onClick={() => window.open(d.leadProfileUrl!, "_blank")} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Open profile</Btn>}
                       </>)}
                       {d.status !== "sent" && <Btn onClick={() => markSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
+                      {d.status !== "sent" && <Btn onClick={() => discard(d)} style="background:transparent;color:#A1A1AA;border:none;border-radius:99px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECF2;color:#F43F7E">Discard</Btn>}
                     </div>
                   </div>
                 );

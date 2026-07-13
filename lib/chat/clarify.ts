@@ -24,7 +24,7 @@ export function scrapeHasTarget(message: string): boolean {
 /** The clarifying question shown when a scrape request has no target. Kept as a
  *  stable, exact string so isAskScrapePrompt can detect the pending state. */
 export function askScrapeText(): string {
-  return `What should I look for? Tell me who or what to find and where — for example, "property buyers in Makati" or "startups hiring SDRs in the US".`;
+  return `What should I look for? Tell me who or what to find, and where.`;
 }
 
 /** True if `text` is the scrape-target clarifying prompt (i.e. the agent is still
@@ -36,13 +36,38 @@ export function isAskScrapePrompt(text: string): boolean {
 /** The "when?" clarifying prompt for a meeting. Carries the picked lead ids in a
  *  hidden ⟦meet:…⟧ marker (stripped in the chat UI) so the next reply can book. */
 export function askWhenText(leadLabel: string, leadIds: string[]): string {
-  return `When should I set the meeting with ${leadLabel}? For example "tomorrow 2pm" or "next Tuesday 10am". ⟦meet:${leadIds.join(",")}⟧`;
+  return `When should I set the meeting with ${leadLabel}? ⟦meet:${leadIds.join(",")}⟧`;
 }
 
-/** Extract the pending-meeting lead ids from a ⟦meet:…⟧ marker, or null. */
-export function pendingMeetingLeadIds(text: string): string[] | null {
+/** The "what time?" prompt — shown when a day is set but no clock time was given.
+ *  The marker also carries the resolved date (ISO yyyy-mm-dd) so a bare time reply
+ *  ("2pm") lands on the right day. */
+export function askWhatTimeText(leadLabel: string, dayLabel: string, leadIds: string[], isoDate: string): string {
+  return `What time on ${dayLabel} should I set the meeting with ${leadLabel}? ⟦meet:${leadIds.join(",")}|${isoDate}⟧`;
+}
+
+/** Extract the pending-meeting state from a ⟦meet:ids|date⟧ marker, or null.
+ *  `date` (ISO yyyy-mm-dd) is present only once a day is chosen and we're waiting
+ *  on the time; absent when we're still waiting on the day ("when?"). */
+export function pendingMeeting(text: string): { leadIds: string[]; date?: string } | null {
   const m = text.match(/⟦meet:([^⟧]*)⟧/);
   if (!m) return null;
-  const ids = m[1].split(",").map((s) => s.trim()).filter(Boolean);
-  return ids.length ? ids : null;
+  const [idsPart, datePart] = m[1].split("|");
+  const leadIds = (idsPart ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!leadIds.length) return null;
+  const date = (datePart ?? "").trim();
+  return { leadIds, date: date || undefined };
+}
+
+/** The "who?" clarifying prompt for a meeting, shown when a book-meeting request
+ *  names no lead. Kept as a stable, exact string so isAskMeetingWhoPrompt can
+ *  detect the pending state and treat the next reply as the lead answer. */
+export function askMeetingWhoText(): string {
+  return `Who should I set the meeting with?`;
+}
+
+/** True if `text` is the meeting "who?" prompt (the agent is still waiting for the
+ *  user to say which lead to book). */
+export function isAskMeetingWhoPrompt(text: string): boolean {
+  return text === askMeetingWhoText();
 }

@@ -13,23 +13,7 @@ import type { ApprovalDTO } from "@/lib/pod/types";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 
-const days = ["M", "T", "W", "T", "F", "S", "S"];
 const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
-
-// Deterministic weekly performance series for a team: seeded by team id and
-// scaled by the members' average score (weekends run lighter). Same team →
-// same bars across reloads; recomputes when membership changes.
-function weekSeries(teamId: string, activity: number): number[] {
-  let a = 2166136261;
-  for (let i = 0; i < teamId.length; i++) { a ^= teamId.charCodeAt(i); a = Math.imul(a, 16777619); }
-  const out: number[] = [];
-  for (let i = 0; i < 7; i++) {
-    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
-    const base = 32 + (a % 58);
-    out.push(Math.max(6, Math.round(base * (i >= 5 ? 0.4 : 1) * activity)));
-  }
-  return out;
-}
 
 export default function TeamDetail() {
   const { agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast } = useApp();
@@ -62,8 +46,6 @@ export default function TeamDetail() {
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
   const avgScore = members.length ? Math.round(members.reduce((n, a) => n + a!.score, 0) / members.length) : 0;
-  const activity = Math.max(0.55, Math.min(avgScore / 85, 1.15));
-  const teamWeek = weekSeries(team.id, activity);
   const workingCount = members.filter((a) => a!.status === "working").length;
 
   // Agents not already on this team, for the add picker.
@@ -197,17 +179,6 @@ export default function TeamDetail() {
                 })}
               </div>
             )}
-          </div>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Team performance</div>
-            <div style={css("display:flex;align-items:flex-end;gap:8px;height:100px")}>
-              {teamWeek.map((v, i) => (
-                <div key={i} style={css("flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end")}>
-                  <div style={css("width:100%;max-width:30px;background:linear-gradient(180deg,#F9A8D4,#F43F7E);border-radius:6px 6px 3px 3px;height:" + v + "%")} />
-                  <div style={css("font-size:10px;color:#A1A1AA")}>{days[i]}</div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>

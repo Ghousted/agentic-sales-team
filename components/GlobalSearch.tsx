@@ -1,5 +1,5 @@
 "use client";
-// Top-bar global search: live results across agents, teams, and conversations.
+// Top-bar global search: live results across agents and teams.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
@@ -8,7 +8,7 @@ import { css, Box } from "./primitives";
 
 interface Result {
   key: string;
-  type: "Agent" | "Team" | "Conversation";
+  type: "Agent" | "Team";
   title: string;
   subtitle: string;
   avatar: string; // inline style for the leading swatch/avatar
@@ -17,7 +17,7 @@ interface Result {
 }
 
 export default function GlobalSearch() {
-  const { s, set, agents, teams, byId } = useApp();
+  const { s, set, agents, teams } = useApp();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const q = s.search.trim().toLowerCase();
@@ -31,14 +31,6 @@ export default function GlobalSearch() {
     for (const t of teams.filter((t) => has(t.name, t.desc, t.goal)).slice(0, 4)) {
       results.push({ key: "t:" + t.id, type: "Team", title: t.name, subtitle: t.desc, avatar: "width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:15px;background:" + t.iconBg, initials: t.icon, go: () => router.push("/teams/" + t.id) });
     }
-    for (const id of Object.keys(s.chats)) {
-      const a = byId(id);
-      if (!a || !has(a.name)) continue;
-      const msgs = s.chats[id];
-      const last = msgs[msgs.length - 1];
-      results.push({ key: "c:" + id, type: "Conversation", title: a.name, subtitle: last ? last.text : "Open conversation", avatar: av(a, 28), initials: a.initials, go: () => router.push("/chats?agent=" + id) });
-      if (results.filter((r) => r.type === "Conversation").length >= 3) break;
-    }
   }
 
   const showDropdown = open && q.length > 0;
@@ -48,13 +40,13 @@ export default function GlobalSearch() {
       <div style={css("height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
         <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>
         <input
-          aria-label="Search agents, teams, and conversations"
+          aria-label="Search agents and teams"
           value={s.search}
           onChange={(e) => set({ search: e.target.value })}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => { if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); } }}
-          placeholder="Search agents, teams, conversations…"
+          placeholder="Search agents, teams…"
           style={css("flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#18181B;min-width:0")}
         />
       </div>

@@ -157,10 +157,13 @@ const CSS = `
 .lp-dash{opacity:0;animation:dashMove 1.8s linear infinite;}
 .lp-goal{position:absolute;left:260px;top:229px;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;z-index:2;opacity:0;}
 .lp-goal-inner{display:flex;align-items:center;justify-content:center;}
-.lp-ring-pulse{position:absolute;left:50%;top:50%;width:124px;height:124px;transform:translate(-50%,-50%);border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out infinite;}
+/* Center with inset+margin (NOT transform): the shared ringPulse keyframe sets
+   transform:scale(), which would clobber a translate() centering and shove the
+   pulse off the orb. margin:auto centering leaves transform free for the scale. */
+.lp-ring-pulse{position:absolute;inset:0;margin:auto;width:124px;height:124px;border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out infinite;}
 .lp-ring-pulse-2{animation-delay:1.5s;}
 .lp-ring{width:132px;height:132px;border-radius:50%;background:conic-gradient(#B57BFF 0 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 46px rgba(139,92,246,.45);}
-.lp-ring-in{width:112px;height:112px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.lp-ring-in{width:112px;height:112px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-top:12px;}
 .lp-ring-num{font-family:'Poetsen One',sans-serif;font-size:30px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
 .lp-ring-lbl{font-size:9px;font-weight:700;letter-spacing:.12em;color:#A99BD8;text-align:center;line-height:1.35;}
 .lp-node{position:absolute;transform:translate(-50%,-50%);z-index:2;width:150px;animation:lpFloat 6s ease-in-out infinite;}

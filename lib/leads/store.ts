@@ -223,6 +223,16 @@ export async function setLeadReview(ids: string[], review: "accepted" | "dismiss
     .where(and(eq(leads.userId, userId), inArray(leads.id, ids)));
 }
 
+/** Hard-delete leads (bulk). FK cascades take their drafts, proposals, meetings,
+ *  and matches with them; the activity log has no FK so it survives as immutable
+ *  history. Scoped to the user so one can only delete their own leads. */
+export async function deleteLeads(ids: string[]): Promise<void> {
+  if (!isDbConfigured() || ids.length === 0) return;
+  const userId = await uid();
+  if (!userId) return;
+  await getDb().delete(leads).where(and(eq(leads.userId, userId), inArray(leads.id, ids)));
+}
+
 export async function getLead(id: string): Promise<LeadDTO | null> {
   if (!isDbConfigured()) return null;
   const userId = await uid();
@@ -269,7 +279,7 @@ export async function listAllDrafts(): Promise<DraftDTO[]> {
     leadProfileUrl: leads.profileUrl, leadPlatform: leads.platform,
   }).from(outreachDrafts)
     .innerJoin(leads, eq(outreachDrafts.leadId, leads.id))
-    .where(eq(outreachDrafts.userId, userId))
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false)))
     .orderBy(desc(outreachDrafts.createdAt));
   return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
@@ -310,6 +320,28 @@ export async function markDraftSent(draftId: string): Promise<void> {
   await db.update(leads).set({ status: "contacted", updatedAt: new Date() })
     .where(and(eq(leads.id, d.leadId), eq(leads.userId, userId), eq(leads.status, "new")));
   await db.insert(activity).values({ userId, agentId: d.agentId, type: "email_sent", leadId: d.leadId, text: `Sent "${d.subject}"` });
+}
+
+/** Hide a single draft from the top-bar inbox (soft-hide, not a delete — the row
+ *  stays in the table so analytics counts are unaffected). Used for "Discard". */
+export async function discardDraft(draftId: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  const userId = await uid();
+  if (!userId) return;
+  await getDb().update(outreachDrafts).set({ dismissed: true })
+    .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId)));
+}
+
+/** Hide every already-sent draft from the inbox in one shot ("Clear sent").
+ *  Returns how many were cleared so the caller can toast a count. */
+export async function clearSentDrafts(): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  const userId = await uid();
+  if (!userId) return 0;
+  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.status, "sent"), eq(outreachDrafts.dismissed, false)))
+    .returning({ id: outreachDrafts.id });
+  return rows.length;
 }
 
 // ── Runner helpers (called by /api/jobs/run) ────────────────────────────────

@@ -34,3 +34,6 @@ worker/.venv/
 worker/.browser-profile/
 worker/__pycache__/
 public/runs/
+
+# Sample import fixtures (local only)
+/samples/

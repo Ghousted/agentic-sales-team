@@ -15,7 +15,7 @@ A single **Next.js** app: web UI, server actions, and the job/scrape runners all
 - **Pods (work-the-book)** — a team auto-runs the full funnel (`scrape → assess → research → qualify → match → outreach → proposal`), chaining stage to stage with per-capability Auto/Ask approval gates.
 - **Team group chat** — `@mention` an agent in plain language; intent is detected, routed to a capable teammate if needed, and the acting agent runs the real job and reports back in-thread.
 - **Meetings & calendar** — book from a lead or via chat (natural-language time parsing); the calendar shows only real booked meetings.
-- **Live activity, analytics & notifications** — real KPIs, a per-day chart, an output ranking, and live "who's working which lead right now" indicators.
+- **Live activity & notifications** — a real event log with live "who's working which lead right now" indicators.
 
 ## Tech stack
 

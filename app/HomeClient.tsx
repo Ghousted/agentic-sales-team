@@ -67,7 +67,6 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:baseline;gap:12px")}>
         <div style={css("font-family:'Poetsen One',sans-serif;font-size:24px;font-weight:400;letter-spacing:-.01em;white-space:nowrap")}>Good morning, {userFirst}!</div>
-        <div style={css("font-size:13px;color:#71717A")}>Your AI workforce — working live</div>
         <Btn onClick={() => set({ showTeamModal: true })} style="margin-left:auto;background:#18181B;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ New team</Btn>
       </div>
 
@@ -148,7 +147,6 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
           <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>🌐</div>
           <div style={css("font-size:15px;font-weight:700")}>No teams yet</div>
-          <div style={css("font-size:12.5px;color:#A1A1AA;max-width:380px")}>Group your agents into a team to work a shared book, run the pod, and command them together in chat.</div>
           <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create your first team</Btn>
         </div>
       ) : (

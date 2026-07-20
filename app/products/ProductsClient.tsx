@@ -87,15 +87,13 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
       {/* toolbar: breadcrumb + actions */}
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
-        {inFolderView ? (
+        {inFolderView && (
           <div style={css("display:flex;align-items:center;gap:7px;font-size:13px")}>
             <Box onClick={() => setFolder(null)} style="color:#5122C1;font-weight:600;cursor:pointer" styleHover="text-decoration:underline">← All products</Box>
             <span style={css("color:#D4D4D8")}>/</span>
             <span style={css("font-weight:700")}>{crumbName}</span>
             <span style={css("color:#A1A1AA")}>· {shown.length} product{shown.length === 1 ? "" : "s"}</span>
           </div>
-        ) : (
-          <div style={css("font-size:13px;color:#71717A")}>{folders.length} folder{folders.length === 1 ? "" : "s"} · your agents’ source of truth</div>
         )}
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           {isRealFolder && <Btn onClick={removeFolder} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete folder</Btn>}
@@ -114,7 +112,6 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
             <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>📦</div>
             <div style={css("font-size:15px;font-weight:700")}>No products yet</div>
-            <div style={css("font-size:12.5px;color:#A1A1AA;max-width:360px")}>Create a folder, import a CSV, or add a product — your agents use this catalog to write proposals and outreach.</div>
           </div>
         ) : (
           <div style={css("display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px")}>

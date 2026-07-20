@@ -230,7 +230,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           {loading ? (
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
           ) : filtered.length === 0 ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No leads yet. Use “Add lead” to create one.</div>
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No leads yet.</div>
           ) : filtered.map((l) => {
             const a = byId(l.agentId);
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
@@ -270,7 +270,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           {loading ? (
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
           ) : candidates.length === 0 ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No candidates awaiting review. Run “Find leads” on a scraping agent.</div>
+            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No candidates awaiting review.</div>
           ) : candidates.map((c) => {
             const a = byId(c.agentId);
             return (

@@ -46,11 +46,6 @@ export default function CalendarClient({ initialEvents }: { initialEvents: Meeti
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("font-size:13px;color:#71717A")}>Meetings your agents have booked, and with whom</div>
-      {cal.events.length === 0 && (
-        <div style={css("font-size:12.5px;color:#A1AEBE;margin-top:-10px")}>No meetings yet — ask the Meeting agent to book one (e.g. “@Meeting set a meeting with /lead”).</div>
-      )}
-
       {/* summary cards */}
       <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
         {cal.summary.map((cs) => (

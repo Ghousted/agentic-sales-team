@@ -14,7 +14,6 @@ const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/products", icon: "leads", label: "Products" },
   { href: "/chats", icon: "chat", label: "Chats" },
   { href: "/calendar", icon: "calendar", label: "Calendar" },
-  { href: "/analytics", icon: "bars", label: "Analytics" },
 ];
 
 function isActive(href: string, path: string): boolean {
@@ -31,7 +30,6 @@ function headerTitle(path: string): string {
   if (path === "/create") return "Add new agent";
   if (path.startsWith("/chats")) return "Chats";
   if (path.startsWith("/calendar")) return "Calendar";
-  if (path.startsWith("/analytics")) return "Analytics";
   if (path.startsWith("/settings")) return "Settings";
   if (path.startsWith("/leads")) return "Leads";
   if (path.startsWith("/products")) return "Products";

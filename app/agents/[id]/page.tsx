@@ -359,7 +359,7 @@ export default function AgentDetail() {
             <Btn onClick={runResearch} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#42199E">{runningResearch ? "Researching…" : "Research leads"}</Btn>
           </div>
           {researchedLeads.length === 0 ? (
-            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet. Hit “Research leads” to enrich this agent&rsquo;s leads.</div>
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet.</div>
           ) : researchedLeads.map((l) => (
             <div key={l.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("font-size:13.5px;font-weight:700")}>{l.name}{l.company ? " · " + l.company : ""}</div>
@@ -387,7 +387,7 @@ export default function AgentDetail() {
             )}
           </div>
           {drafts.length === 0 ? (
-            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet. Add leads in the Leads tab, then hit “Run outreach”.</div>
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No drafts yet.</div>
           ) : drafts.map((d) => (
             <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("display:flex;align-items:center;gap:8px")}>
@@ -419,7 +419,7 @@ export default function AgentDetail() {
             <Btn onClick={runProposals} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningProposal ? "opacity:.6" : "")} styleHover="background:#42199E">{runningProposal ? "Drafting…" : "Generate proposals"}</Btn>
           </div>
           {proposals.length === 0 ? (
-            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No proposals yet. Hit “Generate proposals” to draft from your catalog.</div>
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No proposals yet.</div>
           ) : proposals.map((p) => (
             <div key={p.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("display:flex;align-items:center;gap:8px")}>

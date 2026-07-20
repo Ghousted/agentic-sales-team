@@ -8,20 +8,13 @@ import { css, Box, Btn } from "@/components/primitives";
 export default function AgentsPage() {
   const { s, agents, deleteAgent } = useApp();
   const router = useRouter();
-  const activeCount = agents.filter((a) => a.status === "working").length;
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("display:flex;align-items:baseline;gap:12px")}>
-        <div style={css("font-size:13px;color:#71717A")}>
-          {agents.length} AI employees · {activeCount} working now
-        </div>
-      </div>
       {agents.length === 0 && (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
           <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>🤖</div>
           <div style={css("font-size:15px;font-weight:700")}>No agents yet</div>
-          <div style={css("font-size:12.5px;color:#A1A1AA;max-width:360px")}>Build your AI workforce — create your first agent and give it capabilities like scraping, research, outreach, or proposals.</div>
           <Btn onClick={() => router.push("/create")} style="margin-top:6px;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create your first agent</Btn>
         </div>
       )}

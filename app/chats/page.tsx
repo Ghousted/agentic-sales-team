@@ -179,7 +179,6 @@ function ChatsInner() {
       <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;animation:fadeUp .3s ease")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
         <div style={css("font-size:15px;font-weight:700")}>No conversations yet</div>
-        <div style={css("font-size:12.5px;color:#A1A1AA;max-width:340px")}>Create a team to start chatting with your AI workforce.</div>
         <Btn onClick={() => set({ showTeamModal: true })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create a team</Btn>
       </div>
     );

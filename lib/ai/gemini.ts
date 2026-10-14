@@ -13,6 +13,8 @@ export interface Turn {
   text: string;
 }
 
+const GEN_TIMEOUT_MS = 30_000;
+
 /** Call Gemini with a system instruction + prior turns. Returns the reply text. Throws on failure. */
 export async function geminiGenerate(system: string, turns: Turn[], opts?: { maxTokens?: number; temperature?: number }): Promise<string> {
   const key = process.env.GEMINI_API_KEY;
@@ -37,6 +39,8 @@ export async function geminiGenerate(system: string, turns: Turn[], opts?: { max
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
+    // Never leave a chat hanging on a stalled request.
+    signal: AbortSignal.timeout(GEN_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -73,6 +77,8 @@ export async function geminiJSON<T>(system: string, turns: Turn[], schema: Recor
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
+    // Never leave a chat hanging on a stalled request.
+    signal: AbortSignal.timeout(GEN_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

@@ -345,6 +345,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
     teamChat(teamId, t, leadIds).then(async (res) => {
       for (const m of res.messages) await typeThenAppend(m.who, m.text);
+      set({ chatTyping: false });
+      if (!res.messages.length && !res.job) append("system", "No one picked that up. Try @mentioning an agent on this team.");
       if (!res.job) return;
       const job = res.job;
       if (job.kind === "scrape") {

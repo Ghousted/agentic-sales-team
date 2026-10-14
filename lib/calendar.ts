@@ -42,7 +42,7 @@ export function buildCalendarFromMeetings(meetings: MeetingLike[], agents: Agent
       title: m.leadName,
       initials: agent?.initials ?? "?",
       avStyle: agent ? av(agent, 24) : "",
-      colors: ["#F1EDFD", "#5122C1"],
+      colors: ["#EEF4FF", "#2563EB"],
     };
   });
   const weekRows = CAL_HOURS.map((hour, hourIdx) => ({
@@ -55,7 +55,7 @@ export function buildCalendarFromMeetings(meetings: MeetingLike[], agents: Agent
   const thisWeek = meetings.filter((m) => { const t = new Date(m.whenAt).getTime(); return t >= now && t < now + weekMs; }).length;
   const leadCount = new Set(meetings.map((m) => m.leadName)).size;
   const summary: CalSummary[] = [
-    { label: "Meetings", value: String(meetings.length), emoji: "🗓", bg: "#F1EDFD" },
+    { label: "Meetings", value: String(meetings.length), emoji: "🗓", bg: "#EEF4FF" },
     { label: "Upcoming", value: String(upcoming), emoji: "⏭", bg: "#E7F7EC" },
     { label: "This week", value: String(thisWeek), emoji: "📅", bg: "#FEF6E8" },
     { label: "Leads", value: String(leadCount), emoji: "🧑", bg: "#E9F5FE" },

@@ -16,7 +16,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
       <body style={{ margin: 0, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px", background: "#FAFAFB", fontFamily: "Inter, system-ui, -apple-system, sans-serif", color: "#18181B" }}>
         <div style={{ maxWidth: "460px", textAlign: "center" }}>
           <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "15px", fontWeight: 700, letterSpacing: "-.01em", marginBottom: "24px" }}>
-            <span style={{ color: "#5122C1" }}>agentic</span> salesforce
+            <span style={{ color: "#2563EB" }}>agentic</span> salesforce
           </div>
           <h1 style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-.01em", margin: "0 0 10px" }}>Something went wrong</h1>
           <p style={{ fontSize: "15px", color: "#71717A", lineHeight: 1.55, margin: "0 0 26px" }}>
@@ -25,7 +25,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
             <button
               onClick={() => reset()}
-              style={{ background: "#5122C1", color: "#fff", border: "none", borderRadius: "100px", padding: "11px 24px", fontSize: "15px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(81,34,193,.3)" }}
+              style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: "100px", padding: "11px 24px", fontSize: "15px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(37,99,235,.3)" }}
             >
               Try again
             </button>

@@ -12,8 +12,8 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   return (
     <div style={{ minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px", fontFamily: "Inter, system-ui, sans-serif", color: "#18181B" }}>
       <div style={{ maxWidth: "440px", textAlign: "center" }}>
-        <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: "#F1EDFD", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }} aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5122C1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ width: "56px", height: "56px", borderRadius: "16px", background: "#EEF4FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }} aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
@@ -24,7 +24,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         </p>
         <button
           onClick={() => reset()}
-          style={{ background: "#5122C1", color: "#fff", border: "none", borderRadius: "100px", padding: "10px 22px", fontSize: "14px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(81,34,193,.3)" }}
+          style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: "100px", padding: "10px 22px", fontSize: "14px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(37,99,235,.3)" }}
         >
           Try again
         </button>

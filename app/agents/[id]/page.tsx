@@ -42,11 +42,11 @@ const MSEL = "border:1px solid #E4E4E7;border-radius:8px;padding:6px 9px;font-si
 const ROLE_OPTIONS = AGENT_TYPES.filter((t) => !t.custom).map((t) => t.label);
 const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
-  replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
+  replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#EEF4FF", "#2563EB"],
 };
 const ACT_META: Record<string, { label: string; c: [string, string] }> = {
   lead_added: { label: "Lead added", c: ["#F4F4F5", "#71717A"] },
-  lead_researched: { label: "Researched", c: ["#F1EDFD", "#5122C1"] },
+  lead_researched: { label: "Researched", c: ["#EEF4FF", "#2563EB"] },
   lead_qualified: { label: "Qualified", c: ["#E9F5FE", "#0369A1"] },
   email_drafted: { label: "Drafted", c: ["#FEF6E8", "#B45309"] },
   email_sent: { label: "Sent", c: ["#E7F7EC", "#1B7A3D"] },
@@ -57,7 +57,7 @@ function relTime(iso: string): string { return new Date(iso).toLocaleDateString(
 const tierChip = (score: number): [string, string, string] => score >= 75 ? ["#FEECEC", "#B91C1C", "Hot"] : score >= 50 ? ["#FEF6E8", "#B45309", "Warm"] : score > 0 ? ["#E9F5FE", "#0369A1", "Cold"] : ["#F4F4F5", "#A1A1AA", "—"];
 
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
-  return <div id={id} style={css("font-family:'Poetsen One',sans-serif;font-size:15px;font-weight:700;margin-top:4px")}>{children}</div>;
+  return <div id={id} style={css("font-family:'General Sans',Inter,sans-serif;font-size:15px;font-weight:700;margin-top:4px")}>{children}</div>;
 }
 
 export default function AgentDetail() {
@@ -237,7 +237,7 @@ export default function AgentDetail() {
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="color:#5122C1">← All agents</Box>
+      <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="color:#2563EB">← All agents</Box>
 
       {/* header card */}
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;box-shadow:0 1px 3px rgba(24,24,27,.04);display:flex;align-items:center;gap:18px")}>
@@ -251,7 +251,7 @@ export default function AgentDetail() {
             </span>
           </div>
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{sel.role}</div>
-          <div style={css("font-size:12px;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>🎯 {sel.goal}</div>
+          <div style={css("font-size:12px;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>🎯 {sel.goal}</div>
         </div>
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={() => togglePause(sel.id)} style="background:#FEF6E8;color:#B45309;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FDEBCB">{paused ? "Resume" : "Pause"}</Btn>
@@ -270,8 +270,8 @@ export default function AgentDetail() {
       {/* Overview */}
       <div id="sec-overview" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;animation:fadeUp .25s ease")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
-          <div style={css("background:linear-gradient(135deg,#F3EFFE,#FDEEF6);border-radius:16px;padding:18px")}>
-            <div style={css("font-size:11px;font-weight:700;color:#5122C1;text-transform:uppercase;letter-spacing:.06em")}>✦ Summary</div>
+          <div style={css("background:linear-gradient(135deg,#EEF4FF,#FDEEF6);border-radius:16px;padding:18px")}>
+            <div style={css("font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:.06em")}>✦ Summary</div>
             <div style={css("font-size:13.5px;color:#3F3F46;margin-top:8px;line-height:1.6")}>
               {stats ? `${stats.leadsWorked} lead${stats.leadsWorked === 1 ? "" : "s"} · ${stats.researched} researched · ${stats.drafted} draft${stats.drafted === 1 ? "" : "s"} · ${stats.sent} sent` : "Loading…"}
             </div>
@@ -311,12 +311,12 @@ export default function AgentDetail() {
         <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
           <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>{agentLeads.length} lead{agentLeads.length === 1 ? "" : "s"}</div>
           {sel.capabilities?.includes("scrape") && (
-            <Btn onClick={runScrape} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningScrape ? "opacity:.6" : "")} styleHover="background:#42199E">{runningScrape ? "Finding…" : "Find leads"}</Btn>
+            <Btn onClick={runScrape} style={"margin-left:auto;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningScrape ? "opacity:.6" : "")} styleHover="background:#1D4ED8">{runningScrape ? "Finding…" : "Find leads"}</Btn>
           )}
           {sel.capabilities?.includes("qualify") && (
-            <Btn onClick={runQualify} style={(sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningQualify ? "opacity:.6" : "")} styleHover="background:#42199E">{runningQualify ? "Qualifying…" : "Qualify leads"}</Btn>
+            <Btn onClick={runQualify} style={(sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "background:#2563EB;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningQualify ? "opacity:.6" : "")} styleHover="background:#1D4ED8">{runningQualify ? "Qualifying…" : "Qualify leads"}</Btn>
           )}
-          <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") || sel.capabilities?.includes("qualify") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#5122C1;text-decoration:none") }}>Open Leads module →</Link>
+          <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") || sel.capabilities?.includes("qualify") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#2563EB;text-decoration:none") }}>Open Leads module →</Link>
         </div>
         {scrapeNote && <div style={css("padding:9px 18px;font-size:12px;color:#71717A;border-bottom:1px solid #ECECF1")}>{scrapeNote}</div>}
         {agentLeads.length === 0 ? (
@@ -356,7 +356,7 @@ export default function AgentDetail() {
         <div style={css("display:flex;flex-direction:column;gap:12px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{researchedLeads.length} of {agentLeads.length} researched</div>
-            <Btn onClick={runResearch} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#42199E">{runningResearch ? "Researching…" : "Research leads"}</Btn>
+            <Btn onClick={runResearch} style={"margin-left:auto;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#1D4ED8">{runningResearch ? "Researching…" : "Research leads"}</Btn>
           </div>
           {researchedLeads.length === 0 ? (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet.</div>
@@ -365,7 +365,7 @@ export default function AgentDetail() {
               <div style={css("font-size:13.5px;font-weight:700")}>{l.name}{l.company ? " · " + l.company : ""}</div>
               <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px")}>{l.research!.summary}</div>
               {l.research!.priorities.length > 0 && (
-                <div style={css("margin-top:10px")}><div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px")}>Priorities</div><div style={css("display:flex;gap:6px;flex-wrap:wrap")}>{l.research!.priorities.map((p, i) => <span key={i} style={css(chip("#F1EDFD", "#5122C1"))}>{p}</span>)}</div></div>
+                <div style={css("margin-top:10px")}><div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px")}>Priorities</div><div style={css("display:flex;gap:6px;flex-wrap:wrap")}>{l.research!.priorities.map((p, i) => <span key={i} style={css(chip("#EEF4FF", "#2563EB"))}>{p}</span>)}</div></div>
               )}
               {l.research!.hooks.length > 0 && (
                 <div style={css("margin-top:10px")}><div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px")}>Hooks</div><div style={css("display:flex;flex-direction:column;gap:4px")}>{l.research!.hooks.map((h, i) => <div key={i} style={css("font-size:12px;color:#3F3F46")}>• {h}</div>)}</div></div>
@@ -383,7 +383,7 @@ export default function AgentDetail() {
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
             {sel.capabilities?.includes("outreach") && (
-              <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#42199E">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
+              <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#1D4ED8">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
             )}
           </div>
           {drafts.length === 0 ? (
@@ -391,16 +391,16 @@ export default function AgentDetail() {
           ) : drafts.map((d) => (
             <div key={d.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("display:flex;align-items:center;gap:8px")}>
-                <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#F1EDFD", d.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
+                <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#EEF4FF", d.status === "sent" ? "#1B7A3D" : "#2563EB"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
                 <div style={css("font-size:11.5px;color:#A1A1AA")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail || (d.leadPlatform ? d.leadPlatform + " DM" : "no email")}</div>
               </div>
               <div style={css("font-size:13.5px;font-weight:700;margin-top:10px")}>{d.subject}</div>
               <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:6px;white-space:pre-wrap")}>{d.body}</div>
               <div style={css("display:flex;gap:8px;margin-top:12px")}>
                 {d.leadEmail ? (
-                  <Btn onClick={() => sendDraft(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
+                  <Btn onClick={() => sendDraft(d)} style="background:#E8F0FE;color:#2563EB;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6E4FD">Open in mail</Btn>
                 ) : (<>
-                  <Btn onClick={() => copyMessage(d)} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Copy message</Btn>
+                  <Btn onClick={() => copyMessage(d)} style="background:#E8F0FE;color:#2563EB;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6E4FD">Copy message</Btn>
                   {d.leadProfileUrl && <Btn onClick={() => openProfile(d.leadProfileUrl!)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Open profile</Btn>}
                 </>)}
                 {d.status !== "sent" && <Btn onClick={() => confirmSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}
@@ -416,17 +416,17 @@ export default function AgentDetail() {
         <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{proposals.length} proposal{proposals.length === 1 ? "" : "s"}</div>
-            <Btn onClick={runProposals} style={"margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningProposal ? "opacity:.6" : "")} styleHover="background:#42199E">{runningProposal ? "Drafting…" : "Generate proposals"}</Btn>
+            <Btn onClick={runProposals} style={"margin-left:auto;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningProposal ? "opacity:.6" : "")} styleHover="background:#1D4ED8">{runningProposal ? "Drafting…" : "Generate proposals"}</Btn>
           </div>
           {proposals.length === 0 ? (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No proposals yet.</div>
           ) : proposals.map((p) => (
             <div key={p.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("display:flex;align-items:center;gap:8px")}>
-                <span style={css(chip(p.status === "sent" ? "#E7F7EC" : "#F1EDFD", p.status === "sent" ? "#1B7A3D" : "#5122C1"))}>{p.status === "sent" ? "Sent" : "Draft"}</span>
+                <span style={css(chip(p.status === "sent" ? "#E7F7EC" : "#EEF4FF", p.status === "sent" ? "#1B7A3D" : "#2563EB"))}>{p.status === "sent" ? "Sent" : "Draft"}</span>
                 <div style={css("font-size:13.5px;font-weight:700")}>{p.title}</div>
               </div>
-              {p.products.length > 0 && <div style={css("display:flex;gap:6px;flex-wrap:wrap;margin-top:8px")}>{p.products.map((pr, i) => <span key={i} style={css(chip("#F1EDFD", "#5122C1"))}>{pr}</span>)}</div>}
+              {p.products.length > 0 && <div style={css("display:flex;gap:6px;flex-wrap:wrap;margin-top:8px")}>{p.products.map((pr, i) => <span key={i} style={css(chip("#EEF4FF", "#2563EB"))}>{pr}</span>)}</div>}
               <div style={css("font-size:12.5px;color:#3F3F46;line-height:1.6;margin-top:8px;white-space:pre-wrap")}>{p.body}</div>
               {p.status !== "sent" && <div style={css("margin-top:12px")}><Btn onClick={async () => { await markProposalSent(p.id); listProposalsForAgent(sel.id).then(setProposals); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn></div>}
             </div>
@@ -531,7 +531,7 @@ export default function AgentDetail() {
             <div style={css("font-size:12px;color:#A1A1AA")}>No capabilities — this agent coordinates the team only.</div>
           ) : (
             <div style={css("display:flex;gap:6px;flex-wrap:wrap")}>
-              {caps.map((c) => <span key={c} style={css("font-size:11.5px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:4px 12px")}>{CAPABILITIES.find((x) => x.id === c)?.label ?? c}</span>)}
+              {caps.map((c) => <span key={c} style={css("font-size:11.5px;font-weight:600;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:4px 12px")}>{CAPABILITIES.find((x) => x.id === c)?.label ?? c}</span>)}
             </div>
           )}
         </div>
@@ -571,7 +571,7 @@ export default function AgentDetail() {
                   <div key={cap} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
                     <div style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px")}>
                       <Box onClick={() => setCapMode(cap, "auto")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
-                      <Box onClick={() => setCapMode(cap, "ask")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#5122C1;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
+                      <Box onClick={() => setCapMode(cap, "ask")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#2563EB;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
                     </div>
                   </div>
                 );
@@ -579,7 +579,7 @@ export default function AgentDetail() {
             </div>
           </div>
         )}
-        <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#42199E">Save changes</Btn>
+        <Btn onClick={() => saveConfig(sel.id, { role: cfgRole, goal: cfgGoal })} style="background:#2563EB;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer;align-self:flex-start" styleHover="background:#1D4ED8">Save changes</Btn>
       </div>
     </div>
   );

@@ -27,13 +27,13 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
     if (m.index > last) out.push(text.slice(last, m.index));
     const tok = m[0];
     if (tok.startsWith("@")) {
-      out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#EEE9F8;color:#5122C1;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
+      out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#E8F0FE;color:#2563EB;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
     } else if (tok.startsWith("«")) {
       // Inline lead reference — show the name (drop the « » delimiters) as a pill.
-      out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#EEE9F8;color:#5122C1") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
+      out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#E8F0FE;color:#2563EB") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
     } else {
       const route = NAV_ROUTES[tok.toLowerCase()];
-      out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#5122C1;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
+      out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#2563EB;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
     }
     last = re.lastIndex;
   }
@@ -52,7 +52,7 @@ function renderComposer(text: string): ReactNode[] {
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(<span key={k++} style={css("background:#EEE9F8;color:#5122C1;border-radius:4px;box-shadow:0 0 0 2px #EEE9F8")}>{m[0]}</span>);
+    out.push(<span key={k++} style={css("background:#E8F0FE;color:#2563EB;border-radius:4px;box-shadow:0 0 0 2px #E8F0FE")}>{m[0]}</span>);
     last = re.lastIndex;
   }
   if (last < text.length) out.push(text.slice(last));
@@ -177,32 +177,15 @@ function ChatsInner() {
   if (!activeTeam) {
     return (
       <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;animation:fadeUp .3s ease")}>
-        <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
+        <div style={css("width:52px;height:52px;border-radius:14px;background:#EEF4FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
         <div style={css("font-size:15px;font-weight:700")}>No conversations yet</div>
-        <Btn onClick={() => set({ showTeamModal: true })} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create a team</Btn>
+        <Btn onClick={() => set({ showTeamModal: true })} style="background:#2563EB;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#1D4ED8">+ Create a team</Btn>
       </div>
     );
   }
 
   return (
     <div style={css("display:flex;height:100%;animation:fadeUp .3s ease")}>
-      {/* conversation list */}
-      <div style={css("width:260px;flex:none;border-right:1px solid #ECECF1;background:#fff;display:flex;flex-direction:column")}>
-        <div style={css("padding:16px 16px 10px;font-size:14px;font-weight:700")}>Conversations</div>
-        <div style={css("display:flex;flex-direction:column;padding:0 8px;gap:2px")}>
-          <div style={css("padding:6px 12px;font-size:10.5px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em")}>Teams</div>
-          {teams.map((t) => {
-            const msgs = s.chats[t.id]; const last = msgs && msgs[msgs.length - 1];
-            return (
-              <Box key={t.id} onClick={() => set({ convId: t.id })} style={"display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:pointer;" + (t.id === activeId ? "background:#F1EDFD" : "")} styleHover="background:#F4F4F5">
-                <div style={css("width:32px;height:32px;border-radius:10px;background:" + t.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:16px;flex:none")}>{t.icon}</div>
-                <div style={css("min-width:0")}><div style={css("font-size:12.5px;font-weight:600")}>{t.name}</div><div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{last ? last.text : t.members.length + " agents"}</div></div>
-              </Box>
-            );
-          })}
-        </div>
-      </div>
-
       {/* chat area */}
       <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;background:#FAFAFB")}>
         <div style={css("display:flex;align-items:center;gap:11px;padding:13px 20px;background:#fff;border-bottom:1px solid #ECECF1;flex:none")}>
@@ -231,7 +214,7 @@ function ChatsInner() {
                 {speaker && <div style={css(av(speaker, 26) + ";flex:none;margin-top:2px")}>{speaker.initials}</div>}
                 <div style={css("display:flex;flex-direction:column;max-width:62%;gap:2px")}>
                   {speaker && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{speaker.name.split(" ")[0]}</div>}
-                  <div style={css((mine ? "background:#5122C1;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{renderRich(clean, mine, router)}</div>
+                  <div style={css((mine ? "background:#2563EB;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{renderRich(clean, mine, router)}</div>
                   {showApprove && (
                     <div style={css("display:flex;gap:8px;margin-top:6px;padding-left:2px")}>
                       <Btn onClick={() => onApprove(am![1])} style="background:#E7F7EC;color:#1B7A3D;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6EFDD">Approve</Btn>
@@ -334,7 +317,7 @@ function ChatsInner() {
                 style={css("flex:1;min-width:0;border:none;outline:none;font-size:13px;line-height:20px;background:transparent;position:relative;z-index:1;caret-color:#18181B;color:" + (s.chatInput ? "transparent" : "#18181B"))}
               />
             </div>
-            <Btn onClick={() => sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds())} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Send ↑</Btn>
+            <Btn onClick={() => sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds())} style="background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#1D4ED8">Send ↑</Btn>
           </div>
         </div>
       </div>

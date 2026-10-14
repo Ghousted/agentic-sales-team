@@ -2,7 +2,7 @@
 html, body { margin: 0; padding: 0; background: #FAFAFB; font-family: Inter, system-ui, sans-serif; color: #18181B; }
 * { box-sizing: border-box; }
 input, textarea, select, button { font-family: Inter, system-ui, sans-serif; }
-input:focus, textarea:focus { outline: 2px solid #C9B8F5; outline-offset: 0; }
+input:focus, textarea:focus { outline: 2px solid #BCD3FB; outline-offset: 0; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #E4E4E7; border-radius: 4px; }
 
@@ -27,4 +27,103 @@ button { transition: transform .12s ease, background .15s ease, box-shadow .15s 
 button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
-button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #5122C1; outline-offset: 2px; }
+button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
+
+/* ---- Redesign: icon font (Lucide subset from the Claude Design file) ---- */
+@font-face { font-family: "lucide"; src: url("/fonts/lucide.woff2") format("woff2"); font-display: block; }
+[class^="icon-"], [class*=" icon-"] { font-family: "lucide" !important; font-size: inherit; font-style: normal; line-height: 1; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.icon-arrow-right:before { content: "\e04d"; }
+.icon-arrow-up:before { content: "\e04e"; }
+.icon-ban:before { content: "\e055"; }
+.icon-bell-off:before { content: "\e05e"; }
+.icon-bell:before { content: "\e05d"; }
+.icon-blocks:before { content: "\e4fe"; }
+.icon-book-open-check:before { content: "\e384"; }
+.icon-book-open:before { content: "\e063"; }
+.icon-chart-column:before { content: "\e2a2"; }
+.icon-chart-no-axes-column:before { content: "\e06c"; }
+.icon-check:before { content: "\e070"; }
+.icon-chevron-down:before { content: "\e071"; }
+.icon-chevron-up:before { content: "\e074"; }
+.icon-chevrons-left:before { content: "\e076"; }
+.icon-chevrons-up-down:before { content: "\e210"; }
+.icon-circle-alert:before { content: "\e07b"; }
+.icon-circle-check:before { content: "\e225"; }
+.icon-circle-dashed:before { content: "\e4b4"; }
+.icon-circle-help:before { content: "\e082"; }
+.icon-circle-minus:before { content: "\e083"; }
+.icon-circle-pause:before { content: "\e084"; }
+.icon-circle-x:before { content: "\e088"; }
+.icon-clock:before { content: "\e08b"; }
+.icon-copy:before { content: "\e0a2"; }
+.icon-ellipsis:before { content: "\e0ba"; }
+.icon-external-link:before { content: "\e0bd"; }
+.icon-eye-off:before { content: "\e0bf"; }
+.icon-eye:before { content: "\e0be"; }
+.icon-globe:before { content: "\e0eb"; }
+.icon-history:before { content: "\e1f4"; }
+.icon-hourglass:before { content: "\e295"; }
+.icon-info:before { content: "\e0fe"; }
+.icon-link:before { content: "\e107"; }
+.icon-list-checks:before { content: "\e1cf"; }
+.icon-loader-circle:before { content: "\e10d"; }
+.icon-lock:before { content: "\e10e"; }
+.icon-log-out:before { content: "\e111"; }
+.icon-mail-check:before { content: "\e364"; }
+.icon-mail-warning:before { content: "\e36a"; }
+.icon-mail-x:before { content: "\e36b"; }
+.icon-mail:before { content: "\e112"; }
+.icon-message-circle-plus:before { content: "\e56b"; }
+.icon-messages-square:before { content: "\e411"; }
+.icon-mic:before { content: "\e11b"; }
+.icon-newspaper:before { content: "\e34b"; }
+.icon-octagon-alert:before { content: "\e12a"; }
+.icon-panel-left-close:before { content: "\e21b"; }
+.icon-panel-left:before { content: "\e12d"; }
+.icon-paperclip:before { content: "\e130"; }
+.icon-pen-line:before { content: "\e133"; }
+.icon-plane:before { content: "\e1dd"; }
+.icon-play:before { content: "\e13f"; }
+.icon-plug-zap:before { content: "\e460"; }
+.icon-plus:before { content: "\e140"; }
+.icon-repeat:before { content: "\e149"; }
+.icon-reply:before { content: "\e229"; }
+.icon-scale:before { content: "\e211"; }
+.icon-search:before { content: "\e154"; }
+.icon-send:before { content: "\e155"; }
+.icon-sheet:before { content: "\e15a"; }
+.icon-shield-check:before { content: "\e1fe"; }
+.icon-sparkle:before { content: "\e482"; }
+.icon-sparkles:before { content: "\e416"; }
+.icon-square-pen:before { content: "\e175"; }
+.icon-thumbs-down:before { content: "\e188"; }
+.icon-thumbs-up:before { content: "\e189"; }
+.icon-triangle-alert:before { content: "\e192"; }
+.icon-unplug:before { content: "\e461"; }
+.icon-user-cog:before { content: "\e345"; }
+.icon-user-round:before { content: "\e46c"; }
+.icon-users-round:before { content: "\e472"; }
+.icon-x:before { content: "\e1b1"; }
+
+/* ---- Redesign: shared motion (names match the design file) ---- */
+@keyframes cUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes cFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cPop { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes cSpin { to { transform: rotate(360deg); } }
+@keyframes cDot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-3px); opacity: 1; } }
+@keyframes cSwapA { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes cSwapB { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes cMenu { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes cShake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes cCheck { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes cSet { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+@keyframes cShim { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes cBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes cBreath { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.82); opacity: .55; } }
+@keyframes cSide { from { transform: translateX(-16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes lUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes lFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lBeam { to { transform: rotate(360deg); } }
+@keyframes lPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

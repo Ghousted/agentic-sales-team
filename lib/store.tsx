@@ -70,7 +70,7 @@ interface State extends WizardState {
 }
 
 const initialWizard: WizardState = {
-  wStep: 0, wName: "", wNick: "", wAvatar: "Professional", wColor: "#5122C1",
+  wStep: 0, wName: "", wNick: "", wAvatar: "Professional", wColor: "#2563EB",
   wPosition: "SDR", wIndustry: "SaaS", wSize: "51-200", wTitles: "", wGeo: "", wGoals: "",
   wChannels: { Email: true, LinkedIn: true }, wPosInput: "", wCharacter: 2, wCreatedId: null,
   wType: "sdr", wCapabilities: [],
@@ -90,7 +90,7 @@ const initialState: State = {
 };
 
 // Background tint paired with each team icon (used by create + edit).
-const TEAM_ICON_BG: Record<string, string> = { "🚀": "#F1EDFD", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#F1EDFD" };
+const TEAM_ICON_BG: Record<string, string> = { "🚀": "#EEF4FF", "🌎": "#E9F5FE", "🏛": "#FDF0F5", "📣": "#FEF6E8", "🎯": "#E7F7EC", "💎": "#EEF4FF" };
 
 interface Ctx {
   s: State;
@@ -290,7 +290,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const meta: Partial<Team> = {};
     if (patch.name !== undefined) meta.name = patch.name.trim() || "New Team";
     if (patch.goal !== undefined) meta.goal = patch.goal.trim() || "Define a shared goal for this team.";
-    if (patch.icon !== undefined) { meta.icon = patch.icon; meta.iconBg = TEAM_ICON_BG[patch.icon] || "#F1EDFD"; }
+    if (patch.icon !== undefined) { meta.icon = patch.icon; meta.iconBg = TEAM_ICON_BG[patch.icon] || "#EEF4FF"; }
     if (Object.keys(meta).length === 0) return;
     set((prev) => ({ extraTeams: prev.extraTeams.map((t) => (t.id === teamId ? { ...t, ...meta } : t)) }));
     const display = meta.name ?? TEAMS_BASE.concat(sRef.current.extraTeams).find((t) => t.id === teamId)?.name ?? "Team";
@@ -393,7 +393,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const members = Object.keys(cur.tSel).filter((k) => cur.tSel[k]);
     const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
-      id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#F1EDFD",
+      id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#EEF4FF",
       desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
       activity: ["Team created — agents onboarding", "Shared goal set"],
@@ -434,7 +434,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const nm = name.trim() || (at?.label ?? "Agent");
     const initials = nm.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const agent: Agent = {
-      id, name: nm, initials, role: at?.label ?? "Custom", color: "#5122C1", status: "working",
+      id, name: nm, initials, role: at?.label ?? "Custom", color: "#2563EB", status: "working",
       task: "Onboarding", score: 75, goal: "Ramp up in week 1",
       type: typeId, capabilities: at?.capabilities ?? [],
     };

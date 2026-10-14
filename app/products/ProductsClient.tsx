@@ -89,7 +89,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         {inFolderView && (
           <div style={css("display:flex;align-items:center;gap:7px;font-size:13px")}>
-            <Box onClick={() => setFolder(null)} style="color:#5122C1;font-weight:600;cursor:pointer" styleHover="text-decoration:underline">← All products</Box>
+            <Box onClick={() => setFolder(null)} style="color:#2563EB;font-weight:600;cursor:pointer" styleHover="text-decoration:underline">← All products</Box>
             <span style={css("color:#D4D4D8")}>/</span>
             <span style={css("font-weight:700")}>{crumbName}</span>
             <span style={css("color:#A1A1AA")}>· {shown.length} product{shown.length === 1 ? "" : "s"}</span>
@@ -110,14 +110,14 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
         ) : folders.length === 0 && rootProducts.length === 0 ? (
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
-            <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>📦</div>
+            <div style={css("width:52px;height:52px;border-radius:14px;background:#EEF4FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>📦</div>
             <div style={css("font-size:15px;font-weight:700")}>No products yet</div>
           </div>
         ) : (
           <div style={css("display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px")}>
             {folders.map((f) => (
               <Box key={f.id} onClick={() => setFolder(f.id)} style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px;cursor:pointer;transition:transform .12s,box-shadow .12s" styleHover="transform:translateY(-2px);box-shadow:0 8px 20px rgba(24,24,27,.08)">
-                <div style={css("width:38px;height:38px;border-radius:10px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none")}>📁</div>
+                <div style={css("width:38px;height:38px;border-radius:10px;background:#EEF4FF;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none")}>📁</div>
                 <div style={css("min-width:0")}>
                   <div style={css("font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{f.name}</div>
                   <div style={css("font-size:11.5px;color:#A1A1AA")}>{f.count} item{f.count === 1 ? "" : "s"}</div>
@@ -158,7 +158,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
                   </div>
                 )}
               </div>
-              <div>{p.category ? <span style={css(chip("#F1EDFD", "#5122C1"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
+              <div>{p.category ? <span style={css(chip("#EEF4FF", "#2563EB"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
               <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
               <div style={css("display:flex;gap:8px;align-items:center")}>
                 <select aria-label="Move to folder" value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} title="Move to folder" style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:150px")}>
@@ -186,7 +186,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;justify-content:flex-end;gap:8px")}>
               <Btn onClick={() => setShowFolder(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-              <Btn onClick={submitFolder} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#5122C1;" + (folderName.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={folderName.trim() ? "background:#42199E" : ""}>Create folder</Btn>
+              <Btn onClick={submitFolder} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#2563EB;" + (folderName.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={folderName.trim() ? "background:#1D4ED8" : ""}>Create folder</Btn>
             </div>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;justify-content:flex-end;gap:8px")}>
               <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-              <Btn onClick={submitAdd} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#5122C1;" + (form.name.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={form.name.trim() ? "background:#42199E" : ""}>Add product</Btn>
+              <Btn onClick={submitAdd} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#2563EB;" + (form.name.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={form.name.trim() ? "background:#1D4ED8" : ""}>Add product</Btn>
             </div>
           </div>
         </div>

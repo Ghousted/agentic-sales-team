@@ -49,7 +49,7 @@ export default function SettingsPage() {
                 tabIndex={0}
                 onClick={() => toggle(key)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key); } }}
-                style={css("margin-left:auto;width:34px;height:20px;border-radius:99px;padding:2px;display:flex;cursor:pointer;transition:background .15s;background:" + (on ? "#5122C1" : "#E4E4E7") + ";justify-content:" + (on ? "flex-end" : "flex-start"))}
+                style={css("margin-left:auto;width:34px;height:20px;border-radius:99px;padding:2px;display:flex;cursor:pointer;transition:background .15s;background:" + (on ? "#2563EB" : "#E4E4E7") + ";justify-content:" + (on ? "flex-end" : "flex-start"))}
               >
                 <span style={css("width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)")} />
               </span>

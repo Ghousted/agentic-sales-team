@@ -10,7 +10,7 @@ import { css, Box, Btn } from "./primitives";
 
 const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
-  lead_researched: { label: "Research", bg: "#F1EDFD", fg: "#5122C1" },
+  lead_researched: { label: "Research", bg: "#EEF4FF", fg: "#2563EB" },
   email_drafted: { label: "Draft", bg: "#FEF6E8", fg: "#B45309" },
   email_sent: { label: "Sent", bg: "#E9F5FE", fg: "#0369A1" },
 };
@@ -68,18 +68,18 @@ export default function NotificationsBell() {
       <Box
         onClick={toggle}
         aria-label={unread ? items.length + " new notifications" : "Notifications"}
-        style="position:relative;width:48px;height:48px;border-radius:50%;background:#EEE9F8;display:flex;align-items:center;justify-content:center;color:#5122C1;cursor:pointer"
-        styleHover="background:#E3DBF9"
+        style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#2563EB;cursor:pointer"
+        styleHover="background:#D6E4FD"
       >
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ transformOrigin: "50% 4px", animation: unread ? "iconRing 1.1s ease-in-out" : undefined }}>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {unread && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #EEE9F8")}>{items.length}</span>}
+        {unread && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #F2F4F7")}>{items.length}</span>}
       </Box>
 
       {open && (
-          <div style={css("position:absolute;top:56px;right:0;width:360px;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.14);z-index:40;overflow:hidden")}>
+          <div style={css("position:absolute;top:48px;right:0;width:360px;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.14);z-index:40;overflow:hidden")}>
             <div style={css("display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #F0F0F3")}>
               <div style={css("font-size:13.5px;font-weight:700")}>Notifications</div>
               {items.length > 0 && (

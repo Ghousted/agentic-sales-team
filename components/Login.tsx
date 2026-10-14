@@ -1,233 +1,180 @@
 "use client";
+// Sign-in / sign-up / forgot-password, styled after the redesign's auth screen:
+// a blue dot-grid backdrop with a frosted-glass frame around a white card.
+// Auth itself is the app's own email + password flow (lib/auth/actions).
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { signIn, signUp, requestPasswordReset } from "@/lib/auth/actions";
-import { css, Box, Btn } from "./primitives";
-import Constellation from "./Constellation";
+import { css } from "./primitives";
+import { SIGNUP_EMAIL_KEY } from "./landing/LandingPage";
 
-/* Eye / eye-off icon (mdi) for the password reveal toggle. */
-function EyeIcon({ off }: { off: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="#717680" aria-hidden="true" style={{ display: "block" }}>
-      {off ? (
-        <path d="M11.83 9 15 12.16V12a3 3 0 0 0-3-3zM7.53 9.8l1.55 1.55c-.05.21-.08.42-.08.65a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53a5 5 0 0 1-5-5c0-.79.2-1.53.53-2.2M2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3zM12 7a5 5 0 0 1 5 5c0 .64-.13 1.26-.36 1.82l2.93 2.93c1.5-1.25 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7" />
-      ) : (
-        <path d="M12 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0 8a5 5 0 0 1-5-5 5 5 0 0 1 5-5 5 5 0 0 1 5 5 5 5 0 0 1-5 5m0-12.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5" />
-      )}
-    </svg>
-  );
+const INPUT = "height:52px;padding:0 16px;border:1px solid #dfe3e9;border-radius:14px;font-size:16px;background:#ffffff;color:#101418;transition:border-color .15s,box-shadow .15s;outline:none;width:100%";
+const LABEL = "font-size:15px;font-weight:500;color:#101418";
+const STR_COL = ["#e3e7ed", "#b42318", "#d98e00", "#0b57d0", "#0f7b3f"];
+
+function strength(pw: string): number {
+  if (!pw) return 0;
+  let s = 0;
+  if (pw.length >= 8) s++;
+  if (pw.length >= 12) s++;
+  if (/[a-z]/i.test(pw) && /\d/.test(pw)) s++;
+  if (/[^a-z0-9]/i.test(pw) || (/[a-z]/.test(pw) && /[A-Z]/.test(pw))) s++;
+  return Math.max(1, Math.min(4, s));
 }
 
-const LABEL = "font-size:14px;font-weight:500;color:#414651;line-height:20px";
-const FIELD_WRAP = "background:#fff;border:1px solid #e4e4e4;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 16px;height:52px;width:100%";
-const FIELD_INPUT = "flex:1;border:none;outline:none;background:transparent;font-size:14px;color:#181d27;min-width:0";
-
-function Field({ id, label, placeholder, password, value, setValue, onEnter }: {
-  id: string; label: string; placeholder: string; password?: boolean; value: string; setValue: (v: string) => void; onEnter?: () => void;
-}) {
-  const [show, setShow] = useState(false);
+function Field({ label, children, extra }: { label: React.ReactNode; children: React.ReactNode; extra?: React.ReactNode }) {
   return (
-    <div style={css("display:flex;flex-direction:column;gap:6px;width:100%")}>
-      <label htmlFor={id} style={css(LABEL)}>{label}</label>
-      <div style={css(FIELD_WRAP)}>
-        <input
-          id={id}
-          type={password && !show ? "password" : "text"}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && onEnter) onEnter(); }}
-          placeholder={placeholder}
-          aria-label={label}
-          style={css(FIELD_INPUT + ";color:#181d27")}
-        />
-        {password && (
-          <Box as="span" onClick={() => setShow((v) => !v)} aria-label={show ? "Hide password" : "Show password"} style="display:flex;cursor:pointer">
-            <EyeIcon off={show} />
-          </Box>
-        )}
-      </div>
-    </div>
+    <label style={css("display:flex;flex-direction:column;gap:6px")}>
+      <span style={css(LABEL + ";display:flex;justify-content:space-between;align-items:baseline")}>{label}</span>
+      {children}
+      {extra}
+    </label>
   );
 }
 
 export default function Login() {
   const { s, set } = useApp();
-  const router = useRouter();
   const isSignup = s.authMode === "signup";
-  const [email, setEmail] = useState("");
+  // Prefill from the landing hero's "Work email" field, if the visitor typed one.
+  const [email, setEmail] = useState(() => {
+    try { const v = sessionStorage.getItem(SIGNUP_EMAIL_KEY) ?? ""; sessionStorage.removeItem(SIGNUP_EMAIL_KEY); return v; } catch { return ""; }
+  });
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [errKey, setErrKey] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [swap, setSwap] = useState(0);
 
   // Forgot-password sub-flow (no email infra: surface the reset link on-screen).
   const [forgot, setForgot] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [resetPath, setResetPath] = useState<string | null>(null);
 
-  const openForgot = () => { setError(""); setResetDone(false); setResetPath(null); setForgot(true); };
-  const closeForgot = () => { setError(""); setForgot(false); };
+  const fail = (msg: string) => { setError(msg); setErrKey((k) => k + 1); };
+  const openForgot = (e: React.MouseEvent) => { e.preventDefault(); setError(""); setResetDone(false); setResetPath(null); setForgot(true); setSwap((n) => n + 1); };
+  const closeForgot = () => { setError(""); setForgot(false); setSwap((n) => n + 1); };
+  const switchMode = () => { setError(""); setSwap((n) => n + 1); set({ authMode: isSignup ? "login" : "signup" }); };
 
-  const sendReset = async () => {
+  const sendReset = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (loading) return;
     setError("");
     setLoading(true);
     const res = await requestPasswordReset({ email });
     setLoading(false);
-    if (!res.ok) { setError(res.error || "Something went wrong. Please try again."); return; }
+    if (!res.ok) return fail(res.error || "Something went wrong. Please try again.");
     setResetPath(res.resetPath ?? null);
     setResetDone(true);
   };
 
-  const submit = async () => {
-    if (loading) return;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading || ok) return;
     setError("");
-    if (isSignup && password !== confirm) {
-      setError("Passwords don’t match.");
-      return;
-    }
     setLoading(true);
-    const res = isSignup ? await signUp({ email, password }) : await signIn({ email, password });
+    const res = isSignup ? await signUp({ email, password, name: name.trim() || undefined }) : await signIn({ email, password });
     setLoading(false);
-    if (!res.ok || !res.user) {
-      setError(res.error || "Something went wrong. Please try again.");
-      return;
-    }
-    // Full navigation (not router.push) so the server re-hydrates THIS user's
-    // own workspace and no agents/teams/chats from a prior session linger in
-    // the client store. The session cookie is already set by the action above.
-    window.location.href = "/";
+    if (!res.ok || !res.user) return fail(res.error || "Something went wrong. Please try again.");
+    setOk(true);
+    // Full navigation so the server re-hydrates THIS user's workspace and nothing
+    // from a prior session lingers in the client store.
+    window.setTimeout(() => { window.location.href = "/"; }, 350);
   };
 
-  const switchMode = () => {
-    setError("");
-    set({ authMode: isSignup ? "login" : "signup" });
-  };
+  const sc = isSignup ? strength(password) : 0;
+  const title = forgot ? "Reset your password" : isSignup ? "Create your account" : "Welcome back";
+  const sub = forgot ? "Enter your work email and we’ll give you a link to set a new password." : isSignup ? "Set up your workspace and meet your first agent in a few minutes." : "Log in to see what your agents did while you were away.";
+  const cta = ok ? (isSignup ? "Account created" : "Logged in") : loading ? (isSignup ? "Creating account…" : "Logging in…") : isSignup ? "Create account" : "Log in";
+  const focus = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#006aff"; e.currentTarget.style.boxShadow = "0 0 0 4px rgba(0,106,255,.14)"; };
+  const blur = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#dfe3e9"; e.currentTarget.style.boxShadow = "none"; };
+
+  const errorBox = error && (
+    <div key={errKey} role="alert" style={css("padding:10px 12px;border-radius:10px;background:#fdf2f2;color:#9b1c1c;font-size:14px;display:flex;align-items:center;gap:8px;animation:cShake .3s ease-out")}>
+      <i className="icon-circle-alert" style={{ fontSize: 16, flex: "none" }} />{error}
+    </div>
+  );
+  const primary = (label: React.ReactNode, busy: boolean, done = false) => (
+    <button type="submit" style={{ ...css("margin-top:14px;height:52px;border:0;border-radius:14px;box-shadow:0 8px 20px -10px rgba(0,106,255,.6);color:#ffffff;font-size:15px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:background .2s,transform .1s"), background: done ? "#0f7b3f" : "#006aff" }}>
+      {busy && <span style={css("width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#ffffff;animation:cSpin .8s linear infinite")} />}
+      {done && <i className="icon-check" style={{ fontSize: 18, animation: "cCheck .2s ease-out backwards" }} />}
+      {label}
+    </button>
+  );
 
   return (
-    <div style={css("position:fixed;left:0;top:0;right:0;bottom:0;background:#fff;z-index:60;display:flex;animation:fadeUp .3s ease")}>
-      {/* ===== left visual panel — continues the landing's constellation ===== */}
-      <div style={css("position:relative;width:53%;min-width:520px;flex:none;background:radial-gradient(900px 720px at 62% 26%,#2A1657,#150B33 74%);border-radius:0 40px 40px 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 48px")}>
-        <div aria-hidden="true" style={{ position: "absolute", width: "420px", height: "420px", borderRadius: "50%", background: "#7C3AED", filter: "blur(80px)", opacity: 0.4, top: "-90px", right: "4%", pointerEvents: "none" }} />
-        <div style={css("position:absolute;top:28px;left:32px;z-index:2;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;font-weight:700;letter-spacing:-.01em;color:#fff")}>
-          <span style={{ color: "#C9B8F5" }}>agentic</span> salesforce
-        </div>
-        <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: "440px" }}>
-          <Constellation />
-        </div>
-        <div style={css("position:relative;z-index:2;text-align:center;margin-top:6px;max-width:400px")}>
-          <div style={css("font-family:'Poetsen One',sans-serif;font-size:26px;color:#fff;line-height:1.15;letter-spacing:-.01em")}>A sales team that runs itself.</div>
-          <div style={css("font-size:14px;color:#B9AEE0;margin-top:10px;line-height:1.55")}>Your AI workforce finds, writes, and books — around the clock.</div>
-        </div>
-      </div>
+    <div style={css("position:fixed;inset:0;z-index:60;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;color:#101418;-webkit-font-smoothing:antialiased")}>
+      <div style={css("position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:96px 20px 48px;background:linear-gradient(180deg,#0047b3 0%,#0058e6 30%,#006aff 55%,#4b92ff 82%,#6ea8ff 100%);overflow:hidden;animation:cFade .35s ease-out backwards")}>
+        <span aria-hidden="true" style={css("position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(255,255,255,.26) 1px,transparent 1.5px);background-size:22px 22px")} />
+        <button type="button" onClick={() => set({ showAuth: false })} aria-label="Back to home" style={css("position:absolute;left:28px;top:24px;display:flex;align-items:center;gap:8px;height:36px;padding:0 14px 0 10px;border-radius:999px;color:#ffffff;font-size:14px;font-weight:500;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);cursor:pointer;transition:background .15s")}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,.2)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,.12)"; }}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7M19 12H5" /></svg>Home
+        </button>
 
-      {/* ===== right form panel ===== */}
-      <div style={css("position:relative;flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:80px 64px;overflow-y:auto")}>
-        <Box as="span" onClick={() => set({ showAuth: false })} aria-label="Back to home" style="position:absolute;top:28px;left:28px;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;color:#717680;cursor:pointer" styleHover="color:#5122c1">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-          Home
-        </Box>
-        <div style={css("width:100%;max-width:476px;display:flex;flex-direction:column;gap:32px")}>
-          {/* header */}
-          <div style={css("display:flex;flex-direction:column;gap:24px;align-items:center")}>
-            <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#181d27;text-align:center")}>
-              <span style={{ color: "#5122C1" }}>agentic</span>
-              <br />
-              salesforce
-            </div>
-            <div style={css("display:flex;flex-direction:column;gap:12px;text-align:center;width:100%")}>
-              <div style={css("font-size:30px;font-weight:700;line-height:38px;color:#181d27;letter-spacing:-.01em")}>
-                {forgot ? "Reset your password" : isSignup ? "Sign up and create an account" : "Log in to your account"}
+        <div style={css("position:relative;width:100%;max-width:520px;padding:14px;border-radius:40px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.32);box-shadow:0 40px 90px -40px rgba(0,30,90,.6),inset 0 1px 0 rgba(255,255,255,.25);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:cPop .45s cubic-bezier(.2,.8,.2,1) backwards")}>
+          <div style={css("padding:44px 40px 32px;border-radius:28px;background:#ffffff;box-shadow:0 2px 8px rgba(0,30,90,.08)")}>
+            <div key={swap + (isSignup ? "s" : "l")} style={css("width:100%;animation:" + (swap % 2 ? "cSwapA" : "cSwapB") + " .22s ease-out backwards")}>
+              <div style={css("display:flex;flex-direction:column;align-items:center;text-align:center")}>
+                <span style={css("width:52px;height:52px;border-radius:14px;background:url('/logo-mark.png') center/cover no-repeat;box-shadow:0 8px 20px -8px rgba(0,82,204,.6)")} />
+                <h1 style={css("margin:22px 0 0;font-family:'General Sans',system-ui,sans-serif;font-size:30px;line-height:1.15;font-weight:600;letter-spacing:-.03em")}>{title}</h1>
+                <p style={css("margin:10px 0 0;font-size:16px;line-height:1.5;color:#4a5565")}>{sub}</p>
               </div>
-              <div style={css("font-size:16px;color:#535862;line-height:24px")}>{forgot ? "Enter your email and we’ll get you a reset link." : "Welcome back! Please enter your details."}</div>
-            </div>
-          </div>
 
-          {/* ===== forgot-password view ===== */}
-          {forgot && (
-            <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
-              {resetDone ? (
-                <div style={css("display:flex;flex-direction:column;gap:16px;width:100%")}>
-                  {resetPath ? (
-                    <>
-                      <div style={css("font-size:13px;color:#3F3F46;background:#F1EDFD;border:1px solid #E3DBF9;border-radius:12px;padding:14px 16px;line-height:1.55")}>
-                        No email server is configured in this demo, so use the link below to set a new password (valid for 1 hour):
-                      </div>
-                      <Btn onClick={() => { router.push(resetPath); router.refresh(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);cursor:pointer" styleHover="background:#42199E">Reset your password →</Btn>
-                    </>
-                  ) : (
-                    <div style={css("font-size:14px;color:#3F3F46;background:#F4F4F5;border:1px solid #E4E4E7;border-radius:12px;padding:14px 16px;line-height:1.55")}>
-                      If an account exists for <strong>{email}</strong>, a reset link has been generated.
+              {forgot ? (
+                <form onSubmit={sendReset} noValidate style={css("margin-top:28px;display:flex;flex-direction:column;gap:16px")}>
+                  {resetDone ? (
+                    <div style={css("padding:14px;border-radius:12px;background:#f2f7ff;font-size:14.5px;line-height:1.55;color:#2a313b;animation:cUp .2s ease-out backwards")}>
+                      If an account exists for that email, it can now be reset.
+                      {resetPath && <> <a href={resetPath} style={css("color:#006aff;font-weight:500")}>Set a new password</a>.</>}
                     </div>
+                  ) : (
+                    <>
+                      <Field label="Work email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={focus} onBlur={blur} autoComplete="email" placeholder="you@company.com" style={css(INPUT)} /></Field>
+                      {errorBox}
+                      {primary(loading ? "Sending…" : "Send reset link", loading)}
+                    </>
                   )}
-                </div>
+                  <p style={css("margin:10px 0 0;font-size:15px;color:#4a5565;text-align:center")}>
+                    <button type="button" onClick={closeForgot} style={css("border:0;background:transparent;padding:0;color:#006aff;font-size:15px;font-weight:600;cursor:pointer")}>Back to log in</button>
+                  </p>
+                </form>
               ) : (
                 <>
-                  <Field id="reset-email" label="Email" placeholder="Enter your account email" value={email} setValue={setEmail} onEnter={sendReset} />
-                  {error && (
-                    <div role="alert" style={css("font-size:13px;color:#B91C1C;background:#FEECEC;border:1px solid #FBD5D5;border-radius:10px;padding:10px 14px")}>{error}</div>
-                  )}
-                  <Btn onClick={sendReset} disabled={loading} style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#42199E"}>
-                    {loading ? "Generating link…" : "Send reset link"}
-                  </Btn>
+                  <form onSubmit={submit} noValidate style={css("margin-top:28px;display:flex;flex-direction:column;gap:16px")}>
+                    {isSignup && (
+                      <div style={css("animation:cUp .2s ease-out backwards")}>
+                        <Field label="Full name"><input value={name} onChange={(e) => setName(e.target.value)} onFocus={focus} onBlur={blur} autoComplete="name" placeholder="Alex Rivera" style={css(INPUT)} /></Field>
+                      </div>
+                    )}
+                    <Field label="Work email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={focus} onBlur={blur} autoComplete="email" placeholder="you@company.com" style={css(INPUT)} /></Field>
+                    <Field
+                      label={<>Password{!isSignup && <a href="#" onClick={openForgot} style={css("font-weight:400;font-size:14.5px;color:#006aff;text-decoration:none")}>Forgot password?</a>}</>}
+                      extra={isSignup && (<>
+                        <span style={css("display:flex;gap:4px;margin-top:2px")}>{[1, 2, 3, 4].map((i) => <span key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: sc >= i ? STR_COL[sc] : "#e3e7ed", transition: "background .2s" }} />)}</span>
+                        <span style={{ fontSize: 13, color: password ? STR_COL[sc] : "#8a94a3", transition: "color .2s" }}>{password ? ["", "Weak", "Okay", "Good", "Strong"][sc] + " password" : "Use 8 or more characters with a mix of letters and numbers."}</span>
+                      </>)}
+                    >
+                      <span style={css("position:relative;display:flex")}>
+                        <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} onFocus={focus} onBlur={blur} autoComplete={isSignup ? "new-password" : "current-password"} placeholder={isSignup ? "Create a password" : "Your password"} style={css(INPUT + ";padding-right:48px")} />
+                        <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? "Hide password" : "Show password"} style={css("position:absolute;right:8px;top:10px;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer")}>
+                          <i className={showPw ? "icon-eye-off" : "icon-eye"} style={{ fontSize: 17 }} />
+                        </button>
+                      </span>
+                    </Field>
+                    {errorBox}
+                    {primary(cta, loading, ok)}
+                  </form>
+                  <p style={css("margin:26px 0 0;font-size:15px;color:#4a5565;text-align:center")}>
+                    {isSignup ? "Already have an account?" : "New to Agentic Salesforce?"}{" "}
+                    <button type="button" onClick={switchMode} style={css("border:0;background:transparent;padding:0;color:#006aff;font-size:15px;font-weight:600;cursor:pointer")}>{isSignup ? "Log in" : "Create an account"}</button>
+                  </p>
+                  {isSignup && <p style={css("margin:12px 0 0;font-size:13px;line-height:1.5;color:#8a94a3;text-align:center")}>By creating an account you agree to the Terms and Privacy Policy.</p>}
                 </>
               )}
-              <div style={css("display:flex;justify-content:center;width:100%")}>
-                <Box as="span" onClick={closeForgot} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">← Back to login</Box>
-              </div>
             </div>
-          )}
-
-          {/* form + submit */}
-          {!forgot && (
-          <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
-            <div style={css("display:flex;flex-direction:column;gap:20px;width:100%")}>
-              <Field id="email" label="Email" placeholder="Enter email" value={email} setValue={setEmail} onEnter={submit} />
-              <Field id="password" label="Password" placeholder="Enter password" password value={password} setValue={setPassword} onEnter={submit} />
-              {isSignup && <Field id="confirm" label="Confirm password" placeholder="Confirm password" password value={confirm} setValue={setConfirm} onEnter={submit} />}
-
-              {error && (
-                <div role="alert" style={css("font-size:13px;color:#B91C1C;background:#FEECEC;border:1px solid #FBD5D5;border-radius:10px;padding:10px 14px")}>{error}</div>
-              )}
-
-              <div style={css("display:flex;align-items:center;justify-content:space-between;width:100%")}>
-                <div
-                  role="checkbox"
-                  aria-checked={remember}
-                  aria-label="Remember for 30 days"
-                  tabIndex={0}
-                  onClick={() => setRemember((v) => !v)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setRemember((v) => !v); } }}
-                  style={css("display:flex;align-items:center;gap:8px;cursor:pointer")}
-                >
-                  <span style={css("width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex:none;transition:all .12s;border:1px solid " + (remember ? "#5122c1" : "#e4e4e4") + ";background:" + (remember ? "#5122c1" : "#fff"))}>
-                    {remember && (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-                    )}
-                  </span>
-                  <span style={css("font-size:14px;font-weight:500;color:#414651;white-space:nowrap")}>Remember for 30 days</span>
-                </div>
-                <Box as="span" onClick={openForgot} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer;white-space:nowrap">Forgot password?</Box>
-              </div>
-            </div>
-
-            <Btn onClick={submit} disabled={loading} style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;letter-spacing:-.15px;box-shadow:0 2px 8px rgba(81,34,193,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#42199E"}>
-              {loading ? (isSignup ? "Creating account…" : "Signing in…") : isSignup ? "Create account" : "Sign In"}
-            </Btn>
           </div>
-          )}
-
-          {/* toggle row */}
-          {!forgot && (
-          <div style={css("display:flex;gap:4px;align-items:center;justify-content:center;width:100%")}>
-            <span style={css("font-size:14px;color:#535862")}>{isSignup ? "Already have an account?" : "Don’t have an account?"}</span>
-            <Box as="span" onClick={switchMode} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">
-              {isSignup ? "Log in" : "Sign up"}
-            </Box>
-          </div>
-          )}
         </div>
       </div>
     </div>

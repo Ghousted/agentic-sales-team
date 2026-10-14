@@ -3,31 +3,18 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
 import { AGENT_TYPES, CAPABILITIES, typeById, type Capability } from "@/lib/agentTypes";
+import { AGENT_CHARS, charSrc } from "@/lib/visuals";
 
-/* ---------- character sprite (public/agents-sprite.png, 980x980) ----------
-   The design crops individual business-character illustrations out of one
-   sprite sheet. CHARS are the pixel-exact bounding boxes [x, y, w, h] of all 14
-   figures (extracted by alpha-scanning the sheet). Indices are canonical and
-   shared with the app's avatar head-crops (lib/visuals.ts), so the character you
-   pick here is the one shown as the agent's avatar everywhere. PICKS is the
-   subset offered in the wizard. charBox() height-normalizes each character
-   (scale = targetH / box.h) with the window sized to the box so nothing clips. */
-const SPRITE = "/agents-sprite.png";
-const CHARS: [number, number, number, number][] = [
-  [118, 104, 106, 239], [273, 101, 126, 242], [427, 112, 105, 231], [568, 121, 124, 222],
-  [719, 121, 127, 222], [123, 402, 135, 230], [325, 388, 177, 244], [536, 389, 148, 243],
-  [744, 398, 107, 234], [124, 679, 128, 243], [289, 693, 106, 230], [434, 690, 108, 232],
-  [582, 685, 106, 237], [724, 695, 139, 227],
-];
-const PICKS = [0, 1, 2, 3, 4, 5, 7, 13];
+/* ---------- characters ----------
+   The four illustrated characters from the redesign (lib/visuals.ts
+   AGENT_CHARS). The index picked here is stored as the agent's `char`, so the
+   character chosen in the wizard is the avatar shown everywhere else. */
+const PICKS = AGENT_CHARS.map((_, i) => i);
 function charBox(i: number, targetH: number) {
-  const [x, y, w, h] = CHARS[i];
-  const scale = targetH / h;
-  const size = Math.round(980 * scale);
   return (
-    "width:" + Math.round(w * scale) + "px;height:" + Math.round(targetH) +
-    "px;background-image:url('" + SPRITE + "');background-repeat:no-repeat;background-size:" +
-    size + "px " + size + "px;background-position:-" + Math.round(x * scale) + "px -" + Math.round(y * scale) + "px"
+    "width:" + Math.round(targetH) + "px;height:" + Math.round(targetH) + "px;border-radius:50%;background-color:#E6F0FF;" +
+    "background-image:url('" + charSrc(i) + "');background-repeat:no-repeat;background-size:114%;background-position:center;" +
+    "box-shadow:0 10px 30px rgba(0,106,255,.14)"
   );
 }
 
@@ -35,7 +22,7 @@ function charBox(i: number, targetH: number) {
 const STEPS = ["Identity", "Type", "Appearance", "Settings", "Goal"];
 
 const inputStyle = "width:100%;border:0.5px solid #f2f2f2;background:#f2f2f2;border-radius:12px;padding:16px;font-size:14px;color:#181d27;outline:none";
-const titleStyle = "font-family:'Poetsen One',sans-serif;font-size:24px;color:#000;letter-spacing:-.24px;line-height:32px";
+const titleStyle = "font-family:'General Sans',Inter,sans-serif;font-size:24px;color:#000;letter-spacing:-.24px;line-height:32px";
 const subtitleStyle = "font-size:14px;color:#606b79;letter-spacing:-.14px;line-height:20px";
 
 function Chevron({ dir }: { dir: "left" | "right" }) {
@@ -56,16 +43,16 @@ function Stepper({ step }: { step: number }) {
         return (
           <div key={label} style={css("display:flex;align-items:flex-start")}>
             <div style={css("display:flex;flex-direction:column;align-items:center;gap:10px;width:32px;flex:none")}>
-              <div style={css("width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex:none;" + (done ? "background:#5122c1;color:#fff" : cur ? "background:#EEE9F8;color:#5122c1" : "background:#F0F1F3;color:#242E39"))}>
+              <div style={css("width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex:none;" + (done ? "background:#006AFF;color:#fff" : cur ? "background:#E6F0FF;color:#006AFF" : "background:#F0F1F3;color:#242E39"))}>
                 {done ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
                 ) : (i + 1)}
               </div>
-              <div style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#5122c1" : "font-weight:500;color:#465668"))}>{label}</div>
+              <div style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#006AFF" : "font-weight:500;color:#465668"))}>{label}</div>
             </div>
             {i < STEPS.length - 1 && (
               <div style={css("width:84.75px;height:32px;display:flex;align-items:center")}>
-                <div style={css("width:100%;height:2px;background:" + (i <= step ? "#5122c1" : "#a1aebe"))} />
+                <div style={css("width:100%;height:2px;background:" + (i <= step ? "#006AFF" : "#a1aebe"))} />
               </div>
             )}
           </div>
@@ -105,7 +92,7 @@ export default function CreatePage() {
         <Header onClose={() => { router.push("/agents"); reset(); }} />
         <div style={css("flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;padding:40px")}>
           <div style={css("display:flex;flex-direction:column;align-items:center;gap:10px")}>
-            <div style={css("width:182px;height:258px;background:#EEE9F8;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden")}>
+            <div style={css("width:182px;height:258px;background:#E6F0FF;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden")}>
               <div style={css(charBox(character, 210))} />
             </div>
             <div>
@@ -114,12 +101,12 @@ export default function CreatePage() {
             </div>
           </div>
           <div>
-            <div style={css("font-family:'Poetsen One',sans-serif;font-size:32px;color:#181d27;line-height:1.25")}>Your agent {name} is now live!</div>
+            <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:32px;color:#181d27;line-height:1.25")}>Your agent {name} is now live!</div>
             <div style={css("font-size:16px;color:#606b79;margin-top:12px;max-width:520px")}>They&rsquo;re ready to receive conversations and start helping customers.</div>
           </div>
           <div style={css("display:flex;gap:10px;margin-top:8px")}>
             <Btn onClick={() => { router.push("/agents"); reset(); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:100px;height:48px;padding:0 24px;font-size:14px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Back to agents</Btn>
-            <Btn onClick={() => { const id = s.wCreatedId; router.push(id ? "/agents/" + id : "/agents"); reset(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">View agent →</Btn>
+            <Btn onClick={() => { const id = s.wCreatedId; router.push(id ? "/agents/" + id : "/agents"); reset(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">View agent →</Btn>
           </div>
         </div>
       </div>
@@ -130,13 +117,13 @@ export default function CreatePage() {
   const footer = (
     <div style={css("display:flex;align-items:center;justify-content:" + (step === 0 ? "flex-end" : "space-between") + ";width:100%")}>
       {step > 0 && (
-        <Btn onClick={back} style="background:#EEE9F8;color:#5122c1;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;display:flex;align-items:center;gap:8px" styleHover="background:#E3DBF9"><Chevron dir="left" />Back</Btn>
+        <Btn onClick={back} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;display:flex;align-items:center;gap:8px" styleHover="background:#D6E6FF"><Chevron dir="left" />Back</Btn>
       )}
       <Btn
         onClick={step === 4 ? createAgent : next}
         disabled={!canContinue}
-        style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;letter-spacing:-.15px;display:flex;align-items:center;gap:8px;" + (canContinue ? "cursor:pointer" : "opacity:.45;cursor:not-allowed")}
-        styleHover={canContinue ? "background:#42199E" : ""}
+        style={"background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;letter-spacing:-.15px;display:flex;align-items:center;gap:8px;" + (canContinue ? "cursor:pointer" : "opacity:.45;cursor:not-allowed")}
+        styleHover={canContinue ? "background:#0052CC" : ""}
       >
         {step === 4 ? "Create agent" : "Continue"}<Chevron dir="right" />
       </Btn>
@@ -175,11 +162,11 @@ export default function CreatePage() {
                   const on = s.wType === t.id;
                   const chips = t.custom ? (s.wCapabilities.length ? s.wCapabilities : ["pick capabilities"]) : t.capabilities;
                   return (
-                    <Box key={t.id} onClick={() => set({ wType: t.id })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                    <Box key={t.id} onClick={() => set({ wType: t.id })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
                       <div style={css("font-size:14px;font-weight:700;color:#181d27")}>{t.label}</div>
                       <div style={css("font-size:12px;color:#606b79;margin-top:4px;line-height:1.4")}>{t.desc}</div>
                       <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:8px")}>
-                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#5122c1;background:#F1EDFD;border-radius:99px;padding:2px 9px")}>{c}</span>)}
+                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 9px")}>{c}</span>)}
                       </div>
                     </Box>
                   );
@@ -192,8 +179,8 @@ export default function CreatePage() {
                     {CAPABILITIES.map((c) => {
                       const on = s.wCapabilities.includes(c.id);
                       return (
-                        <Box key={c.id} onClick={() => setCap(c.id)} style={"display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
-                          <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#5122c1" : "#D4D4D8") + ";background:" + (on ? "#5122c1" : "#fff"))}>
+                        <Box key={c.id} onClick={() => setCap(c.id)} style={"display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
+                          <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
                             {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                           </span>
                           <div><div style={css("font-size:13px;font-weight:600")}>{c.label}</div><div style={css("font-size:11px;color:#606b79")}>{c.desc}</div></div>
@@ -215,14 +202,14 @@ export default function CreatePage() {
               </div>
               <div style={css("flex:1;min-height:0;display:flex;gap:80px;align-items:center")}>
                 <div style={css("flex:none;display:flex;align-items:flex-end;justify-content:center")}>
-                  <div style={css(charBox(character, 380))} />
+                  <div style={css(charBox(character, 320))} />
                 </div>
-                <div style={css("flex:1;min-width:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px")}>
+                <div style={css("flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,1fr);gap:16px")}>
                   {PICKS.map((idx, i) => {
                     const on = character === idx;
                     return (
-                      <Box key={idx} onClick={() => set({ wCharacter: idx })} aria-label={"Character option " + (i + 1)} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#EEE9F8;border:2px solid #5122c1" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#C9B8F5">
-                        <div style={css(charBox(idx, 150))} />
+                      <Box key={idx} onClick={() => set({ wCharacter: idx })} aria-label={"Character " + AGENT_CHARS[i].label} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#E6F0FF;border:2px solid #006AFF" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#CFE0FF">
+                        <div style={css(charBox(idx, 140))} />
                       </Box>
                     );
                   })}
@@ -253,7 +240,7 @@ export default function CreatePage() {
                     <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
                       {["Direct", "Warm", "Formal"].map((t) => {
                         const on = sv("outreach", "tone") === t || (!sv("outreach", "tone") && t === "Warm");
-                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F1EDFD;color:#5122c1" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#C9B8F5">{t} tone</Box>;
+                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#EAF2FF;color:#006AFF" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#CFE0FF">{t} tone</Box>;
                       })}
                     </div>
                   </div>
@@ -297,7 +284,7 @@ function Header({ onClose }: { onClose: () => void }) {
   return (
     <div style={css("position:relative;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e9eaeb;padding:16px 24px;flex:none")}>
       <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.1;color:#181d27")}>
-        <span style={{ color: "#5122C1" }}>agent</span>ic salesforce
+        <span style={{ color: "#006AFF" }}>agent</span>ic salesforce
       </div>
       <div style={css("position:absolute;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600;color:#000;letter-spacing:-.24px")}>Add new agent</div>
       <Box onClick={onClose} aria-label="Close" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#606b79;font-size:20px" styleHover="color:#181d27">✕</Box>

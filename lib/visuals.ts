@@ -9,35 +9,34 @@ export function hashId(id: string): number {
 }
 
 // ---- character avatars ----
-// Agents are represented by the illustrated business characters from the design's
-// sprite sheet (public/agents-sprite.png). CHAR_HEADS are pixel-exact head+shoulder
-// squares [x, y, side] per character (extracted by alpha-scanning each figure's top),
-// cropped into circular avatars.
-const SPRITE = "/agents-sprite.png";
-const CHAR_HEADS: [number, number, number][] = [
-  [83, 95, 176], [242, 92, 171], [400, 104, 167], [544, 112, 176], [696, 112, 189],
-  [77, 391, 228], [290, 378, 203], [507, 378, 214], [710, 389, 176], [87, 670, 180],
-  [258, 685, 166], [400, 681, 178], [554, 677, 167], [684, 686, 187],
+// Agents are drawn as the four illustrated characters from the redesign
+// (public/agents/*.jpg: square head-and-shoulders portraits). Any agent maps to
+// one of them; the circle is tinted with the agent's own colour so agents that
+// share a character still read as different people.
+export const AGENT_CHARS = [
+  { key: "theo", src: "/agents/theo.jpg", label: "Theo" },
+  { key: "pat", src: "/agents/pat.jpg", label: "Pat" },
+  { key: "maya", src: "/agents/maya.jpg", label: "Maya" },
+  { key: "sam", src: "/agents/sam.jpg", label: "Sam" },
 ];
 // Deterministic character per agent: named seeds get a hand-matched figure; anyone
 // else (agents created in the wizard) can carry an explicit `char`, else hash by id.
-const SEED_CHAR: Record<string, number> = { sk: 7, mt: 1, ew: 3, rp: 8, al: 4, nc: 2, ps: 5, lm: 12 };
+const SEED_CHAR: Record<string, number> = { sk: 2, mt: 0, ew: 1, rp: 3, al: 0, nc: 1, ps: 2, lm: 3 };
 export function agentCharIndex(a: { id: string; char?: number }): number {
-  if (typeof a.char === "number") return a.char % CHAR_HEADS.length;
+  if (typeof a.char === "number") return a.char % AGENT_CHARS.length;
   if (a.id in SEED_CHAR) return SEED_CHAR[a.id];
-  return hashId(a.id) % CHAR_HEADS.length;
+  return hashId(a.id) % AGENT_CHARS.length;
+}
+export function charSrc(i: number): string {
+  return AGENT_CHARS[((i % AGENT_CHARS.length) + AGENT_CHARS.length) % AGENT_CHARS.length].src;
 }
 
 export function av(a: { id: string; color: string; char?: number }, size: number): string {
-  const [hx, hy, side] = CHAR_HEADS[agentCharIndex(a)];
-  const scale = size / side;
-  const bsize = Math.round(980 * scale);
   return (
     "width:" + size + "px;height:" + size + "px;border-radius:50%;flex:none;overflow:hidden;background-color:" +
-    a.color + "1F;background-image:url('" + SPRITE + "');background-repeat:no-repeat;background-size:" +
-    bsize + "px " + bsize + "px;background-position:-" + Math.round(hx * scale) + "px -" + Math.round(hy * scale) +
-    "px;color:transparent;display:flex;align-items:center;justify-content:center;font-size:" +
-    Math.round(size * 0.37) + "px;font-weight:700"
+    a.color + "26;background-image:url('" + charSrc(agentCharIndex(a)) + "');background-repeat:no-repeat;" +
+    "background-size:114%;background-position:center;color:transparent;display:flex;align-items:center;" +
+    "justify-content:center;font-size:" + Math.round(size * 0.37) + "px;font-weight:700"
   );
 }
 
@@ -53,6 +52,10 @@ export function chip(bg: string, color: string): string {
 }
 
 const NAV_PATHS: Record<string, string> = {
+  compose: '<path d="M4 20.2h4.3L19.4 9.1a1.7 1.7 0 0 0 0-2.4l-2.1-2.1a1.7 1.7 0 0 0-2.4 0L3.8 15.7v4.5Z"/><rect x="12.5" y="18.7" width="8" height="1.6" rx=".8"/>',
+  grid: '<rect x="3.5" y="3.5" width="7.4" height="7.4" rx="2"/><rect x="13.1" y="3.5" width="7.4" height="7.4" rx="2"/><rect x="3.5" y="13.1" width="7.4" height="7.4" rx="2"/><rect x="13.1" y="13.1" width="7.4" height="7.4" rx="2"/>',
+  box: '<path d="M12 2.6 3.4 7v10L12 21.4l8.6-4.4V7Z"/><path d="M3.9 7.3 12 11.5l8.1-4.2M12 11.5v9.5" fill="none" stroke="#fff" stroke-width="1.4" stroke-opacity=".7"/>',
+  search: '<path d="M10.6 3.6a7 7 0 1 0 4.3 12.5l4.4 4.4 1.4-1.4-4.4-4.4A7 7 0 0 0 10.6 3.6Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>',
   home: '<path d="M12 3.1 3.6 10.3a.8.8 0 0 0-.28.6V20a1 1 0 0 0 1 1H9.6v-5.4a1 1 0 0 1 1-1h2.8a1 1 0 0 1 1 1V21h5.28a1 1 0 0 0 1-1v-9.1a.8.8 0 0 0-.28-.6Z"/>',
   robot: '<rect x="5" y="4" width="14" height="8.4" rx="2.6"/><circle cx="9.4" cy="8.2" r="1.35" fill="#fff"/><circle cx="14.6" cy="8.2" r="1.35" fill="#fff"/><rect x="4" y="14.4" width="16" height="6.6" rx="3.1"/>',
   chat: '<path d="M11.6 4a8.3 8.3 0 1 0 4.2 15.5L20 20.7l-1.1-4.2A8.3 8.3 0 0 0 11.6 4Z"/><circle cx="8.8" cy="12" r="1.25" fill="#fff"/><circle cx="13.6" cy="12" r="1.25" fill="#fff"/><path d="M19.6 1.6l.9 1.9 1.9.9-1.9.9-.9 1.9-.9-1.9-1.9-.9 1.9-.9Z"/>',

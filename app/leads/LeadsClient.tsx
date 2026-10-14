@@ -14,7 +14,7 @@ import { WorkedBy, LivePulse } from "@/components/LeadBits";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
-  replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#F1EDFD", "#5122C1"],
+  replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#EAF2FF", "#006AFF"],
 };
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
 const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
@@ -158,7 +158,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
           <Box onClick={() => setView("active")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (view === "active" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Active</Box>
-          <Box onClick={() => setView("pending")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;" + (view === "pending" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Pending{candidates.length > 0 && <span style={css("background:#5122C1;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{candidates.length}</span>}</Box>
+          <Box onClick={() => setView("pending")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;" + (view === "pending" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Pending{candidates.length > 0 && <span style={css("background:#006AFF;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{candidates.length}</span>}</Box>
         </div>
         <div style={css("font-size:13px;color:#71717A")}>{view === "active" ? leads.length + " lead" + (leads.length === 1 ? "" : "s") : candidates.length + " to review"}</div>
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
@@ -216,7 +216,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
               <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-              <Btn onClick={submitAdd} style="background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Add lead</Btn>
+              <Btn onClick={submitAdd} style="background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Add lead</Btn>
             </div>
           </div>
         </div>
@@ -236,8 +236,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
             return (
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#5122C1">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
-                  {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="font-size:11px;font-weight:600;color:#5122C1;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                  {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="font-size:11px;font-weight:600;color:#006AFF;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
                   {(byLead[l.id] || l.workedBy.length > 0) && (
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
                       <LivePulse info={byLead[l.id]} />
@@ -248,9 +248,9 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
                 <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-                <div style={css("font-weight:700;color:#5122C1")}>{l.score || "—"}</div>
+                <div style={css("font-weight:700;color:#006AFF")}>{l.score || "—"}</div>
                 <div style={css("display:flex;gap:6px")}>
-                  <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#EEE9F8;color:#5122C1;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#E3DBF9">{running === l.id ? "Running…" : "Run outreach"}</Btn>
+                  <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E6F0FF;color:#006AFF;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#D6E6FF">{running === l.id ? "Running…" : "Run outreach"}</Btn>
                   <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
                   <Btn onClick={() => del(l)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
                 </div>
@@ -263,7 +263,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
             <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates — accept the good ones</div>
             {candidates.length > 0 && (<>
-              <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Accept all</Btn>
+              <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Accept all</Btn>
               <Btn onClick={() => review(candidates.map((c) => c.id), false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Dismiss all</Btn>
             </>)}
           </div>
@@ -275,11 +275,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             const a = byId(c.agentId);
             return (
               <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#5122C1">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
                 <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
-                  {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#5122C1;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
+                  {c.profileUrl && <Box onClick={() => window.open(c.profileUrl!, "_blank")} style="font-size:11.5px;font-weight:600;color:#006AFF;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
                   <Btn onClick={() => review([c.id], true)} style="margin-left:auto;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Accept</Btn>
                   <Btn onClick={() => review([c.id], false)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Dismiss</Btn>
                   <Btn onClick={() => del(c)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === c.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === c.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === c.id ? "Delete?" : "Delete"}</Btn>
@@ -302,10 +302,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div style={css("flex:1;min-width:0")}>
                   <div style={css("font-size:16px;font-weight:700")}>{l.name}</div>
                   <div style={css("font-size:12px;color:#71717A;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center")}>
-                    {l.email && <a href={"mailto:" + l.email} style={css("color:#5122C1;text-decoration:none;font-weight:600")}>{l.email}</a>}
+                    {l.email && <a href={"mailto:" + l.email} style={css("color:#006AFF;text-decoration:none;font-weight:600")}>{l.email}</a>}
                     {l.company && <span>{l.company}</span>}
-                    {l.platform && <span style={css(chip("#F1EDFD", "#5122C1"))}>{l.platform}</span>}
-                    {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="color:#5122C1;cursor:pointer;font-weight:600" styleHover="text-decoration:underline">View post ↗</Box>}
+                    {l.platform && <span style={css(chip("#EAF2FF", "#006AFF"))}>{l.platform}</span>}
+                    {l.profileUrl && <Box onClick={() => window.open(l.profileUrl!, "_blank")} style="color:#006AFF;cursor:pointer;font-weight:600" styleHover="text-decoration:underline">View post ↗</Box>}
                   </div>
                 </div>
                 <Btn onClick={() => del(l)} style={"flex:none;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
@@ -314,7 +314,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
               <div style={css("padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px")}>
                 <div style={css("display:flex;flex-wrap:wrap;gap:6px;align-items:center")}>
                   <span style={css(chip(sc[0], sc[1]))}>{l.status}</span>
-                  <span style={css(chip("#EEE9F8", "#5122C1"))}>score {l.score || 0}</span>
+                  <span style={css(chip("#E6F0FF", "#006AFF"))}>score {l.score || 0}</span>
                   <span style={css(chip("#F4F4F5", "#71717A"))}>{l.source || "manual"}</span>
                   <span style={css(chip(l.review === "accepted" ? "#E7F7EC" : "#FEF3E7", l.review === "accepted" ? "#1B7A3D" : "#B7791F"))}>{l.review}</span>
                   {ag && <span style={css("font-size:11.5px;color:#71717A")}>· {ag.name}</span>}
@@ -323,7 +323,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                   <div style={css(SEC)}>Book a meeting</div>
                   <div style={css("display:flex;gap:8px;align-items:center;flex-wrap:wrap")}>
                     <input value={bookingWhen} onChange={(e) => setBookingWhen(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bookMeetingNow(); }} placeholder='e.g. "tomorrow 2pm" or "next Tue 10am"' style={css(FIELD + ";flex:1;min-width:180px")} />
-                    <Btn onClick={bookMeetingNow} style={"background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#42199E">{booking ? "Booking…" : "Book"}</Btn>
+                    <Btn onClick={bookMeetingNow} style={"background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#0052CC">{booking ? "Booking…" : "Book"}</Btn>
                   </div>
                 </div>
                 {l.title && <div><div style={css(SEC)}>Intent</div><div style={css("font-size:13px;color:#3F3F46;line-height:1.55")}>{l.title}</div></div>}
@@ -362,8 +362,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                         <div style={css("font-size:12px;color:#52525B;line-height:1.5;margin-top:4px;white-space:pre-wrap")}>{d.body.length > 200 ? d.body.slice(0, 200) + "…" : d.body}</div>
                         <div style={css("display:flex;gap:6px;margin-top:8px")}>
                           {d.leadEmail
-                            ? <Btn onClick={() => window.open("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body), "_blank")} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Open in mail</Btn>
-                            : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"))} style="background:#EEE9F8;color:#5122C1;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E3DBF9">Copy message</Btn>}
+                            ? <Btn onClick={() => window.open("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body), "_blank")} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Open in mail</Btn>
+                            : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"))} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Copy message</Btn>}
                         </div>
                       </div>
                     ))}</div>

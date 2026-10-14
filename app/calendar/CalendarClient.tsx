@@ -59,7 +59,7 @@ export default function CalendarClient({ initialEvents }: { initialEvents: Meeti
       {/* schedule card */}
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px;overflow-x:auto")}>
         <div style={css("display:flex;align-items:center;gap:14px;margin-bottom:18px")}>
-          <div style={css("font-family:'Poetsen One',sans-serif;font-size:18px;font-weight:400")}>Schedule</div>
+          <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:18px;font-weight:400")}>Schedule</div>
           <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
             <Box onClick={() => setView("week")} style={segBtn(isWeek)}>Week</Box>
             <Box onClick={() => setView("month")} style={segBtn(!isWeek)}>Month</Box>

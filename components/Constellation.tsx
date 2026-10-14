@@ -13,24 +13,20 @@ import { animate, stagger, utils } from "animejs";
 import { css } from "./primitives";
 import { av } from "@/lib/visuals";
 
-// Illustrated demo agents — real sprite avatars (char index). Exported so the
-// landing's group-chat demo references the same six teammates.
+// Illustrated demo agents (char index into AGENT_CHARS), shown on the auth
+// screen: the same four teammates as the landing page.
 export const DEMO = [
-  { id: "d-maya", name: "Maya", role: "Scout", color: "#0EA5E9", char: 5 },
-  { id: "d-noor", name: "Noor", role: "Researcher", color: "#F59E0B", char: 9 },
-  { id: "d-theo", name: "Theo", role: "Qualifier", color: "#2FA45C", char: 3 },
-  { id: "d-kai", name: "Kai", role: "Writer", color: "#5122C1", char: 4 },
-  { id: "d-ava", name: "Ava", role: "Meeting Booker", color: "#F43F7E", char: 1 },
-  { id: "d-leo", name: "Leo", role: "Closer", color: "#8B5CF6", char: 7 },
+  { id: "d-theo", name: "Theo", role: "Research", color: "#F59E0B", char: 0 },
+  { id: "d-pat", name: "Pat", role: "Qualify", color: "#2FA45C", char: 1 },
+  { id: "d-maya", name: "Maya", role: "First emails", color: "#006AFF", char: 2 },
+  { id: "d-sam", name: "Sam", role: "Follow-ups", color: "#8B5CF6", char: 3 },
 ];
 
 const CAPTIONS = [
-  "Maya imported 47 fintech CTOs on AWS",
-  "Noor briefed 18 leads with research",
-  "Kai drafted a follow-up to Plaid’s CTO",
-  "Theo qualified 12 leads — 3 hot",
-  "Ava booked a demo with Ramp for Friday",
-  "Leo sent a scoped proposal to Brex",
+  "Theo researched 25 finance leads in Texas",
+  "Pat scored the list: 9 ready, 5 borderline",
+  "Maya drafted 5 first emails for your approval",
+  "Sam queued 3 follow-ups for you to check",
 ];
 
 export default function Constellation() {
@@ -104,10 +100,10 @@ export default function Constellation() {
             <div className="lp-orbit lp-orbit-2" />
             <svg width="520" height="520" viewBox="0 0 520 520" aria-hidden="true" style={{ position: "absolute", inset: 0 }}>
               {nodes.map((n) => (
-                <line key={"l" + n.i} x1={cx} y1={hubY} x2={n.x} y2={n.y - LABEL_OFF} stroke="#3D2A78" strokeWidth="1.5" strokeDasharray="3 7" className="lp-dash" />
+                <line key={"l" + n.i} x1={cx} y1={hubY} x2={n.x} y2={n.y - LABEL_OFF} stroke="#2B57B5" strokeWidth="1.5" strokeDasharray="3 7" className="lp-dash" />
               ))}
               {nodes.map((n) => (
-                <circle key={"p" + n.i} r="2.6" fill="#C9B2FF" opacity="0.9">
+                <circle key={"p" + n.i} r="2.6" fill="#93C5FD" opacity="0.9">
                   <animateMotion dur={2.4 + (n.i % 4) * 0.6 + "s"} begin={n.i * 0.4 + "s"} repeatCount="indefinite" path={`M${n.x} ${n.y - LABEL_OFF} L${cx} ${hubY}`} />
                 </circle>
               ))}
@@ -130,7 +126,7 @@ export default function Constellation() {
               <div key={n.id} className="lp-node" style={{ left: n.x, top: n.y, animationDelay: (n.i * 0.45).toFixed(2) + "s" }}>
                 <div className="lp-node-inner">
                   <div className="lp-node-av">
-                    <span style={{ ...css(av(n, 58)), backgroundColor: "#E9E6F4", border: "2px solid #190E3B", boxShadow: "0 0 20px rgba(181,123,255,.42)" }} aria-hidden="true" />
+                    <span style={{ ...css(av(n, 58)), backgroundColor: "#E5EBF6", border: "2px solid #0A1E4D", boxShadow: "0 0 20px rgba(96,165,250,.42)" }} aria-hidden="true" />
                   </div>
                   <div className="lp-node-name"><span className="lp-node-dot" style={{ background: "#2FA45C" }} />{n.name}</div>
                   <div className="lp-node-role">{n.role}</div>
@@ -160,21 +156,21 @@ const CSS = `
 /* Center with inset+margin (NOT transform): the shared ringPulse keyframe sets
    transform:scale(), which would clobber a translate() centering and shove the
    pulse off the orb. margin:auto centering leaves transform free for the scale. */
-.lp-ring-pulse{position:absolute;inset:0;margin:auto;width:124px;height:124px;border-radius:50%;border:2px solid rgba(181,123,255,.5);animation:ringPulse 3s ease-out infinite;}
+.lp-ring-pulse{position:absolute;inset:0;margin:auto;width:124px;height:124px;border-radius:50%;border:2px solid rgba(96,165,250,.5);animation:ringPulse 3s ease-out infinite;}
 .lp-ring-pulse-2{animation-delay:1.5s;}
-.lp-ring{width:132px;height:132px;border-radius:50%;background:conic-gradient(#B57BFF 0 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 46px rgba(139,92,246,.45);}
-.lp-ring-in{width:112px;height:112px;border-radius:50%;background:#190E3B;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-top:12px;}
-.lp-ring-num{font-family:'Poetsen One',sans-serif;font-size:30px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
-.lp-ring-lbl{font-size:9px;font-weight:700;letter-spacing:.12em;color:#A99BD8;text-align:center;line-height:1.35;}
+.lp-ring{width:132px;height:132px;border-radius:50%;background:conic-gradient(#60A5FA 0 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 46px rgba(59,130,246,.45);}
+.lp-ring-in{width:112px;height:112px;border-radius:50%;background:#0A1E4D;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding-top:12px;}
+.lp-ring-num{font-family:'General Sans',Inter,sans-serif;font-size:30px;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
+.lp-ring-lbl{font-size:9px;font-weight:700;letter-spacing:.12em;color:#9DB5E6;text-align:center;line-height:1.35;}
 .lp-node{position:absolute;transform:translate(-50%,-50%);z-index:2;width:150px;animation:lpFloat 6s ease-in-out infinite;}
 @keyframes lpFloat{0%,100%{transform:translate(-50%,-50%);}50%{transform:translate(-50%,calc(-50% - 7px));}}
 .lp-node-inner{opacity:0;display:flex;flex-direction:column;align-items:center;gap:5px;}
 .lp-node-av{padding:3px;border-radius:50%;background:#fff;}
-.lp-node-name{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:#F4F1FF;}
+.lp-node-name{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:#F1F6FF;}
 .lp-node-dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s infinite;}
-.lp-node-role{font-size:10.5px;font-weight:600;color:#B9AEE0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:99px;padding:2px 10px;}
-.lp-live{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#E5DEFF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:99px;padding:7px 16px;backdrop-filter:blur(8px);white-space:nowrap;animation:fadeUp .4s ease;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
-.lp-live-mark{color:#B57BFF;}
+.lp-node-role{font-size:10.5px;font-weight:600;color:#AFC4EC;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:99px;padding:2px 10px;}
+.lp-live{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#DCE7FF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:99px;padding:7px 16px;backdrop-filter:blur(8px);white-space:nowrap;animation:fadeUp .4s ease;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.lp-live-mark{color:#60A5FA;}
 @media (max-width:960px){ .lp-stage-wrap{margin-top:20px;} }
 @media (prefers-reduced-motion:reduce){ .lp-const *{animation:none !important;} .lp-const .lp-node-inner,.lp-const .lp-goal,.lp-const .lp-dash{opacity:1;} }
 `;

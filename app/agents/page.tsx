@@ -13,9 +13,9 @@ export default function AgentsPage() {
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       {agents.length === 0 && (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
-          <div style={css("width:52px;height:52px;border-radius:14px;background:#F1EDFD;display:flex;align-items:center;justify-content:center;font-size:24px")}>🤖</div>
+          <div style={css("width:52px;height:52px;border-radius:14px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>🤖</div>
           <div style={css("font-size:15px;font-weight:700")}>No agents yet</div>
-          <Btn onClick={() => router.push("/create")} style="margin-top:6px;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#42199E">+ Create your first agent</Btn>
+          <Btn onClick={() => router.push("/create")} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first agent</Btn>
         </div>
       )}
       <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>

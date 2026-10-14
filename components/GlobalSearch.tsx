@@ -16,7 +16,7 @@ interface Result {
   go: () => void;
 }
 
-export default function GlobalSearch() {
+export default function GlobalSearch({ compact = false }: { compact?: boolean }) {
   const { s, set, agents, teams } = useApp();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,9 +36,9 @@ export default function GlobalSearch() {
   const showDropdown = open && q.length > 0;
 
   return (
-    <div style={css("margin-left:auto;position:relative;width:380px")}>
-      <div style={css("height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
-        <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>
+    <div style={css(compact ? "position:relative;width:100%" : "margin-left:auto;position:relative;width:380px")}>
+      <div style={css(compact ? "height:40px;display:flex;align-items:center;gap:12px;background:transparent;border-radius:10px;padding:0 12px;min-width:0" : "height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
+        {compact ? <i className="icon-search" aria-hidden="true" style={{ fontSize: 17, color: "#4a5565" }} /> : <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>}
         <input
           aria-label="Search agents and teams"
           value={s.search}
@@ -46,13 +46,13 @@ export default function GlobalSearch() {
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => { if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); } }}
-          placeholder="Search agents, teams…"
-          style={css("flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#18181B;min-width:0")}
+          placeholder={compact ? "Search" : "Search agents, teams…"}
+          style={css("flex:1;border:none;outline:none;background:transparent;font-size:" + (compact ? "14px" : "13px") + ";color:#18181B;min-width:0")}
         />
       </div>
 
       {showDropdown && (
-        <div style={css("position:absolute;top:52px;left:0;right:0;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.12);padding:6px;z-index:40;max-height:60vh;overflow-y:auto")}>
+        <div style={css("position:absolute;top:" + (compact ? "42px;width:300px" : "52px;right:0") + ";left:0;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.12);padding:6px;z-index:40;max-height:60vh;overflow-y:auto")}>
           {results.length === 0 ? (
             <div style={css("padding:14px 12px;font-size:12.5px;color:#A1A1AA")}>No matches for “{s.search.trim()}”</div>
           ) : (
@@ -61,14 +61,14 @@ export default function GlobalSearch() {
                 key={r.key}
                 onClick={() => { r.go(); set({ search: "" }); setOpen(false); }}
                 style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer"
-                styleHover="background:#F8F7FB"
+                styleHover="background:#F5F8FE"
               >
                 <div style={css(r.avatar)}>{r.initials}</div>
                 <div style={css("min-width:0;flex:1")}>
                   <div style={css("font-size:12.5px;font-weight:600;color:#18181B")}>{r.title}</div>
                   <div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{r.subtitle}</div>
                 </div>
-                <span style={css("font-size:10px;font-weight:600;color:#5122C1;background:#F1EDFD;border-radius:99px;padding:2px 8px;flex:none")}>{r.type}</span>
+                <span style={css("font-size:10px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 8px;flex:none")}>{r.type}</span>
               </Box>
             ))
           )}

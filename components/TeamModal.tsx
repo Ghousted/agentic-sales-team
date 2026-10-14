@@ -27,7 +27,7 @@ export default function TeamModal() {
       >
         <div style={css("display:flex;align-items:center")}>
           <div>
-            <div style={css("font-family:'Poetsen One',sans-serif;font-size:18px;font-weight:700")}>Create a team</div>
+            <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:18px;font-weight:700")}>Create a team</div>
             <div style={css("font-size:12.5px;color:#71717A;margin-top:2px")}>Group agents around a shared goal.</div>
           </div>
           <Box onClick={close} aria-label="Close" style="margin-left:auto;width:30px;height:30px;border-radius:50%;background:#F4F4F5;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:#71717A" styleHover="background:#E4E4E7">✕</Box>
@@ -43,7 +43,7 @@ export default function TeamModal() {
             <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Icon</div>
             <div style={css("display:flex;gap:8px")}>
               {ICONS.map((ic) => (
-                <Box key={ic} onClick={() => set({ tIcon: ic })} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (s.tIcon === ic ? "#5122C1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                <Box key={ic} onClick={() => set({ tIcon: ic })} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (s.tIcon === ic ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
                   {ic}
                 </Box>
               ))}
@@ -56,7 +56,7 @@ export default function TeamModal() {
               {TEAM_TEMPLATES.map((t) => {
                 const on = s.tTemplate === t.id;
                 return (
-                  <Box key={t.id} onClick={() => set({ tTemplate: t.id })} style={"border-radius:12px;padding:10px 12px;cursor:pointer;border:2px solid " + (on ? "#5122c1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                  <Box key={t.id} onClick={() => set({ tTemplate: t.id })} style={"border-radius:12px;padding:10px 12px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
                     <div style={css("font-size:12.5px;font-weight:700")}>{t.label}</div>
                     <div style={css("font-size:10.5px;color:#71717A;margin-top:3px")}>{t.requiredCapabilities.length ? t.requiredCapabilities.join(" · ") : "freeform"}</div>
                   </Box>
@@ -68,19 +68,19 @@ export default function TeamModal() {
           <div>
             <div style={css("display:flex;align-items:baseline;margin-bottom:8px")}>
               <div style={css("font-size:12px;font-weight:600;color:#3F3F46")}>Members</div>
-              <div style={css("margin-left:auto;font-size:11px;color:#5122C1;font-weight:600")}>{selCount} selected</div>
+              <div style={css("margin-left:auto;font-size:11px;color:#006AFF;font-weight:600")}>{selCount} selected</div>
             </div>
             <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:8px")}>
               {agents.map((a) => {
                 const on = !!s.tSel[a.id];
                 return (
-                  <Box key={a.id} onClick={() => set((p) => ({ tSel: { ...p.tSel, [a.id]: !on } }))} style={"display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#5122C1;background:#F8F5FE" : "#ECECF1;background:#fff")} styleHover="border-color:#C9B8F5">
+                  <Box key={a.id} onClick={() => set((p) => ({ tSel: { ...p.tSel, [a.id]: !on } }))} style={"display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
                     <div style={css(av(a, 30))}>{a.initials}</div>
                     <div style={css("min-width:0")}>
                       <div style={css("font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a.name}</div>
                       <div style={css("font-size:10.5px;color:#71717A")}>{a.role}</div>
                     </div>
-                    <span style={css("margin-left:auto;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;transition:all .12s;" + (on ? "background:#5122C1;color:#fff" : "background:#F4F4F5;color:transparent"))}>✓</span>
+                    <span style={css("margin-left:auto;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none;transition:all .12s;" + (on ? "background:#006AFF;color:#fff" : "background:#F4F4F5;color:transparent"))}>✓</span>
                   </Box>
                 );
               })}
@@ -125,7 +125,7 @@ export default function TeamModal() {
                     <div key={c} style={css("display:flex;gap:8px;align-items:center;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:8px 10px")}>
                       <div style={css("font-size:12px;font-weight:600;color:#3F3F46;flex:1")}>{t.label} <span style={css("color:#A1A1AA;font-weight:400")}>· {c}</span></div>
                       <input value={s.tGapName[c] || ""} onChange={(e) => set((p) => ({ tGapName: { ...p.tGapName, [c]: e.target.value } }))} placeholder="Name" style={css("border:1px solid #E4E4E7;border-radius:8px;padding:6px 10px;font-size:12px;width:120px;outline:none")} />
-                      <Btn onClick={() => { const id = quickCreateAgent(t.id, s.tGapName[c] || t.label); set((p) => ({ tSel: { ...p.tSel, [id]: true } })); }} style="background:#5122C1;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#42199E">Create</Btn>
+                      <Btn onClick={() => { const id = quickCreateAgent(t.id, s.tGapName[c] || t.label); set((p) => ({ tSel: { ...p.tSel, [id]: true } })); }} style="background:#006AFF;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Create</Btn>
                     </div>
                   );
                 })}
@@ -141,7 +141,7 @@ export default function TeamModal() {
 
         <div style={css("display:flex;gap:10px;margin-top:20px")}>
           <Btn onClick={close} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-          <Btn onClick={() => { const id = createTeam(); router.push("/teams/" + id); }} style="margin-left:auto;background:#5122C1;color:#fff;border:none;border-radius:99px;padding:9px 24px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">Create team</Btn>
+          <Btn onClick={() => { const id = createTeam(); router.push("/teams/" + id); }} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 24px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Create team</Btn>
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import { loadWorkspace } from "@/lib/workspace/actions";
 
 export const metadata: Metadata = {
   title: "Agentic Salesforce",
-  description: "The command center for your AI sales workforce.",
+  description: "An AI sales team that works for you in chat.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,9 +20,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* eslint-disable-next-line @next/next/google-font-preconnect */}
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poetsen+One&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
+        {/* General Sans (display face from the redesign) isn't on Google Fonts; Fontshare serves it. */}
+        <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
       </head>
       <body>
         <AppProvider initialUser={user} initialWorkspace={workspace}>

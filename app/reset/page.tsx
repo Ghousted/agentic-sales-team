@@ -13,7 +13,7 @@ const LABEL = "font-size:14px;font-weight:500;color:#414651;line-height:20px";
 function Wordmark() {
   return (
     <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#181d27;text-align:center")}>
-      <span style={{ color: "#5122C1" }}>agentic</span>
+      <span style={{ color: "#006AFF" }}>agentic</span>
       <br />
       salesforce
     </div>
@@ -71,7 +71,7 @@ function ResetInner() {
           <div style={css("display:flex;flex-direction:column;gap:20px;width:100%;text-align:center")}>
             <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Link expired or invalid</div>
             <div style={css("font-size:15px;color:#535862;line-height:22px")}>This password reset link is no longer valid. Request a new one from the login screen.</div>
-            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">Back to login</Btn>
+            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Back to login</Btn>
           </div>
         )}
 
@@ -96,7 +96,7 @@ function ResetInner() {
               </div>
               {error && <div role="alert" style={css("font-size:13px;color:#B91C1C;background:#FEECEC;border:1px solid #FBD5D5;border-radius:10px;padding:10px 14px")}>{error}</div>}
             </div>
-            <Btn onClick={submit} disabled={loading} style={"background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(81,34,193,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#42199E"}>
+            <Btn onClick={submit} disabled={loading} style={"background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;box-shadow:0 2px 8px rgba(0,106,255,.3);" + (loading ? "opacity:.7;cursor:default" : "cursor:pointer")} styleHover={loading ? "" : "background:#0052CC"}>
               {loading ? "Updating…" : "Update password"}
             </Btn>
           </div>
@@ -107,12 +107,12 @@ function ResetInner() {
             <div style={css("width:56px;height:56px;border-radius:50%;background:#E7F7EC;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto")}>✓</div>
             <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Password updated</div>
             <div style={css("font-size:15px;color:#535862;line-height:22px")}>Your password has been changed. Log in with your new password.</div>
-            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#5122c1;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(81,34,193,.3)" styleHover="background:#42199E">Go to login</Btn>
+            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Go to login</Btn>
           </div>
         )}
 
         {(state === "form" || state === "invalid") && (
-          <Box as="span" onClick={() => { router.push("/"); router.refresh(); }} style="font-size:14px;font-weight:600;color:#5122c1;cursor:pointer">← Back to login</Box>
+          <Box as="span" onClick={() => { router.push("/"); router.refresh(); }} style="font-size:14px;font-weight:600;color:#006AFF;cursor:pointer">← Back to login</Box>
         )}
       </div>
     </div>

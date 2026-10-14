@@ -37,8 +37,8 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
 
   return (
     <div style={css(compact ? "position:relative;width:100%" : "margin-left:auto;position:relative;width:380px")}>
-      <div style={css(compact ? "height:38px;display:flex;align-items:center;gap:10px;background:transparent;border-radius:10px;padding:0 10px;min-width:0" : "height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
-        <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>
+      <div style={css(compact ? "height:40px;display:flex;align-items:center;gap:12px;background:transparent;border-radius:10px;padding:0 12px;min-width:0" : "height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
+        {compact ? <i className="icon-search" aria-hidden="true" style={{ fontSize: 17, color: "#4a5565" }} /> : <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>}
         <input
           aria-label="Search agents and teams"
           value={s.search}
@@ -68,7 +68,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                   <div style={css("font-size:12.5px;font-weight:600;color:#18181B")}>{r.title}</div>
                   <div style={css("font-size:11px;color:#A1A1AA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{r.subtitle}</div>
                 </div>
-                <span style={css("font-size:10px;font-weight:600;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:2px 8px;flex:none")}>{r.type}</span>
+                <span style={css("font-size:10px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 8px;flex:none")}>{r.type}</span>
               </Box>
             ))
           )}

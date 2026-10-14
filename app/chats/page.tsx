@@ -27,13 +27,13 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
     if (m.index > last) out.push(text.slice(last, m.index));
     const tok = m[0];
     if (tok.startsWith("@")) {
-      out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#E8F0FE;color:#2563EB;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
+      out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#E6F0FF;color:#006AFF;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
     } else if (tok.startsWith("«")) {
       // Inline lead reference — show the name (drop the « » delimiters) as a pill.
-      out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#E8F0FE;color:#2563EB") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
+      out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#E6F0FF;color:#006AFF") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
     } else {
       const route = NAV_ROUTES[tok.toLowerCase()];
-      out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#2563EB;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
+      out.push(<Box key={k++} as="span" onClick={() => router.push(route)} style="color:#006AFF;text-decoration:underline;cursor:pointer;font-weight:500;display:inline" styleHover="opacity:.7">{tok}</Box>);
     }
     last = re.lastIndex;
   }
@@ -52,7 +52,7 @@ function renderComposer(text: string): ReactNode[] {
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(<span key={k++} style={css("background:#E8F0FE;color:#2563EB;border-radius:4px;box-shadow:0 0 0 2px #E8F0FE")}>{m[0]}</span>);
+    out.push(<span key={k++} style={css("background:#E6F0FF;color:#006AFF;border-radius:4px;box-shadow:0 0 0 2px #E6F0FF")}>{m[0]}</span>);
     last = re.lastIndex;
   }
   if (last < text.length) out.push(text.slice(last));
@@ -176,24 +176,25 @@ function ChatsInner() {
   // No teams yet — chatting happens with a team, so prompt the user to make one.
   if (!activeTeam) {
     return (
-      <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;animation:fadeUp .3s ease")}>
-        <div style={css("width:52px;height:52px;border-radius:14px;background:#EEF4FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>💬</div>
-        <div style={css("font-size:15px;font-weight:700")}>No conversations yet</div>
-        <Btn onClick={() => set({ showTeamModal: true })} style="background:#2563EB;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#1D4ED8">+ Create a team</Btn>
+      <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;text-align:center;animation:cFade .2s backwards")}>
+        <i className="icon-messages-square" style={{ fontSize: 26, color: "#8a94a3" }} />
+        <div style={css("font-size:16px;font-weight:500")}>No conversations yet</div>
+        <div style={css("font-size:14px;color:#6b7686")}>Chats happen with a team. Create one to get started.</div>
+        <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;height:36px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;cursor:pointer" styleHover="background:#2a313b">Create a team</Btn>
       </div>
     );
   }
 
   return (
-    <div style={css("display:flex;height:100%;animation:fadeUp .3s ease")}>
+    <div style={css("display:flex;height:100%")}>
       {/* chat area */}
-      <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;background:#FAFAFB")}>
-        <div style={css("display:flex;align-items:center;gap:11px;padding:13px 20px;background:#fff;border-bottom:1px solid #ECECF1;flex:none")}>
-          <div style={css("width:34px;height:34px;border-radius:11px;background:" + activeTeam.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:17px;flex:none")}>{activeTeam.icon}</div>
-          <div><div style={css("font-size:13.5px;font-weight:700")}>{activeTeam.name}</div><div style={css("font-size:11px;color:#71717A")}>{teamMembers.map((a) => a.name.split(" ")[0]).join(", ")}</div></div>
+      <div style={css("flex:1;min-width:0;display:flex;flex-direction:column;background:#ffffff")}>
+        <div key={activeId} style={css("display:flex;align-items:center;gap:10px;padding:0 20px 10px;background:#fff;flex:none;animation:cSwapA .2s ease-out backwards")}>
+          <div style={css("width:28px;height:28px;border-radius:50%;background:" + activeTeam.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:14px;flex:none")}>{activeTeam.icon}</div>
+          <div style={css("min-width:0")}><div style={css("font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{activeTeam.name}</div><div style={css("font-size:12px;color:#6b7686;white-space:nowrap")}>{teamMembers.map((a) => a.name.split(" ")[0]).join(", ")}</div></div>
           <div style={css("margin-left:auto;display:flex")}>{teamMembers.slice(0, 5).map((a, i) => <div key={a.id} style={css(av(a, 26) + ";border:2px solid #fff;margin-left:" + (i ? "-8" : "0") + "px")}>{a.initials}</div>)}</div>
           {!confirmClear ? (
-            <Btn onClick={() => setConfirmClear(true)} style="flex:none;background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#FBE9E9;color:#C0392B">Clear chat</Btn>
+            <Btn onClick={() => setConfirmClear(true)} style="flex:none;height:32px;background:transparent;color:#6b7686;border:0;border-radius:999px;padding:0 12px;font-size:13px;cursor:pointer" styleHover="background:#f1f3f6;color:#101418">Clear chat</Btn>
           ) : (
             <div style={css("flex:none;display:flex;align-items:center;gap:6px")}>
               <Btn onClick={() => { clearChat(activeId); setConfirmClear(false); }} style="background:#C0392B;color:#fff;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#A93226">Clear</Btn>
@@ -202,7 +203,8 @@ function ChatsInner() {
           )}
         </div>
 
-        <div style={css("flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px")}>
+        <div style={css("flex:1;overflow-y:auto;padding:12px 20px 24px")}>
+        <div style={css("max-width:740px;margin:0 auto;display:flex;flex-direction:column;gap:22px;padding-top:12px")}>
           {messages.map((m, i) => {
             const mine = m.who === "me";
             const speaker = !mine ? byId(m.who) : null;
@@ -210,15 +212,19 @@ function ChatsInner() {
             const clean = m.text.replace(APPROVE_RE, "").replace(/⟦meet:[^⟧]*⟧/, "").trim();
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
-              <div key={i} style={css("display:flex;gap:8px;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
-                {speaker && <div style={css(av(speaker, 26) + ";flex:none;margin-top:2px")}>{speaker.initials}</div>}
-                <div style={css("display:flex;flex-direction:column;max-width:62%;gap:2px")}>
-                  {speaker && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{speaker.name.split(" ")[0]}</div>}
-                  <div style={css((mine ? "background:#2563EB;color:#fff;border-radius:16px 16px 4px 16px;" : "background:#fff;color:#3F3F46;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;") + "padding:11px 15px;font-size:13px;line-height:1.55;animation:fadeUp .25s ease")}>{renderRich(clean, mine, router)}</div>
+              <div key={i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
+                {!mine && <span style={css("width:30px;flex:none")}>{speaker && (i === 0 || messages[i - 1].who !== m.who) && <span style={css(av(speaker, 30))}>{speaker.initials}</span>}</span>}
+                <div style={css("display:flex;flex-direction:column;gap:6px;min-width:0;" + (mine ? "max-width:78%;align-items:flex-end" : "flex:1"))}>
+                  {speaker && (i === 0 || messages[i - 1].who !== m.who) && <div style={css("font-size:13px;font-weight:500;padding-top:5px")}>{speaker.name.split(" ")[0]}</div>}
+                  {!mine && !speaker && m.who === "system" ? (
+                    <div style={css("align-self:center;font-size:13px;color:#6b7686;display:flex;align-items:center;gap:6px")}><i className="icon-info" style={{ fontSize: 14 }} />{renderRich(clean, mine, router)}</div>
+                  ) : (
+                    <div style={css((mine ? "background:#006aff;color:#fff;border-radius:20px 20px 6px 20px;" : "align-self:flex-start;max-width:92%;background:#f1f3f6;color:#101418;border-radius:6px 20px 20px 20px;") + "padding:11px 16px;font-size:15px;line-height:1.6;white-space:pre-wrap")}>{renderRich(clean, mine, router)}</div>
+                  )}
                   {showApprove && (
-                    <div style={css("display:flex;gap:8px;margin-top:6px;padding-left:2px")}>
-                      <Btn onClick={() => onApprove(am![1])} style="background:#E7F7EC;color:#1B7A3D;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#D6EFDD">Approve</Btn>
-                      <Btn onClick={() => onReject(am![1])} style="background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Reject</Btn>
+                    <div style={css("display:flex;gap:6px;flex-wrap:wrap;animation:cUp .25s ease-out backwards")}>
+                      <Btn onClick={() => onApprove(am![1])} style="height:34px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="background:#2a313b"><i className="icon-check" style={{ fontSize: 15 }} />Approve</Btn>
+                      <Btn onClick={() => onReject(am![1])} style="height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#6b7686;font-size:14px;cursor:pointer" styleHover="background:#f1f3f6;color:#101418">Skip</Btn>
                     </div>
                   )}
                 </div>
@@ -228,22 +234,23 @@ function ChatsInner() {
           {s.chatTyping && (() => {
             const typer = typeof s.chatTyping === "string" ? byId(s.chatTyping) : null;
             return (
-              <div style={css("display:flex;gap:8px;justify-content:flex-start;animation:fadeUp .2s ease")}>
-                {typer && <div style={css(av(typer, 26) + ";flex:none;margin-top:2px")}>{typer.initials}</div>}
-                <div style={css("display:flex;flex-direction:column;gap:2px")}>
-                  {typer && <div style={css("font-size:10.5px;font-weight:600;color:#71717A;padding-left:4px")}>{typer.name.split(" ")[0]}</div>}
-                  <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px 16px 16px 4px;padding:12px 16px;display:flex;gap:4px")}>
-                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite")} />
-                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .15s")} />
-                    <span style={css("width:6px;height:6px;border-radius:50%;background:#A1A1AA;animation:typing 1.2s infinite .3s")} />
+              <div style={css("display:flex;gap:12px;animation:cFade .2s backwards")}>
+                <span style={css("width:30px;flex:none")}>{typer && <span style={css(av(typer, 30))}>{typer.initials}</span>}</span>
+                <div style={css("display:flex;flex-direction:column;gap:6px")}>
+                  {typer && <div style={css("font-size:13px;font-weight:500;padding-top:5px")}>{typer.name.split(" ")[0]}</div>}
+                  <div style={css("display:flex;align-items:center;gap:4px;height:40px;padding:0 16px;border-radius:6px 20px 20px 20px;background:#f1f3f6")}>
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#6b7686;animation:cDot 1s ease-in-out infinite")} />
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#6b7686;animation:cDot 1s .15s ease-in-out infinite")} />
+                    <span style={css("width:6px;height:6px;border-radius:50%;background:#6b7686;animation:cDot 1s .3s ease-in-out infinite")} />
                   </div>
                 </div>
               </div>
             );
           })()}
         </div>
+        </div>
 
-        <div style={css("padding:14px 20px;background:#FAFAFB;flex:none;position:relative")}>
+        <div style={css("padding:0 20px 20px;background:#ffffff;flex:none;position:relative;max-width:780px;width:100%;margin:0 auto")}>
           {activeTeam && (() => {
             const m = s.chatInput.match(/@([\w'-]*)$/);
             if (!m) return null;
@@ -282,10 +289,10 @@ function ChatsInner() {
               </div>
             );
           })()}
-          <div style={css("display:flex;gap:10px;background:#fff;border:1px solid #ECECF1;border-radius:99px;padding:6px 6px 6px 18px;box-shadow:0 1px 3px rgba(24,24,27,.05)")}>
+          <div className="as-composer" style={css("display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e3e7ed;border-radius:24px;padding:10px 10px 10px 18px;box-shadow:0 6px 24px -12px rgba(16,20,24,.14);transition:border-color .15s,box-shadow .15s")}>
             <div style={css("flex:1;min-width:0;position:relative;display:flex;align-items:center")}>
-              <div ref={backdropRef} aria-hidden style={css("position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;pointer-events:none;font-size:13px;color:#18181B")}>
-                <span style={css("white-space:pre;line-height:20px")}>{renderComposer(s.chatInput)}</span>
+              <div ref={backdropRef} aria-hidden style={css("position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;pointer-events:none;font-size:15px;color:#101418")}>
+                <span style={css("white-space:pre;line-height:22px")}>{renderComposer(s.chatInput)}</span>
               </div>
               <input
                 ref={inputRef}
@@ -314,10 +321,10 @@ function ChatsInner() {
                   sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds());
                 }}
                 placeholder="Message the team — @mention an agent, /lead to pick leads…"
-                style={css("flex:1;min-width:0;border:none;outline:none;font-size:13px;line-height:20px;background:transparent;position:relative;z-index:1;caret-color:#18181B;color:" + (s.chatInput ? "transparent" : "#18181B"))}
+                style={css("flex:1;min-width:0;border:none;outline:none;font-size:15px;line-height:22px;background:transparent;position:relative;z-index:1;caret-color:#18181B;color:" + (s.chatInput ? "transparent" : "#18181B"))}
               />
             </div>
-            <Btn onClick={() => sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds())} style="background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#1D4ED8">Send ↑</Btn>
+            <Btn onClick={() => sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds())} aria-label="Send" style={"width:36px;height:36px;flex:none;border:0;border-radius:50%;color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;background:" + (s.chatInput.trim() ? "#006aff" : "#c7ced8")}><i className="icon-arrow-up" style={{ fontSize: 18 }} /></Btn>
           </div>
         </div>
       </div>

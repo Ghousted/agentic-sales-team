@@ -73,14 +73,14 @@ export default function TeamDetail() {
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#2563EB">← Dashboard</Box>
+      <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
 
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:" + team.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:24px;flex:none")}>{team.icon}</div>
         <div style={css("min-width:0")}>
           <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{team.desc}</div>
-          <div style={css("font-size:12px;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
+          <div style={css("font-size:12px;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={openEdit} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Edit</Btn>
@@ -148,7 +148,7 @@ export default function TeamDetail() {
                     <div style={css(av(a!, 34))}>{a!.initials}</div>
                     <div><div style={css("font-size:13px;font-weight:600")}>{a!.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a!.role}</div></div>
                     <span style={css("display:inline-flex;align-items:center;gap:5px;margin-left:10px;" + chip(m.bg, m.color))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + m.dot)} />{m.label}</span>
-                    <div style={css("margin-left:auto;font-size:12px;font-weight:700;color:#2563EB")}>{a!.score}</div>
+                    <div style={css("margin-left:auto;font-size:12px;font-weight:700;color:#006AFF")}>{a!.score}</div>
                     <Btn onClick={(e) => { e.stopPropagation(); removeTeamMember(team.id, a!.id); }} aria-label={"Remove " + a!.name} title="Remove from team" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#A1A1AA;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none" styleHover="background:#FEECEC;color:#B91C1C">✕</Btn>
                   </Box>
                 );
@@ -182,13 +182,13 @@ export default function TeamDetail() {
           </div>
         </div>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
-          <div style={css("background:linear-gradient(135deg,#EEF4FF,#FDEEF6);border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:12.5px;font-weight:700;color:#1E40AF")}>Shared goal</div>
-            <div style={css("font-size:12.5px;color:#1D4ED8;margin-top:5px;line-height:1.55")}>{team.goal}</div>
+          <div style={css("background:linear-gradient(135deg,#EAF2FF,#FDEEF6);border-radius:16px;padding:16px 18px")}>
+            <div style={css("font-size:12.5px;font-weight:700;color:#0047B3")}>Shared goal</div>
+            <div style={css("font-size:12.5px;color:#0052CC;margin-top:5px;line-height:1.55")}>{team.goal}</div>
           </div>
           {approvals.length > 0 && (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-              <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Pending approvals <span style={css("font-size:11px;font-weight:700;color:#fff;background:#2563EB;border-radius:99px;padding:1px 7px")}>{approvals.length}</span></div>
+              <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Pending approvals <span style={css("font-size:11px;font-weight:700;color:#fff;background:#006AFF;border-radius:99px;padding:1px 7px")}>{approvals.length}</span></div>
               <div style={css("display:flex;flex-direction:column;gap:10px")}>
                 {approvals.map((ap) => (
                   <div key={ap.id} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:10px 12px")}>
@@ -205,7 +205,7 @@ export default function TeamDetail() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Recent activity</div>
             <div style={css("display:flex;flex-direction:column;gap:9px")}>
-              {team.activity.map((tac) => <div key={tac} style={css("font-size:12px;color:#3F3F46;display:flex;gap:8px")}><span style={css("color:#2563EB")}>•</span>{tac}</div>)}
+              {team.activity.map((tac) => <div key={tac} style={css("font-size:12px;color:#3F3F46;display:flex;gap:8px")}><span style={css("color:#006AFF")}>•</span>{tac}</div>)}
             </div>
           </div>
         </div>
@@ -225,10 +225,10 @@ export default function TeamDetail() {
               ) : candidates.map((a) => {
                 const on = !!pick[a.id];
                 return (
-                  <Box key={a.id} onClick={() => setPick((p) => ({ ...p, [a.id]: !p[a.id] }))} style={"display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" + (on ? "background:#EEF4FF" : "")} styleHover="background:#FAFAFB">
+                  <Box key={a.id} onClick={() => setPick((p) => ({ ...p, [a.id]: !p[a.id] }))} style={"display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" + (on ? "background:#EAF2FF" : "")} styleHover="background:#FAFAFB">
                     <div style={css(av(a, 32))}>{a.initials}</div>
                     <div style={css("min-width:0")}><div style={css("font-size:13px;font-weight:600")}>{a.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a.role}</div></div>
-                    <span style={css("margin-left:auto;width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#2563EB" : "#D4D4D8") + ";background:" + (on ? "#2563EB" : "#fff"))}>
+                    <span style={css("margin-left:auto;width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
                       {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                     </span>
                   </Box>
@@ -237,7 +237,7 @@ export default function TeamDetail() {
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
               <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-              <Btn onClick={confirmAdd} disabled={chosen.length === 0} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#2563EB;" + (chosen.length === 0 ? "opacity:.5;cursor:default" : "cursor:pointer")} styleHover={chosen.length === 0 ? "" : "background:#1D4ED8"}>
+              <Btn onClick={confirmAdd} disabled={chosen.length === 0} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#006AFF;" + (chosen.length === 0 ? "opacity:.5;cursor:default" : "cursor:pointer")} styleHover={chosen.length === 0 ? "" : "background:#0052CC"}>
                 Add{chosen.length ? " " + chosen.length : ""}
               </Btn>
             </div>
@@ -262,7 +262,7 @@ export default function TeamDetail() {
                 <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Icon</div>
                 <div style={css("display:flex;gap:8px")}>
                   {ICONS.map((ic) => (
-                    <Box key={ic} onClick={() => setEIcon(ic)} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (eIcon === ic ? "#2563EB;background:#F5F8FF" : "#ECECF1;background:#fff")} styleHover="border-color:#BCD3FB">{ic}</Box>
+                    <Box key={ic} onClick={() => setEIcon(ic)} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (eIcon === ic ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">{ic}</Box>
                   ))}
                 </div>
               </div>
@@ -273,7 +273,7 @@ export default function TeamDetail() {
             </div>
             <div style={css("padding:14px 22px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
               <Btn onClick={() => setShowEdit(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-              <Btn onClick={saveEdit} style="color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:700;background:#2563EB;cursor:pointer" styleHover="background:#1D4ED8">Save changes</Btn>
+              <Btn onClick={saveEdit} style="color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:700;background:#006AFF;cursor:pointer" styleHover="background:#0052CC">Save changes</Btn>
             </div>
           </div>
         </div>

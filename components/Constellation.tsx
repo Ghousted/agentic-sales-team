@@ -18,7 +18,7 @@ import { av } from "@/lib/visuals";
 export const DEMO = [
   { id: "d-theo", name: "Theo", role: "Research", color: "#F59E0B", char: 0 },
   { id: "d-pat", name: "Pat", role: "Qualify", color: "#2FA45C", char: 1 },
-  { id: "d-maya", name: "Maya", role: "First emails", color: "#2563EB", char: 2 },
+  { id: "d-maya", name: "Maya", role: "First emails", color: "#006AFF", char: 2 },
   { id: "d-sam", name: "Sam", role: "Follow-ups", color: "#8B5CF6", char: 3 },
 ];
 

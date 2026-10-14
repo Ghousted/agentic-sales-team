@@ -73,8 +73,8 @@ export default function InboxBell() {
       <Box
         onClick={() => { setOpen((o) => !o); if (!open) refetch(); }}
         aria-label={unsent > 0 ? unsent + " email drafts to send" : "Email drafts"}
-        style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#2563EB;cursor:pointer"
-        styleHover="background:#D6E4FD"
+        style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#006AFF;cursor:pointer"
+        styleHover="background:#D6E6FF"
       >
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -94,7 +94,7 @@ export default function InboxBell() {
             {drafts.length > 0 && (
               <Btn onClick={clearAll} style="background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear all</Btn>
             )}
-            <div style={css("font-size:11px;font-weight:600;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
+            <div style={css("font-size:11px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 9px")}>{unsent} to send</div>
           </div>
           <div style={css("max-height:70vh;overflow-y:auto")}>
             {drafts.length === 0 ? (
@@ -108,7 +108,7 @@ export default function InboxBell() {
                     <div style={css("display:flex;align-items:center;gap:8px")}>
                       {a && <div style={css(av(a, 22))}>{a.initials}</div>}
                       <span style={css("font-size:12px;font-weight:600;color:#18181B")}>{a ? a.name.split(" ")[0] : "Agent"}</span>
-                      <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#EEF4FF", d.status === "sent" ? "#1B7A3D" : "#2563EB"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
+                      <span style={css(chip(d.status === "sent" ? "#E7F7EC" : "#EAF2FF", d.status === "sent" ? "#1B7A3D" : "#006AFF"))}>{d.status === "sent" ? "Sent" : "Draft"}</span>
                       <span style={css("margin-left:auto;font-size:10.5px;color:#A1A1AA")}>{relTime(d.createdAt)}</span>
                     </div>
                     <div style={css("font-size:11px;color:#A1A1AA;margin-top:5px")}>to {d.leadName}{d.leadCompany ? " · " + d.leadCompany : ""} · {d.leadEmail || (d.leadPlatform ? d.leadPlatform + " DM" : "no email")}</div>
@@ -116,9 +116,9 @@ export default function InboxBell() {
                     <div style={css("font-size:11.5px;color:#52525B;line-height:1.55;margin-top:3px;white-space:pre-wrap")}>{preview}</div>
                     <div style={css("display:flex;gap:6px;margin-top:9px;flex-wrap:wrap")}>
                       {d.leadEmail ? (
-                        <Btn onClick={() => openInMail(d)} style="background:#E8F0FE;color:#2563EB;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E4FD">Open in mail</Btn>
+                        <Btn onClick={() => openInMail(d)} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Open in mail</Btn>
                       ) : (<>
-                        <Btn onClick={() => copyMessage(d)} style="background:#E8F0FE;color:#2563EB;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E4FD">Copy message</Btn>
+                        <Btn onClick={() => copyMessage(d)} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Copy message</Btn>
                         {d.leadProfileUrl && <Btn onClick={() => window.open(d.leadProfileUrl!, "_blank")} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Open profile</Btn>}
                       </>)}
                       {d.status !== "sent" && <Btn onClick={() => markSent(d)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Mark sent</Btn>}

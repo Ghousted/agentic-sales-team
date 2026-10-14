@@ -2,7 +2,7 @@
 html, body { margin: 0; padding: 0; background: #FAFAFB; font-family: Inter, system-ui, sans-serif; color: #18181B; }
 * { box-sizing: border-box; }
 input, textarea, select, button { font-family: Inter, system-ui, sans-serif; }
-input:focus, textarea:focus { outline: 2px solid #BCD3FB; outline-offset: 0; }
+input:focus, textarea:focus { outline: 2px solid #CFE0FF; outline-offset: 0; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #E4E4E7; border-radius: 4px; }
 
@@ -27,7 +27,7 @@ button { transition: transform .12s ease, background .15s ease, box-shadow .15s 
 button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
-button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
+button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
 
 /* ---- Redesign: icon font (Lucide subset from the Claude Design file) ---- */
 @font-face { font-family: "lucide"; src: url("/fonts/lucide.woff2") format("woff2"); font-display: block; }
@@ -127,3 +127,6 @@ button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { 
 @keyframes lBeam { to { transform: rotate(360deg); } }
 @keyframes lPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Redesign composer focus ring (home + chat) */
+.as-composer:focus-within { border-color: #c7ced8 !important; box-shadow: 0 10px 30px -14px rgba(16,20,24,.22) !important; }

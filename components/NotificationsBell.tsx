@@ -10,7 +10,7 @@ import { css, Box, Btn } from "./primitives";
 
 const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
-  lead_researched: { label: "Research", bg: "#EEF4FF", fg: "#2563EB" },
+  lead_researched: { label: "Research", bg: "#EAF2FF", fg: "#006AFF" },
   email_drafted: { label: "Draft", bg: "#FEF6E8", fg: "#B45309" },
   email_sent: { label: "Sent", bg: "#E9F5FE", fg: "#0369A1" },
 };
@@ -68,8 +68,8 @@ export default function NotificationsBell() {
       <Box
         onClick={toggle}
         aria-label={unread ? items.length + " new notifications" : "Notifications"}
-        style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#2563EB;cursor:pointer"
-        styleHover="background:#D6E4FD"
+        style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#006AFF;cursor:pointer"
+        styleHover="background:#D6E6FF"
       >
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ transformOrigin: "50% 4px", animation: unread ? "iconRing 1.1s ease-in-out" : undefined }}>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -10,7 +10,7 @@ import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 const hubTypes: Record<string, string> = { sk: "meeting", mt: "email", ew: "research", rp: "writing", al: "call", nc: "analytics", ps: "idle", lm: "alert" };
 const hubIcons: Record<string, [string, string, string]> = {
   email: ["✉", "iconFly 2.6s ease-in-out infinite", "#0EA5E9"], call: ["☏", "iconRing 1.6s ease-in-out infinite", "#2FA45C"],
-  research: ["⌕", "iconSwing 2.4s ease-in-out infinite", "#F59E0B"], writing: ["✎", "iconPop 2.4s ease-in-out infinite", "#2563EB"],
+  research: ["⌕", "iconSwing 2.4s ease-in-out infinite", "#F59E0B"], writing: ["✎", "iconPop 2.4s ease-in-out infinite", "#006AFF"],
   meeting: ["▦", "iconPop 2.8s ease-in-out infinite", "#F43F7E"], analytics: ["∿", "iconPop 3s ease-in-out infinite", "#8B5CF6"],
   idle: ["◌", "breathe 3s ease-in-out infinite", "#A1A1AA"], alert: ["⚠", "iconPop 1.8s ease-in-out infinite", "#EF4444"],
 };
@@ -74,7 +74,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
       <div style={css("position:relative;background:radial-gradient(900px 520px at 50% 38%,#123A8C,#07183F 75%);border:1px solid #1A3A80;border-radius:24px;height:calc(100vh - 178px);min-height:540px;overflow:hidden;box-shadow:0 20px 50px rgba(7,24,63,.3)")}>
         <div style={css("position:absolute;top:16px;left:20px;right:150px;display:flex;gap:8px;z-index:3;flex-wrap:wrap")}>
           {teamPills.map((p) => (
-            <Box key={p.id} onClick={() => set({ hubTeam: p.id })} style={"font-size:11.5px;font-weight:600;border-radius:99px;padding:5px 13px;cursor:pointer;transition:all .12s;backdrop-filter:blur(6px);" + (s.hubTeam === p.id ? "background:#fff;color:#0B2A6B;border:1px solid #fff" : "background:rgba(255,255,255,.07);color:#C7D7F5;border:1px solid rgba(255,255,255,.16)")} styleHover="border-color:#BCD3FB">{p.label}</Box>
+            <Box key={p.id} onClick={() => set({ hubTeam: p.id })} style={"font-size:11.5px;font-weight:600;border-radius:99px;padding:5px 13px;cursor:pointer;transition:all .12s;backdrop-filter:blur(6px);" + (s.hubTeam === p.id ? "background:#fff;color:#0B2A6B;border:1px solid #fff" : "background:rgba(255,255,255,.07);color:#C7D7F5;border:1px solid rgba(255,255,255,.16)")} styleHover="border-color:#CFE0FF">{p.label}</Box>
           ))}
         </div>
         {hubWorking > 0 && <div style={css("position:absolute;top:16px;right:20px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#7EE2A8;background:rgba(46,164,92,.15);border:1px solid rgba(126,226,168,.3);border-radius:99px;padding:4px 12px;z-index:3;backdrop-filter:blur(6px)")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 2s infinite")} />Working now</div>}
@@ -146,9 +146,9 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
       {/* team cards */}
       {teams.length === 0 ? (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
-          <div style={css("width:52px;height:52px;border-radius:14px;background:#EEF4FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>🌐</div>
+          <div style={css("width:52px;height:52px;border-radius:14px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>🌐</div>
           <div style={css("font-size:15px;font-weight:700")}>No teams yet</div>
-          <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#1D4ED8">+ Create your first team</Btn>
+          <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first team</Btn>
         </div>
       ) : (
       <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>

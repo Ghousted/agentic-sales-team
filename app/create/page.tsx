@@ -12,9 +12,9 @@ import { AGENT_CHARS, charSrc } from "@/lib/visuals";
 const PICKS = AGENT_CHARS.map((_, i) => i);
 function charBox(i: number, targetH: number) {
   return (
-    "width:" + Math.round(targetH) + "px;height:" + Math.round(targetH) + "px;border-radius:50%;background-color:#E8F0FE;" +
+    "width:" + Math.round(targetH) + "px;height:" + Math.round(targetH) + "px;border-radius:50%;background-color:#E6F0FF;" +
     "background-image:url('" + charSrc(i) + "');background-repeat:no-repeat;background-size:114%;background-position:center;" +
-    "box-shadow:0 10px 30px rgba(37,99,235,.14)"
+    "box-shadow:0 10px 30px rgba(0,106,255,.14)"
   );
 }
 
@@ -43,16 +43,16 @@ function Stepper({ step }: { step: number }) {
         return (
           <div key={label} style={css("display:flex;align-items:flex-start")}>
             <div style={css("display:flex;flex-direction:column;align-items:center;gap:10px;width:32px;flex:none")}>
-              <div style={css("width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex:none;" + (done ? "background:#2563EB;color:#fff" : cur ? "background:#E8F0FE;color:#2563EB" : "background:#F0F1F3;color:#242E39"))}>
+              <div style={css("width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex:none;" + (done ? "background:#006AFF;color:#fff" : cur ? "background:#E6F0FF;color:#006AFF" : "background:#F0F1F3;color:#242E39"))}>
                 {done ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
                 ) : (i + 1)}
               </div>
-              <div style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#2563EB" : "font-weight:500;color:#465668"))}>{label}</div>
+              <div style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#006AFF" : "font-weight:500;color:#465668"))}>{label}</div>
             </div>
             {i < STEPS.length - 1 && (
               <div style={css("width:84.75px;height:32px;display:flex;align-items:center")}>
-                <div style={css("width:100%;height:2px;background:" + (i <= step ? "#2563EB" : "#a1aebe"))} />
+                <div style={css("width:100%;height:2px;background:" + (i <= step ? "#006AFF" : "#a1aebe"))} />
               </div>
             )}
           </div>
@@ -92,7 +92,7 @@ export default function CreatePage() {
         <Header onClose={() => { router.push("/agents"); reset(); }} />
         <div style={css("flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;padding:40px")}>
           <div style={css("display:flex;flex-direction:column;align-items:center;gap:10px")}>
-            <div style={css("width:182px;height:258px;background:#E8F0FE;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden")}>
+            <div style={css("width:182px;height:258px;background:#E6F0FF;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden")}>
               <div style={css(charBox(character, 210))} />
             </div>
             <div>
@@ -106,7 +106,7 @@ export default function CreatePage() {
           </div>
           <div style={css("display:flex;gap:10px;margin-top:8px")}>
             <Btn onClick={() => { router.push("/agents"); reset(); }} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:100px;height:48px;padding:0 24px;font-size:14px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Back to agents</Btn>
-            <Btn onClick={() => { const id = s.wCreatedId; router.push(id ? "/agents/" + id : "/agents"); reset(); }} style="background:#2563EB;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.3)" styleHover="background:#1D4ED8">View agent →</Btn>
+            <Btn onClick={() => { const id = s.wCreatedId; router.push(id ? "/agents/" + id : "/agents"); reset(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;height:48px;padding:0 28px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">View agent →</Btn>
           </div>
         </div>
       </div>
@@ -117,13 +117,13 @@ export default function CreatePage() {
   const footer = (
     <div style={css("display:flex;align-items:center;justify-content:" + (step === 0 ? "flex-end" : "space-between") + ";width:100%")}>
       {step > 0 && (
-        <Btn onClick={back} style="background:#E8F0FE;color:#2563EB;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;display:flex;align-items:center;gap:8px" styleHover="background:#D6E4FD"><Chevron dir="left" />Back</Btn>
+        <Btn onClick={back} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-.15px;display:flex;align-items:center;gap:8px" styleHover="background:#D6E6FF"><Chevron dir="left" />Back</Btn>
       )}
       <Btn
         onClick={step === 4 ? createAgent : next}
         disabled={!canContinue}
-        style={"background:#2563EB;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;letter-spacing:-.15px;display:flex;align-items:center;gap:8px;" + (canContinue ? "cursor:pointer" : "opacity:.45;cursor:not-allowed")}
-        styleHover={canContinue ? "background:#1D4ED8" : ""}
+        style={"background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 24px;font-size:16px;font-weight:600;letter-spacing:-.15px;display:flex;align-items:center;gap:8px;" + (canContinue ? "cursor:pointer" : "opacity:.45;cursor:not-allowed")}
+        styleHover={canContinue ? "background:#0052CC" : ""}
       >
         {step === 4 ? "Create agent" : "Continue"}<Chevron dir="right" />
       </Btn>
@@ -162,11 +162,11 @@ export default function CreatePage() {
                   const on = s.wType === t.id;
                   const chips = t.custom ? (s.wCapabilities.length ? s.wCapabilities : ["pick capabilities"]) : t.capabilities;
                   return (
-                    <Box key={t.id} onClick={() => set({ wType: t.id })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#2563EB;background:#F5F8FF" : "#ECECF1;background:#fff")} styleHover="border-color:#BCD3FB">
+                    <Box key={t.id} onClick={() => set({ wType: t.id })} style={"border-radius:12px;padding:14px 16px;cursor:pointer;transition:all .12s;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
                       <div style={css("font-size:14px;font-weight:700;color:#181d27")}>{t.label}</div>
                       <div style={css("font-size:12px;color:#606b79;margin-top:4px;line-height:1.4")}>{t.desc}</div>
                       <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:8px")}>
-                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#2563EB;background:#EEF4FF;border-radius:99px;padding:2px 9px")}>{c}</span>)}
+                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 9px")}>{c}</span>)}
                       </div>
                     </Box>
                   );
@@ -179,8 +179,8 @@ export default function CreatePage() {
                     {CAPABILITIES.map((c) => {
                       const on = s.wCapabilities.includes(c.id);
                       return (
-                        <Box key={c.id} onClick={() => setCap(c.id)} style={"display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;cursor:pointer;border:2px solid " + (on ? "#2563EB;background:#F5F8FF" : "#ECECF1;background:#fff")} styleHover="border-color:#BCD3FB">
-                          <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#2563EB" : "#D4D4D8") + ";background:" + (on ? "#2563EB" : "#fff"))}>
+                        <Box key={c.id} onClick={() => setCap(c.id)} style={"display:flex;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">
+                          <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
                             {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                           </span>
                           <div><div style={css("font-size:13px;font-weight:600")}>{c.label}</div><div style={css("font-size:11px;color:#606b79")}>{c.desc}</div></div>
@@ -208,7 +208,7 @@ export default function CreatePage() {
                   {PICKS.map((idx, i) => {
                     const on = character === idx;
                     return (
-                      <Box key={idx} onClick={() => set({ wCharacter: idx })} aria-label={"Character " + AGENT_CHARS[i].label} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#E8F0FE;border:2px solid #2563EB" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#BCD3FB">
+                      <Box key={idx} onClick={() => set({ wCharacter: idx })} aria-label={"Character " + AGENT_CHARS[i].label} style={"height:194px;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;" + (on ? "background:#E6F0FF;border:2px solid #006AFF" : "background:#ECECF1;border:2px solid transparent")} styleHover="border-color:#CFE0FF">
                         <div style={css(charBox(idx, 140))} />
                       </Box>
                     );
@@ -240,7 +240,7 @@ export default function CreatePage() {
                     <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
                       {["Direct", "Warm", "Formal"].map((t) => {
                         const on = sv("outreach", "tone") === t || (!sv("outreach", "tone") && t === "Warm");
-                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#2563EB;background:#EEF4FF;color:#2563EB" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#BCD3FB">{t} tone</Box>;
+                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#EAF2FF;color:#006AFF" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#CFE0FF">{t} tone</Box>;
                       })}
                     </div>
                   </div>
@@ -284,7 +284,7 @@ function Header({ onClose }: { onClose: () => void }) {
   return (
     <div style={css("position:relative;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e9eaeb;padding:16px 24px;flex:none")}>
       <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.1;color:#181d27")}>
-        <span style={{ color: "#2563EB" }}>agent</span>ic salesforce
+        <span style={{ color: "#006AFF" }}>agent</span>ic salesforce
       </div>
       <div style={css("position:absolute;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600;color:#000;letter-spacing:-.24px")}>Add new agent</div>
       <Box onClick={onClose} aria-label="Close" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#606b79;font-size:20px" styleHover="color:#181d27">✕</Box>

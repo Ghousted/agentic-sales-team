@@ -283,8 +283,9 @@ export default function CreatePage() {
 function Header({ onClose }: { onClose: () => void }) {
   return (
     <div style={css("position:relative;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e9eaeb;padding:16px 24px;flex:none")}>
-      <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:18px;font-weight:700;letter-spacing:-.02em;line-height:1.1;color:#181d27")}>
-        <span style={{ color: "#006AFF" }}>agent</span>ic salesforce
+      <div style={css("display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;letter-spacing:-.01em;color:#101418")}>
+        <span style={css("width:30px;height:30px;border-radius:9px;background:url('/logo-mark.png') center/cover no-repeat")} />
+        Agentic Sales Team
       </div>
       <div style={css("position:absolute;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600;color:#000;letter-spacing:-.24px")}>Add new agent</div>
       <Box onClick={onClose} aria-label="Close" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#606b79;font-size:20px" styleHover="color:#181d27">✕</Box>

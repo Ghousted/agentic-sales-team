@@ -167,7 +167,7 @@ export default function Login() {
                     {primary(cta, loading, ok)}
                   </form>
                   <p style={css("margin:26px 0 0;font-size:15px;color:#4a5565;text-align:center")}>
-                    {isSignup ? "Already have an account?" : "New to Agentic Salesforce?"}{" "}
+                    {isSignup ? "Already have an account?" : "New to Agentic Sales Team?"}{" "}
                     <button type="button" onClick={switchMode} style={css("border:0;background:transparent;padding:0;color:#006aff;font-size:15px;font-weight:600;cursor:pointer")}>{isSignup ? "Log in" : "Create an account"}</button>
                   </p>
                   {isSignup && <p style={css("margin:12px 0 0;font-size:13px;line-height:1.5;color:#8a94a3;text-align:center")}>By creating an account you agree to the Terms and Privacy Policy.</p>}

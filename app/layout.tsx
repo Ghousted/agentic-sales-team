@@ -6,7 +6,7 @@ import { currentUser } from "@/lib/auth/actions";
 import { loadWorkspace } from "@/lib/workspace/actions";
 
 export const metadata: Metadata = {
-  title: "Agentic Salesforce",
+  title: "Agentic Sales Team",
   description: "An AI sales team that works for you in chat.",
 };
 

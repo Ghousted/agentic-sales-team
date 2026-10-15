@@ -1,4 +1,4 @@
-// Shared domain types for the Agentic Salesforce app.
+// Shared domain types for the Agentic Sales Team app.
 
 export type StatusKey = "working" | "waiting" | "offline" | "error";
 

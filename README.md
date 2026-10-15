@@ -1,4 +1,4 @@
-# Agentic Salesforce
+# Agentic Sales Team
 
 The command center for an **AI sales workforce**. Instead of a CRM you operate by hand, you create autonomous **agents** that find leads on the public web, research and qualify them, match them to your product catalog, write personalized outreach and proposals, and book meetings — individually, as **teams** that hand work off to each other, or by chatting with a team in plain English.
 

@@ -15,8 +15,8 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
     <html lang="en">
       <body style={{ margin: 0, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px", background: "#FAFAFB", fontFamily: "Inter, system-ui, -apple-system, sans-serif", color: "#18181B" }}>
         <div style={{ maxWidth: "460px", textAlign: "center" }}>
-          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "15px", fontWeight: 700, letterSpacing: "-.01em", marginBottom: "24px" }}>
-            <span style={{ color: "#006AFF" }}>agentic</span> salesforce
+          <div style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-.01em", marginBottom: "24px" }}>
+            Agentic Sales Team
           </div>
           <h1 style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-.01em", margin: "0 0 10px" }}>Something went wrong</h1>
           <p style={{ fontSize: "15px", color: "#71717A", lineHeight: 1.55, margin: "0 0 26px" }}>

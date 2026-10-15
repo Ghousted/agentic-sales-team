@@ -18,7 +18,7 @@ import { AG, avBg, TEAM, STEPS, KINDS, KREPLY, RULES, RPREV, PROMISES, TRUST, PL
 // Hand-off from the hero email field to the sign-up form.
 export const SIGNUP_EMAIL_KEY = "as:signupEmail";
 
-const NAME = "Agentic Salesforce";
+const NAME = "Agentic Sales Team";
 const AGENT_IDS: AgentId[] = ["theo", "priya", "maya", "sam"];
 const reduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -178,7 +178,7 @@ export default function LandingPage() {
 /* ---------- loading screen ---------- */
 function Loader({ out }: { out: boolean }) {
   return (
-    <div role="status" aria-label="Loading Agentic Salesforce" style={{ ...css("position:fixed;inset:0;z-index:100;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;color:#ffffff;background:linear-gradient(180deg,#0047b3 0%,#0058e6 55%,#006aff 100%);transition:transform .85s cubic-bezier(.76,0,.24,1),visibility 0s linear " + (out ? ".85s" : "0s")), transform: out ? "translateY(-100%)" : "none", visibility: out ? "hidden" : "visible" }}>
+    <div role="status" aria-label="Loading Agentic Sales Team" style={{ ...css("position:fixed;inset:0;z-index:100;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;color:#ffffff;background:linear-gradient(180deg,#0047b3 0%,#0058e6 55%,#006aff 100%);transition:transform .85s cubic-bezier(.76,0,.24,1),visibility 0s linear " + (out ? ".85s" : "0s")), transform: out ? "translateY(-100%)" : "none", visibility: out ? "hidden" : "visible" }}>
       <span aria-hidden="true" style={css("position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(255,255,255,.24) 1px,transparent 1.4px);background-size:22px 22px;animation:ldDrift 8s linear infinite;-webkit-mask-image:radial-gradient(ellipse 65% 60% at 50% 48%,#000,transparent 80%);mask-image:radial-gradient(ellipse 65% 60% at 50% 48%,#000,transparent 80%)")} />
       <span aria-hidden="true" style={css("position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 50% 45% at 50% 46%,rgba(0,82,204,.9),rgba(0,82,204,0) 100%)")} />
       <div style={{ ...css("position:relative;display:flex;flex-direction:column;align-items:center;transition:transform .7s cubic-bezier(.6,0,.2,1),opacity .5s ease"), transform: out ? "translateY(-40px) scale(.96)" : "none", opacity: out ? 0 : 1 }}>
@@ -451,7 +451,7 @@ function Inbox() {
                 <div style={css("flex:1;display:flex;flex-direction:column;border:1px solid #e3e7ed;background:#ffffff;color:#101418;overflow:hidden")}>
                   <div style={css("display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #eceef1")}>
                     <span aria-hidden="true" style={css("width:26px;height:26px;background:url('/logo-mark.png') center/cover no-repeat")} />
-                    <span style={css("font-size:14px;font-weight:600")}>Agentic Salesforce</span>
+                    <span style={css("font-size:14px;font-weight:600")}>Agentic Sales Team</span>
                     <span style={css("font-size:13px;color:#8a94a3")}>· Chat</span>
                     <span style={{ flex: 1 }} />
                     <span style={css("height:26px;padding:0 10px;background:" + (open ? "#e6f0ff" : "#e7f5ec") + ";color:" + (open ? "#0b57d0" : "#0f7b3f") + ";font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:6px;transition:background .2s")}><i className={open ? "icon-bell" : "icon-check"} style={{ fontSize: 13 }} />{open ? open + " need you" : "All caught up"}</span>

@@ -78,7 +78,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div style={css("height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:14px 12px 0 15px")}>
             <Box onClick={() => router.push("/")} aria-label="New chat" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">
               <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
-              <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Salesforce</span>
+              <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Sales Team</span>
             </Box>
             <Btn onClick={() => set({ sidebarOpen: false })} aria-label="Collapse sidebar" title="Collapse sidebar" style="width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eef0f3;color:#101418"><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></Btn>
           </div>

@@ -292,7 +292,7 @@ export default function HeroDemo({ width, height }: { width: number; height: num
     if (reduce) { setIntro(0); return; }
     // Start once the landing's loading screen has gone.
     let n = 0, t = 0;
-    const go = () => { n++; if (document.querySelector('[aria-label="Loading Agentic Salesforce"]') && n < 60) { t = window.setTimeout(go, 200); return; } run(0, true); };
+    const go = () => { n++; if (document.querySelector('[aria-label="Loading Agentic Sales Team"]') && n < 60) { t = window.setTimeout(go, 200); return; } run(0, true); };
     t = window.setTimeout(go, 400);
     return () => { window.clearTimeout(t); gen.current++; };
   }, [run]);
@@ -420,7 +420,7 @@ function Sidebar({ threads, active }: { threads: Thread[]; active: string }) {
     <aside aria-label="Sidebar" style={css("width:272px;flex:none;height:100%;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column")}>
       <div style={css("height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:14px 12px 0 15px")}>
         <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
-        <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Salesforce</span>
+        <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Sales Team</span>
         <span style={css("width:34px;height:34px;color:#6b7686;display:flex;align-items:center;justify-content:center")}><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></span>
       </div>
       <div style={css("padding:4px 10px 0;display:flex;flex-direction:column;gap:2px")}>

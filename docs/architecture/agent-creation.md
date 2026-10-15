@@ -1,6 +1,6 @@
 # Agent Creation — Architecture
 
-How an agent gets created in Agentic Salesforce, end to end: the model, the wizard flow, the data it writes, and how a created agent's **capabilities** connect to the job/engine harness.
+How an agent gets created in Agentic Sales Team, end to end: the model, the wizard flow, the data it writes, and how a created agent's **capabilities** connect to the job/engine harness.
 
 > Spec: `docs/superpowers/specs/2026-07-07-typed-agents-and-team-templates-design.md`
 > Plan: `docs/superpowers/plans/2026-07-07-typed-agents-and-team-templates.md`

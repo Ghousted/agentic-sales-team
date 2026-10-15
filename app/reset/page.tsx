@@ -12,10 +12,9 @@ const LABEL = "font-size:14px;font-weight:500;color:#414651;line-height:20px";
 
 function Wordmark() {
   return (
-    <div style={css("font-family:'JetBrains Mono',ui-monospace,monospace;font-size:24px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#181d27;text-align:center")}>
-      <span style={{ color: "#006AFF" }}>agentic</span>
-      <br />
-      salesforce
+    <div style={css("display:flex;align-items:center;justify-content:center;gap:10px;font-family:'General Sans',system-ui,sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em;color:#101418")}>
+      <span style={css("width:36px;height:36px;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
+      Agentic Sales Team
     </div>
   );
 }

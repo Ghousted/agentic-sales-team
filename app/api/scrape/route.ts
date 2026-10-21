@@ -9,9 +9,10 @@ import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecraw
 import { isGeminiConfigured } from "@/lib/ai/gemini";
 import { addScrapedLeads } from "@/lib/leads/store";
 import { chainNext } from "@/lib/pod/orchestrate";
+import { reapStaleJobs, withDeadline, SCRAPE_TIMEOUT_MS } from "@/lib/jobs/runtime";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 60; // keep equal to SCRAPE_MAX_DURATION_S
 
 export async function POST(req: Request) {
   if (!isDbConfigured()) return NextResponse.json({ error: "Server not configured." }, { status: 500 });
@@ -23,6 +24,8 @@ export async function POST(req: Request) {
   if (!jobId) return NextResponse.json({ error: "Missing jobId." }, { status: 400 });
 
   const db = getDb();
+  // A scrape killed at maxDuration stays 'running' and would answer "already running" forever.
+  try { await reapStaleJobs(db, userId); } catch (e) { console.error("[scrape] reap failed:", e); }
   const [job] = await db.select().from(jobs).where(and(eq(jobs.id, jobId), eq(jobs.userId, userId))).limit(1);
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
   if (job.kind !== "scrape") return NextResponse.json({ error: "Not a scrape job." }, { status: 400 });
@@ -43,7 +46,10 @@ export async function POST(req: Request) {
   const claimed = await db.update(jobs).set({ status: "running", startedAt: new Date() })
     .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId), eq(jobs.status, "queued")))
     .returning({ id: jobs.id });
-  if (claimed.length === 0) return NextResponse.json({ ok: true, leadsFound: 0, note: "already running" });
+  if (claimed.length === 0) {
+    if (job.status === "running") return NextResponse.json({ ok: true, leadsFound: 0, note: "already running" });
+    return NextResponse.json({ error: job.status === "failed" ? "That search stopped before it finished. Please try again." : "That search has already finished." }, { status: 409 });
+  }
 
   const params = (job.params ?? {}) as { agent?: any; target?: number; instruction?: string | null; pod?: boolean; teamId?: string | null };
   const agent = params.agent ?? { id: job.agentId, name: "Agent", role: "", goal: "", task: "" };
@@ -51,7 +57,8 @@ export async function POST(req: Request) {
   const instruction = params.instruction ?? undefined;
 
   try {
-    const prospects = await runFirecrawlScrape(agent, target, instruction);
+    // Finish inside maxDuration so the job is marked failed, not left 'running'.
+    const prospects = await withDeadline(runFirecrawlScrape(agent, target, instruction), SCRAPE_TIMEOUT_MS, "Search");
     const leadsFound = await addScrapedLeads(userId, job.agentId, prospects);
     await db.update(jobs).set({ status: "done", result: { leadsFound }, finishedAt: new Date() })
       .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));

@@ -11,6 +11,7 @@ import { pickLeadsForMatch } from "@/lib/matches/store";
 import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
+import { isStale } from "@/lib/jobs/runtime";
 
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
 
@@ -81,9 +82,11 @@ export async function countPending(userId: string, agentId: string, capability: 
 
 export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<void> {
   // Don't stack duplicates: skip if this team already has an active job for this capability.
+  // A 'running' job past its time limit is dead (the runner reaps it), so it doesn't count.
+  const now = new Date();
   const active = await getDb().select().from(jobs)
     .where(and(eq(jobs.userId, userId), eq(jobs.kind, capability), inArray(jobs.status, ["queued", "running", "needs_approval"])));
-  if (active.some((j) => (j.params as { teamId?: string })?.teamId === teamId)) return;
+  if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return;
   const info = await agentInfo(userId, agentId);
   if (!info) return;
   const mode = await approvalMode(userId, agentId, capability);

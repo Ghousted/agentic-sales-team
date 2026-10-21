@@ -1,13 +1,15 @@
 import "server-only";
 // The user's Products & Services catalog: CSV import + CRUD + pgvector semantic
-// search. Embeddings via Gemini text-embedding-004. Agents' source of truth.
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+// search. Embeddings via Gemini (see EMBED_MODEL). Agents' source of truth.
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb, isDbConfigured, products, productFolders } from "@/lib/db";
 import { geminiEmbed, geminiEmbedBatch } from "@/lib/ai/gemini";
 
 export interface ProductDTO { id: string; name: string; description: string; price: string; category: string; folderId: string | null; attributes: Record<string, string> }
 export interface ProductInput { name: string; description?: string; price?: string; category?: string; folderId?: string | null; attributes?: Record<string, string> }
 export interface FolderDTO { id: string; name: string; count: number }
+export interface ImportResult { added: number; error?: string; /** Set when some rows saved without an embedding (keyword search only). */ warning?: string }
+export interface ReembedResult { embedded: number; failed: number; error?: string }
 
 const PRODUCT_COLS = { id: products.id, name: products.name, description: products.description, price: products.price, category: products.category, folderId: products.folderId, attributes: products.attributes };
 const toDTO = (r: { id: string; name: string; description: string; price: string; category: string; folderId: string | null; attributes: Record<string, string> }): ProductDTO =>
@@ -51,14 +53,25 @@ export async function listProducts(userId: string, folderId?: string | null): Pr
   return rows.map(toDTO);
 }
 
-export async function addProduct(userId: string, input: ProductInput): Promise<ProductDTO | null> {
+const notIndexed = (n: number, reason: string) =>
+  `${n} product${n === 1 ? "" : "s"} could not be indexed for search (${reason.slice(0, 150)}). They match by keyword until you re-index.`;
+
+/** Saves the product even when embedding fails; `warning` then says it is keyword search only. */
+export async function addProduct(userId: string, input: ProductInput): Promise<(ProductDTO & { warning?: string }) | null> {
   if (!isDbConfigured() || !input.name?.trim()) return null;
-  const embedding = await geminiEmbed(embedText(input));
+  let embedding: number[] | null = null;
+  let warning: string | undefined;
+  try {
+    embedding = await geminiEmbed(embedText(input));
+  } catch (e) {
+    warning = notIndexed(1, (e as Error).message);
+    console.error("[products] embedding failed:", (e as Error).message);
+  }
   const [row] = await getDb().insert(products).values({
     userId, folderId: input.folderId ?? null, name: input.name.trim(), description: input.description ?? "", price: input.price ?? "", category: input.category ?? "",
-    attributes: input.attributes ?? {}, embedding: embedding ?? null,
+    attributes: input.attributes ?? {}, embedding,
   }).returning(PRODUCT_COLS);
-  return toDTO(row);
+  return warning ? { ...toDTO(row), warning } : toDTO(row);
 }
 
 export async function deleteProduct(userId: string, id: string): Promise<void> {
@@ -103,7 +116,7 @@ const FIELD_ALIASES: Record<string, "name" | "description" | "price" | "category
   category: "category", type: "category",
 };
 
-export async function importProductsCsv(userId: string, csvText: string, folderId?: string | null): Promise<{ added: number; error?: string }> {
+export async function importProductsCsv(userId: string, csvText: string, folderId?: string | null): Promise<ImportResult> {
   if (!isDbConfigured()) return { added: 0, error: "Server not configured." };
   const parsed = parseCsv(csvText).slice(0, 200); // bounded import
   const inputs: ProductInput[] = [];
@@ -120,28 +133,100 @@ export async function importProductsCsv(userId: string, csvText: string, folderI
     inputs.push({ ...fields, attributes });
   }
   if (inputs.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
-  const vecs = await geminiEmbedBatch(inputs.map(embedText));
-  const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", attributes: p.attributes ?? {}, embedding: vecs[i] ?? null }));
+  const { vectors, error: embedError } = await geminiEmbedBatch(inputs.map(embedText));
+  const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", attributes: p.attributes ?? {}, embedding: vectors[i] ?? null }));
+  const missing = vectors.filter((v) => !v).length;
+  if (embedError) console.error("[products] import embedding failed:", embedError);
   try {
     await getDb().insert(products).values(values);
-    return { added: values.length };
+    return missing ? { added: values.length, warning: notIndexed(missing, embedError ?? "unknown error") } : { added: values.length };
   } catch (e) {
     return { added: 0, error: "Import failed: " + String(e).slice(0, 150) };
   }
 }
 
-/** Semantic top-K over the user's catalog (cosine). The primitive agents ground on. */
+/**
+ * Re-embed the user's catalog with the current model. Pass onlyMissing to fill
+ * rows with no embedding; otherwise every row is redone, which is required after
+ * a model change because vectors from different models are not comparable.
+ */
+export async function reembedProducts(userId: string, opts?: { onlyMissing?: boolean }): Promise<ReembedResult> {
+  if (!isDbConfigured()) return { embedded: 0, failed: 0, error: "Server not configured." };
+  const db = getDb();
+  const where = opts?.onlyMissing ? and(eq(products.userId, userId), isNull(products.embedding)) : eq(products.userId, userId);
+  const rows = (await db.select(PRODUCT_COLS).from(products).where(where)).map(toDTO);
+  if (rows.length === 0) return { embedded: 0, failed: 0 };
+  const { vectors, error } = await geminiEmbedBatch(rows.map(embedText));
+  let embedded = 0;
+  for (let i = 0; i < rows.length; i += 25) {
+    const writes = rows.slice(i, i + 25).flatMap((r, j) => {
+      const v = vectors[i + j];
+      return v ? [db.update(products).set({ embedding: v }).where(and(eq(products.userId, userId), eq(products.id, r.id)))] : [];
+    });
+    await Promise.all(writes);
+    embedded += writes.length;
+  }
+  return { embedded, failed: rows.length - embedded, error };
+}
+
+// Words of 3+ letters/digits. Splitting on everything else also strips LIKE wildcards.
+const searchTerms = (q: string) => Array.from(new Set(q.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 3))).slice(0, 8);
+
+/** Keyword match over name/category/description/attributes, ranked by how many terms hit. */
+async function keywordSearch(userId: string, query: string, k: number, extra?: SQL): Promise<ProductDTO[]> {
+  const terms = searchTerms(query);
+  if (terms.length === 0) return [];
+  const anyTerm = or(...terms.flatMap((t) => {
+    const pat = `%${t}%`;
+    return [ilike(products.name, pat), ilike(products.category, pat), ilike(products.description, pat), sql`${products.attributes}::text ilike ${pat}`];
+  }));
+  const rows = await getDb().select(PRODUCT_COLS).from(products)
+    .where(and(eq(products.userId, userId), extra, anyTerm))
+    .limit(50);
+  const hits = (p: ProductDTO) => {
+    const hay = embedText(p).toLowerCase();
+    return terms.filter((t) => hay.includes(t)).length;
+  };
+  return rows.map(toDTO).map((p) => ({ p, n: hits(p) })).sort((a, b) => b.n - a.n).slice(0, k).map((x) => x.p);
+}
+
+/** Alternate semantic and keyword hits, dropping duplicates. */
+function interleave(a: ProductDTO[], b: ProductDTO[], k: number): ProductDTO[] {
+  const out: ProductDTO[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; out.length < k && (i < a.length || i < b.length); i++) {
+    for (const p of [a[i], b[i]]) if (p && !seen.has(p.id) && out.length < k) { seen.add(p.id); out.push(p); }
+  }
+  return out;
+}
+
+/**
+ * Top-K products for a query: cosine search over embedded rows, plus keyword
+ * matches for rows with no embedding so they are never invisible. If the query
+ * itself cannot be embedded, keyword search covers the whole catalog.
+ */
 export async function searchProducts(userId: string, query: string, k = 5): Promise<ProductDTO[]> {
   if (!isDbConfigured() || !query.trim()) return [];
   const [any] = await getDb().select({ id: products.id }).from(products).where(eq(products.userId, userId)).limit(1);
   if (!any) return []; // empty catalog → skip the embedding call
-  const vec = await geminiEmbed(query);
-  if (!vec) return listProducts(userId).then((all) => all.slice(0, k)); // no embeddings → fall back to recent
+  let vec: number[] | null = null;
+  try {
+    vec = await geminiEmbed(query, "RETRIEVAL_QUERY");
+  } catch (e) {
+    console.error("[products] query embedding failed, using keyword search:", (e as Error).message);
+  }
+  if (!vec) {
+    const keyword = await keywordSearch(userId, query, k);
+    return keyword.length ? keyword : listProducts(userId).then((all) => all.slice(0, k)); // nothing matched → recent
+  }
   const lit = `[${vec.join(",")}]`;
-  const rows = await getDb().select(PRODUCT_COLS)
-    .from(products)
-    .where(and(eq(products.userId, userId), isNotNull(products.embedding)))
-    .orderBy(sql`${products.embedding} <=> ${lit}::vector`)
-    .limit(k);
-  return rows.map(toDTO);
+  const [semantic, keyword] = await Promise.all([
+    getDb().select(PRODUCT_COLS)
+      .from(products)
+      .where(and(eq(products.userId, userId), isNotNull(products.embedding)))
+      .orderBy(sql`${products.embedding} <=> ${lit}::vector`)
+      .limit(k),
+    keywordSearch(userId, query, k, isNull(products.embedding)),
+  ]);
+  return interleave(semantic.map(toDTO), keyword, k);
 }

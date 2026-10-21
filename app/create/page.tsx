@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
-import { AGENT_TYPES, CAPABILITIES, typeById, type Capability } from "@/lib/agentTypes";
+import { AGENT_TYPES, CAPABILITIES, typeById, isEngineReady, parseMeetingMinutes, type Capability } from "@/lib/agentTypes";
 import { AGENT_CHARS, charSrc } from "@/lib/visuals";
 
 /* ---------- characters ----------
@@ -166,7 +166,10 @@ export default function CreatePage() {
                       <div style={css("font-size:14px;font-weight:700;color:#181d27")}>{t.label}</div>
                       <div style={css("font-size:12px;color:#606b79;margin-top:4px;line-height:1.4")}>{t.desc}</div>
                       <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:8px")}>
-                        {chips.map((c) => <span key={c} style={css("font-size:10.5px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:2px 9px")}>{c}</span>)}
+                        {chips.map((c) => {
+                          const soon = !t.custom && !isEngineReady(c as Capability);
+                          return <span key={c} title={soon ? "Coming soon — not run by the engine yet" : undefined} style={css("font-size:10.5px;font-weight:600;border-radius:99px;padding:2px 9px;" + (soon ? "color:#71717A;background:#F4F4F5" : "color:#006AFF;background:#EAF2FF"))}>{c}{soon ? " · soon" : ""}</span>;
+                        })}
                       </div>
                     </Box>
                   );
@@ -183,7 +186,7 @@ export default function CreatePage() {
                           <span style={css("width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
                             {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                           </span>
-                          <div><div style={css("font-size:13px;font-weight:600")}>{c.label}</div><div style={css("font-size:11px;color:#606b79")}>{c.desc}</div></div>
+                          <div><div style={css("font-size:13px;font-weight:600")}>{c.label}{!c.engineReady && <span style={css("margin-left:6px;font-size:10.5px;font-weight:600;color:#71717A;background:#F4F4F5;border-radius:99px;padding:1px 7px")}>Coming soon</span>}</div><div style={css("font-size:11px;color:#606b79")}>{c.desc}</div></div>
                         </Box>
                       );
                     })}
@@ -234,27 +237,27 @@ export default function CreatePage() {
                     <b>Lead scraping</b> is driven by what you ask in chat — e.g. “find property buyers near Makati.” No target setup needed here.
                   </div>
                 )}
-                {caps.includes("outreach") && (
-                  <div>
-                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Email drafting</div>
-                    <div style={css("display:flex;gap:8px;flex-wrap:wrap")}>
-                      {["Direct", "Warm", "Formal"].map((t) => {
-                        const on = sv("outreach", "tone") === t || (!sv("outreach", "tone") && t === "Warm");
-                        return <Box key={t} onClick={() => setSetting("outreach", "tone", t)} style={"font-size:13px;font-weight:600;border-radius:99px;padding:7px 15px;cursor:pointer;border:2px solid " + (on ? "#006AFF;background:#EAF2FF;color:#006AFF" : "#ECECF1;background:#fff;color:#3F3F46")} styleHover="border-color:#CFE0FF">{t} tone</Box>;
-                      })}
-                    </div>
-                  </div>
-                )}
-                {caps.includes("follow-up") && (
-                  <div>
-                    <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Follow-ups</div>
-                    <input value={sv("follow-up", "touches")} onChange={(e) => setSetting("follow-up", "touches", e.target.value)} placeholder="Number of touches (e.g. 3)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                {caps.filter((c) => !isEngineReady(c)).length > 0 && (
+                  <div style={css("font-size:12.5px;color:#606b79;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:14px 16px")}>
+                    <b>Coming soon:</b> {caps.filter((c) => !isEngineReady(c)).map((c) => CAPABILITIES.find((x) => x.id === c)?.label ?? c).join(", ")}. This agent keeps the capability, but nothing runs it yet.
                   </div>
                 )}
                 {caps.includes("book-meeting") && (
                   <div>
                     <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Meeting booking</div>
-                    <input value={sv("book-meeting", "length")} onChange={(e) => setSetting("book-meeting", "length", e.target.value)} placeholder="Meeting length (e.g. 30 min)" style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")} />
+                    <input
+                      aria-label="Meeting length"
+                      value={sv("book-meeting", "length")}
+                      onChange={(e) => {
+                        setSetting("book-meeting", "length", e.target.value);
+                        setSetting("book-meeting", "duration", parseMeetingMinutes(e.target.value));
+                      }}
+                      placeholder="Meeting length (e.g. 30 min) — default 30 min"
+                      style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")}
+                    />
+                    {sv("book-meeting", "length").trim() !== "" && parseMeetingMinutes(sv("book-meeting", "length")) === undefined && (
+                      <div style={css("font-size:12px;color:#B91C1C;margin-top:6px")}>Use minutes or hours between 5 min and 8 h, e.g. “45 min” or “1 hour”. Until then meetings default to 30 min.</div>
+                    )}
                   </div>
                 )}
               </div>

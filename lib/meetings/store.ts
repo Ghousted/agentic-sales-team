@@ -48,12 +48,16 @@ export async function findMeetingAgent(userId: string): Promise<{ id: string; na
   return m ? { id: m.id, name: m.name, role: m.role, goal: m.goal, task: m.task } : null;
 }
 
-/** Book a meeting (caller supplies userId) and advance the lead to the 'meeting' stage. */
-export async function bookMeeting(userId: string, agentId: string, leadId: string, whenAtIso: string, whenLabel: string, title = "Meeting"): Promise<void> {
-  if (!isDbConfigured()) return;
+/** Book a meeting (caller supplies userId) and advance the lead to the 'meeting' stage.
+ *  Returns false, booking nothing, when the lead isn't the user's. */
+export async function bookMeeting(userId: string, agentId: string, leadId: string, whenAtIso: string, whenLabel: string, title = "Meeting"): Promise<boolean> {
+  if (!isDbConfigured()) return false;
   const db = getDb();
+  const [owned] = await db.select({ id: leads.id }).from(leads).where(and(eq(leads.id, leadId), eq(leads.userId, userId))).limit(1);
+  if (!owned) return false;
   await db.insert(meetings).values({ userId, agentId, leadId, title, whenAt: new Date(whenAtIso), whenLabel });
   await db.update(leads).set({ status: "meeting", updatedAt: new Date() }).where(and(eq(leads.id, leadId), eq(leads.userId, userId)));
+  return true;
 }
 
 /** Book a meeting for a lead directly (from the lead modal): parse the time,
@@ -82,7 +86,7 @@ export async function listMeetings(): Promise<MeetingDTO[]> {
     id: meetings.id, agentId: meetings.agentId, leadId: meetings.leadId, title: meetings.title,
     whenAt: meetings.whenAt, whenLabel: meetings.whenLabel, createdAt: meetings.createdAt, leadName: leads.name,
   }).from(meetings)
-    .innerJoin(leads, eq(meetings.leadId, leads.id))
+    .innerJoin(leads, and(eq(meetings.leadId, leads.id), eq(leads.userId, userId)))
     .where(eq(meetings.userId, userId)).orderBy(asc(meetings.whenAt));
   return rows.map((r) => ({
     id: r.id, agentId: r.agentId, leadId: r.leadId, leadName: r.leadName, title: r.title,

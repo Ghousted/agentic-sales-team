@@ -1,40 +1,34 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box } from "@/components/primitives";
 import { buildCalendarFromMeetings, buildMonthGrid } from "@/lib/calendar";
 import type { MeetingDTO } from "@/lib/meetings/store";
 
-const WEEK_LABELS = ["Last week", "This week", "Next week", "In 2 weeks"];
-
 export default function CalendarClient({ initialEvents }: { initialEvents: MeetingDTO[] }) {
   const { agents } = useApp();
   const events = initialEvents;
-  const cal = useMemo(() => buildCalendarFromMeetings(events, agents), [events, agents]);
   const [view, setView] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
+  // Dates come from the browser clock after mount, never the server's timezone.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  const cal = useMemo(
+    () => buildCalendarFromMeetings(events, agents, now ? { now, weekOffset } : undefined),
+    [events, agents, now, weekOffset]
+  );
 
-  const dayNums = (() => {
-    const base = new Date();
-    const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7) + weekOffset * 7);
-    return cal.dayLabels.map((_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return String(d.getDate());
-    });
-  })();
-  const weekLabel = WEEK_LABELS[Math.min(Math.max(weekOffset + 1, 0), WEEK_LABELS.length - 1)];
-
-  const now = new Date();
-  const monthDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const monthYear = now ? new Date(now.getFullYear(), now.getMonth() + monthOffset, 1) : null;
+  const y = monthYear?.getFullYear();
+  const m = monthYear?.getMonth();
   const month = useMemo(
-    () => buildMonthGrid(cal.events, monthDate.getFullYear(), monthDate.getMonth()),
-    [cal.events, monthDate.getFullYear(), monthDate.getMonth()]
+    () => (y === undefined || m === undefined ? { label: "", weeks: [] } : buildMonthGrid(cal.events, y, m)),
+    [cal.events, y, m]
   );
 
   const isWeek = view === "week";
-  const periodLabel = isWeek ? weekLabel : month.label;
+  const periodLabel = isWeek ? cal.weekLabel : month.label;
   const prev = () => (isWeek ? setWeekOffset((o) => o - 1) : setMonthOffset((o) => o - 1));
   const next = () => (isWeek ? setWeekOffset((o) => o + 1) : setMonthOffset((o) => o + 1));
   const reset = () => (isWeek ? setWeekOffset(0) : setMonthOffset(0));
@@ -77,7 +71,7 @@ export default function CalendarClient({ initialEvents }: { initialEvents: Meeti
             {cal.dayLabels.map((label, i) => (
               <div key={i} style={css("text-align:center;padding-bottom:10px;border-bottom:1px solid #F0F0F3")}>
                 <div style={css("font-size:11px;color:#A1AEBE;font-weight:600")}>{label}</div>
-                <div style={css("font-size:14px;font-weight:700;color:#18181B;margin-top:2px")}>{dayNums[i]}</div>
+                <div style={css("font-size:14px;font-weight:700;color:#18181B;margin-top:2px")}>{cal.dayNums[i]}</div>
               </div>
             ))}
             {cal.weekRows.map((row, ri) => (

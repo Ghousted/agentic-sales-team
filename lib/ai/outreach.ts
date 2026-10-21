@@ -1,9 +1,9 @@
 import "server-only";
-// The outreach engine: one structured Gemini call per lead that qualifies
+// The outreach engine: one structured LLM call per lead that qualifies
 // (score + stage) and drafts personalized outreach — a formal email when the
 // lead has an email, or a short platform DM when it only has a profile. Uses
 // the lead's research brief when present. Pure — no DB.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, OutreachResult, ResearchBrief } from "@/lib/leads/types";
 import type { ProductDTO } from "@/lib/products/store";
 
@@ -43,11 +43,11 @@ export async function draftOutreach(
   const channel: "email" | "dm" = hasEmail ? "email" : "dm";
   const first = lead.name.split(" ")[0] || "there";
 
-  if (!isGeminiConfigured()) {
+  if (!isAIConfigured()) {
     if (hasEmail) {
-      return { score: 60, stage: "contacted", subject: `An idea for ${lead.company || "your team"}`, body: `Dear ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title ? lead.title + "s" : "leaders"} on ${agent.goal}, and I believe there may be a worthwhile opportunity for ${lead.company || "your team"}. Would you be open to a brief 15-minute call next week to explore it?\n\nKind regards,\n${agent.name}`, rationale: "Fallback draft (Gemini not configured)." };
+      return { score: 60, stage: "contacted", subject: `An idea for ${lead.company || "your team"}`, body: `Dear ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title ? lead.title + "s" : "leaders"} on ${agent.goal}, and I believe there may be a worthwhile opportunity for ${lead.company || "your team"}. Would you be open to a brief 15-minute call next week to explore it?\n\nKind regards,\n${agent.name}`, rationale: "Fallback draft (AI not configured)." };
     }
-    return { score: 55, stage: "contacted", subject: `Message to ${first}`, body: `Hello ${first}, I'm ${agent.name}. I work on ${agent.goal}, and I came across your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""}. I'd welcome the chance to have a brief conversation if you're open to it.`, rationale: "Fallback DM (Gemini not configured)." };
+    return { score: 55, stage: "contacted", subject: `Message to ${first}`, body: `Hello ${first}, I'm ${agent.name}. I work on ${agent.goal}, and I came across your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""}. I'd welcome the chance to have a brief conversation if you're open to it.`, rationale: "Fallback DM (AI not configured)." };
   }
 
   const researchBlock = lead.research
@@ -61,7 +61,7 @@ export async function draftOutreach(
     role: "user",
     text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\n${contact}${researchBlock}${productBlock}`,
   }];
-  const r = await geminiJSON<OutreachResult>(systemPrompt(agent, channel, lead.platform), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
+  const r = await aiJSON<OutreachResult>(systemPrompt(agent, channel, lead.platform), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
   return {
     score: typeof r.score === "number" ? r.score : 50,
     stage: r.stage || "contacted",

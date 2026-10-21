@@ -1,9 +1,9 @@
 import "server-only";
 // The user's Products & Services catalog: CSV import + CRUD + pgvector semantic
-// search. Embeddings via Gemini (see EMBED_MODEL). Agents' source of truth.
+// search. Embeddings via OpenRouter (see EMBED_MODEL). Agents' source of truth.
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb, isDbConfigured, products, productFolders } from "@/lib/db";
-import { geminiEmbed, geminiEmbedBatch } from "@/lib/ai/gemini";
+import { aiEmbed, aiEmbedBatch } from "@/lib/ai/openrouter";
 
 export interface ProductDTO { id: string; name: string; description: string; price: string; category: string; folderId: string | null; attributes: Record<string, string> }
 export interface ProductInput { name: string; description?: string; price?: string; category?: string; folderId?: string | null; attributes?: Record<string, string> }
@@ -62,7 +62,7 @@ export async function addProduct(userId: string, input: ProductInput): Promise<(
   let embedding: number[] | null = null;
   let warning: string | undefined;
   try {
-    embedding = await geminiEmbed(embedText(input));
+    embedding = await aiEmbed(embedText(input));
   } catch (e) {
     warning = notIndexed(1, (e as Error).message);
     console.error("[products] embedding failed:", (e as Error).message);
@@ -133,7 +133,7 @@ export async function importProductsCsv(userId: string, csvText: string, folderI
     inputs.push({ ...fields, attributes });
   }
   if (inputs.length === 0) return { added: 0, error: "No rows with a 'name' column found." };
-  const { vectors, error: embedError } = await geminiEmbedBatch(inputs.map(embedText));
+  const { vectors, error: embedError } = await aiEmbedBatch(inputs.map(embedText));
   const values = inputs.map((p, i) => ({ userId, folderId: folderId ?? null, name: p.name, description: p.description ?? "", price: p.price ?? "", category: p.category ?? "", attributes: p.attributes ?? {}, embedding: vectors[i] ?? null }));
   const missing = vectors.filter((v) => !v).length;
   if (embedError) console.error("[products] import embedding failed:", embedError);
@@ -156,7 +156,7 @@ export async function reembedProducts(userId: string, opts?: { onlyMissing?: boo
   const where = opts?.onlyMissing ? and(eq(products.userId, userId), isNull(products.embedding)) : eq(products.userId, userId);
   const rows = (await db.select(PRODUCT_COLS).from(products).where(where)).map(toDTO);
   if (rows.length === 0) return { embedded: 0, failed: 0 };
-  const { vectors, error } = await geminiEmbedBatch(rows.map(embedText));
+  const { vectors, error } = await aiEmbedBatch(rows.map(embedText));
   let embedded = 0;
   for (let i = 0; i < rows.length; i += 25) {
     const writes = rows.slice(i, i + 25).flatMap((r, j) => {
@@ -211,7 +211,7 @@ export async function searchProducts(userId: string, query: string, k = 5): Prom
   if (!any) return []; // empty catalog → skip the embedding call
   let vec: number[] | null = null;
   try {
-    vec = await geminiEmbed(query, "RETRIEVAL_QUERY");
+    vec = await aiEmbed(query, "search_query");
   } catch (e) {
     console.error("[products] query embedding failed, using keyword search:", (e as Error).message);
   }

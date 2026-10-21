@@ -133,6 +133,8 @@ export const leads = pgTable("leads", {
   profileUrl: text("profile_url"),
   platform: text("platform"),
   research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),
+  // Set by the qualify stage. Separate from `score`, which assess and outreach also write.
+  qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

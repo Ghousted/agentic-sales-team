@@ -2,7 +2,7 @@ import "server-only";
 // All persistence for the leads/outreach domain. Plain async functions so the
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
-import { and, desc, eq, inArray, asc } from "drizzle-orm";
+import { and, desc, eq, inArray, asc, isNull } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
@@ -428,7 +428,7 @@ export async function applyResearchResult(userId: string, agentId: string, lead:
   await db.insert(activity).values({ userId, agentId, type: "lead_researched", leadId: lead.id, text: `Researched ${lead.name}` });
 }
 
-/** Pick the agent's teammate-book leads not yet qualified (score = 0), or the
+/** Pick the agent's teammate-book leads not yet qualified (no qualifiedAt), or the
  *  given ids, oldest first, capped. Standalone (not layered on
  *  pickLeadsForResearch) because that helper's null-research filter would
  *  wrongly exclude leads that were researched but never scored. */
@@ -441,7 +441,7 @@ export async function pickLeadsForQualify(userId: string, agentId: string, leadI
       .limit(batchSize);
   }
   return db.select().from(leads)
-    .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"), eq(leads.score, 0)))
+    .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"), isNull(leads.qualifiedAt)))
     .orderBy(asc(leads.createdAt))
     .limit(batchSize);
 }
@@ -450,7 +450,8 @@ export async function pickLeadsForQualify(userId: string, agentId: string, leadI
 export async function applyQualifyResult(userId: string, agentId: string, lead: LeadRow, result: QualifyResult): Promise<void> {
   const db = getDb();
   const score = Math.max(1, Math.min(100, Math.round(result.score)));
-  await db.update(leads).set({ score, updatedAt: new Date() })
+  const now = new Date();
+  await db.update(leads).set({ score, qualifiedAt: now, updatedAt: now })
     .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name} — ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
 }

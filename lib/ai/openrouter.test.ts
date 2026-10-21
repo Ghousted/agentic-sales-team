@@ -10,6 +10,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   process.env.OPENROUTER_API_KEY = "test-key";
   delete process.env.OPENROUTER_MODEL;
+  delete process.env.OPENROUTER_BASE_URL;
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -43,6 +44,13 @@ describe("aiGenerate", () => {
     fetchMock.mockResolvedValue(reply("hi"));
     await aiGenerate("sys", []);
     expect(call().body.model).toBe("anthropic/claude-haiku-4.5");
+  });
+
+  it("sends calls to OPENROUTER_BASE_URL when set", async () => {
+    process.env.OPENROUTER_BASE_URL = "https://gateway.example.com/v1/";
+    fetchMock.mockResolvedValue(reply("hi"));
+    await aiGenerate("sys", []);
+    expect(call().url).toBe("https://gateway.example.com/v1/chat/completions");
   });
 
   it("throws on an HTTP error, an in-body error and an empty reply", async () => {

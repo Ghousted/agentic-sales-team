@@ -1,6 +1,6 @@
 "use client";
 // Top-bar global search: live results across agents and teams.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
@@ -16,10 +16,12 @@ interface Result {
   go: () => void;
 }
 
-export default function GlobalSearch({ compact = false }: { compact?: boolean }) {
+export default function GlobalSearch({ compact = false, autoFocus = false }: { compact?: boolean; autoFocus?: boolean }) {
   const { s, set, agents, teams } = useApp();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
   const q = s.search.trim().toLowerCase();
 
   const results: Result[] = [];
@@ -40,6 +42,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
       <div style={css(compact ? "height:40px;display:flex;align-items:center;gap:12px;background:transparent;border-radius:10px;padding:0 12px;min-width:0" : "height:45px;display:flex;align-items:center;gap:8px;background:#F4F4F5;border-radius:99px;padding:0 18px;min-width:0")}>
         {compact ? <i className="icon-search" aria-hidden="true" style={{ fontSize: 17, color: "#4a5565" }} /> : <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>}
         <input
+          ref={inputRef}
           aria-label="Search agents and teams"
           value={s.search}
           onChange={(e) => set({ search: e.target.value })}

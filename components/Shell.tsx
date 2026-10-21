@@ -9,6 +9,7 @@ import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
 import InboxBell from "./InboxBell";
+import { hasUnread, loadRead, saveRead, sameRead, syncRead, type ReadCounts } from "./unread";
 
 // Lucide "calendar" (not in the design's icon-font subset).
 const CalendarIcon = ({ size = 17 }: { size?: number }) => (
@@ -53,6 +54,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const open = s.sidebarOpen;
   const [pm, setPm] = useState(false);
   const pmRef = useRef<HTMLDivElement>(null);
+  const [focusSearch, setFocusSearch] = useState(false);
+  // Messages seen per conversation; null until loaded from storage (no dots before then).
+  const [read, setRead] = useState<ReadCounts | null>(null);
+  const readUser = s.userEmail || s.userName;
+  const viewing = path.startsWith("/chats") ? s.convId : null;
+
+  useEffect(() => { setRead(loadRead(readUser)); }, [readUser]);
+  useEffect(() => {
+    if (!read) return;
+    const next = syncRead(read, s.chats, viewing);
+    if (!sameRead(read, next)) { setRead(next); saveRead(readUser, next); }
+  }, [read, s.chats, viewing, readUser]);
 
   useEffect(() => {
     if (!pm) return;
@@ -80,10 +93,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
               <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Sales Team</span>
             </Box>
-            <Btn onClick={() => set({ sidebarOpen: false })} aria-label="Collapse sidebar" title="Collapse sidebar" style="width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eef0f3;color:#101418"><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></Btn>
+            <Btn onClick={() => { setFocusSearch(false); set({ sidebarOpen: false }); }} aria-label="Collapse sidebar" title="Collapse sidebar" style="width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eef0f3;color:#101418"><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></Btn>
           </div>
           <div style={css("padding:4px 10px 0;display:flex;flex-direction:column;gap:2px")}>
-            <GlobalSearch compact />
+            <GlobalSearch compact autoFocus={focusSearch} />
             <Btn onClick={() => router.push("/")} style={ROW + ";" + bg(path === "/")} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name="square-pen" /></span>New chat</Btn>
             {NAV.map((nv) => (
               <Btn key={nv.href} onClick={() => router.push(nv.href)} style={ROW + ";" + bg(isActive(nv.href, path))} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name={nv.icon} /></span>{nv.label}</Btn>
@@ -95,7 +108,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {teams.length === 0 && <div style={css("padding:6px 12px;font-size:14px;color:#6b7686")}>No chats yet</div>}
             {teams.map((t, i) => {
               const cur = path.startsWith("/chats") && s.convId === t.id;
-              const msgs = s.chats[t.id], last = msgs && msgs[msgs.length - 1], dot = !!last && last.who !== "me" && !cur;
+              const dot = !!read && !cur && hasUnread(s.chats[t.id], read[t.id]);
               return (
                 <Btn key={t.id} onClick={() => openChat(t.id)} aria-current={cur ? "page" : undefined} style={{ ...css("position:relative;width:100%;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 12px;border:0;border-radius:10px;text-align:left;cursor:pointer;transition:background .12s,transform .1s;animation:cUp .25s ease-out backwards"), background: cur ? "#eceef1" : "transparent", animationDelay: i * 0.03 + "s" }} styleHover="background:#eceef1">
                   <span style={css("width:18px;height:18px;flex:none;border-radius:50%;background:" + t.iconBg + ";font-size:10px;display:flex;align-items:center;justify-content:center")}>{t.icon}</span>
@@ -141,11 +154,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <nav aria-label="Main" style={css("width:64px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0")}>
           <Btn onClick={() => set({ sidebarOpen: true })} aria-label="Expand sidebar" title="Expand sidebar" style="width:34px;height:34px;margin-bottom:14px;padding:0;border:0;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat;cursor:pointer;transition:transform .12s" styleHover="transform:scale(1.06)" />
           <Btn onClick={() => router.push("/")} aria-label="New chat" title="New chat" style={RAIL_BTN + ";background:" + (path === "/" ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="square-pen" size={18} /></Btn>
-          <Btn onClick={() => set({ sidebarOpen: true })} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>
+          <Btn onClick={() => { setFocusSearch(true); set({ sidebarOpen: true }); }} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>
           {NAV.map((nv) => (
             <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} /></Btn>
           ))}
-          <Btn onClick={() => set({ sidebarOpen: true })} aria-label="Chats" title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} /></Btn>
+          <Btn onClick={() => router.push("/chats")} aria-label="Chats" title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} /></Btn>
           <div style={{ flex: 1 }} />
           <Btn onClick={() => router.push("/settings")} aria-label="Workspace" title="Workspace" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><span style={css("width:26px;height:26px;border-radius:7px;background:#101418;color:#ffffff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{wsInitial}</span></Btn>
           <Btn onClick={doLogout} aria-label="Log out" title="Log out" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="log-out" size={18} /></Btn>

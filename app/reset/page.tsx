@@ -1,6 +1,6 @@
 "use client";
-// Password-reset landing page, reached from the link surfaced by "Forgot
-// password?". Validates the token, then lets the user set a new password.
+// Password-reset landing page for a reset link. Self-serve reset is off until the
+// app can email links, so new links aren't issued; any other token shows "invalid".
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { validateResetToken, resetPassword } from "@/lib/auth/actions";
@@ -25,7 +25,6 @@ function ResetInner() {
   const token = params.get("token") || "";
 
   const [state, setState] = useState<"checking" | "invalid" | "form" | "done">("checking");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -35,12 +34,7 @@ function ResetInner() {
     let live = true;
     validateResetToken(token).then((res) => {
       if (!live) return;
-      if (res.ok) {
-        setEmail(res.email || "");
-        setState("form");
-      } else {
-        setState("invalid");
-      }
+      setState(res.ok ? "form" : "invalid");
     });
     return () => { live = false; };
   }, [token]);
@@ -69,7 +63,7 @@ function ResetInner() {
         {state === "invalid" && (
           <div style={css("display:flex;flex-direction:column;gap:20px;width:100%;text-align:center")}>
             <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Link expired or invalid</div>
-            <div style={css("font-size:15px;color:#535862;line-height:22px")}>This password reset link is no longer valid. Request a new one from the login screen.</div>
+            <div style={css("font-size:15px;color:#535862;line-height:22px")}>This password reset link is no longer valid. Contact support to reset your password.</div>
             <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Back to login</Btn>
           </div>
         )}
@@ -78,7 +72,7 @@ function ResetInner() {
           <div style={css("display:flex;flex-direction:column;gap:24px;width:100%")}>
             <div style={css("display:flex;flex-direction:column;gap:10px;text-align:center")}>
               <div style={css("font-size:28px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Set a new password</div>
-              <div style={css("font-size:15px;color:#535862;line-height:22px")}>{email ? "For " + email : "Choose a new password for your account."}</div>
+              <div style={css("font-size:15px;color:#535862;line-height:22px")}>Choose a new password for your account.</div>
             </div>
             <div style={css("display:flex;flex-direction:column;gap:16px;width:100%")}>
               <div style={css("display:flex;flex-direction:column;gap:6px;width:100%")}>

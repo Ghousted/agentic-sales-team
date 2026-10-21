@@ -48,13 +48,12 @@ export default function Login() {
   const [ok, setOk] = useState(false);
   const [swap, setSwap] = useState(0);
 
-  // Forgot-password sub-flow (no email infra: surface the reset link on-screen).
+  // Forgot-password sub-flow. Self-serve reset is off until the app can email a link.
   const [forgot, setForgot] = useState(false);
   const [resetDone, setResetDone] = useState(false);
-  const [resetPath, setResetPath] = useState<string | null>(null);
 
   const fail = (msg: string) => { setError(msg); setErrKey((k) => k + 1); };
-  const openForgot = (e: React.MouseEvent) => { e.preventDefault(); setError(""); setResetDone(false); setResetPath(null); setForgot(true); setSwap((n) => n + 1); };
+  const openForgot = (e: React.MouseEvent) => { e.preventDefault(); setError(""); setResetDone(false); setForgot(true); setSwap((n) => n + 1); };
   const closeForgot = () => { setError(""); setForgot(false); setSwap((n) => n + 1); };
   const switchMode = () => { setError(""); setSwap((n) => n + 1); set({ authMode: isSignup ? "login" : "signup" }); };
 
@@ -66,7 +65,6 @@ export default function Login() {
     const res = await requestPasswordReset({ email });
     setLoading(false);
     if (!res.ok) return fail(res.error || "Something went wrong. Please try again.");
-    setResetPath(res.resetPath ?? null);
     setResetDone(true);
   };
 
@@ -86,7 +84,7 @@ export default function Login() {
 
   const sc = isSignup ? strength(password) : 0;
   const title = forgot ? "Reset your password" : isSignup ? "Create your account" : "Welcome back";
-  const sub = forgot ? "Enter your work email and we’ll give you a link to set a new password." : isSignup ? "Set up your workspace and meet your first agent in a few minutes." : "Log in to see what your agents did while you were away.";
+  const sub = forgot ? "Enter your work email and we’ll tell you how to get back in." : isSignup ? "Set up your workspace and meet your first agent in a few minutes." : "Log in to see what your agents did while you were away.";
   const cta = ok ? (isSignup ? "Account created" : "Logged in") : loading ? (isSignup ? "Creating account…" : "Logging in…") : isSignup ? "Create account" : "Log in";
   const focus = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#006aff"; e.currentTarget.style.boxShadow = "0 0 0 4px rgba(0,106,255,.14)"; };
   const blur = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#dfe3e9"; e.currentTarget.style.boxShadow = "none"; };
@@ -126,14 +124,13 @@ export default function Login() {
                 <form onSubmit={sendReset} noValidate style={css("margin-top:28px;display:flex;flex-direction:column;gap:16px")}>
                   {resetDone ? (
                     <div style={css("padding:14px;border-radius:12px;background:#f2f7ff;font-size:14.5px;line-height:1.55;color:#2a313b;animation:cUp .2s ease-out backwards")}>
-                      If an account exists for that email, it can now be reset.
-                      {resetPath && <> <a href={resetPath} style={css("color:#006aff;font-weight:500")}>Set a new password</a>.</>}
+                      Self-serve password reset isn’t available yet. If an account exists for that email, contact support and we’ll reset it for you.
                     </div>
                   ) : (
                     <>
                       <Field label="Work email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={focus} onBlur={blur} autoComplete="email" placeholder="you@company.com" style={css(INPUT)} /></Field>
                       {errorBox}
-                      {primary(loading ? "Sending…" : "Send reset link", loading)}
+                      {primary(loading ? "Checking…" : "Continue", loading)}
                     </>
                   )}
                   <p style={css("margin:10px 0 0;font-size:15px;color:#4a5565;text-align:center")}>

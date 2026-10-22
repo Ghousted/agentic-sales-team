@@ -1,12 +1,12 @@
 // Synchronous scrape runner (Vercel Node route). Claims a queued scrape job, discovers
-// public prospects via Firecrawl + Gemini (lib/scrape/firecrawl), writes them as PENDING
+// public prospects via Firecrawl + LLM (lib/scrape/firecrawl), writes them as PENDING
 // leads, and finishes the job — all in one ≤60s invocation. Replaces the Python worker.
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecrawl";
-import { isGeminiConfigured } from "@/lib/ai/gemini";
+import { isAIConfigured } from "@/lib/ai/openrouter";
 import { addScrapedLeads } from "@/lib/leads/store";
 import { chainNext } from "@/lib/pod/orchestrate";
 import { reapStaleJobs, withDeadline, SCRAPE_TIMEOUT_MS } from "@/lib/jobs/runtime";
@@ -36,10 +36,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scraping isn't configured (FIRECRAWL_API_KEY)." }, { status: 400 });
   }
 
-  if (!isGeminiConfigured()) {
-    await db.update(jobs).set({ status: "failed", error: "GEMINI_API_KEY not set (needed to extract prospects).", finishedAt: new Date() })
+  if (!isAIConfigured()) {
+    await db.update(jobs).set({ status: "failed", error: "OPENROUTER_API_KEY not set (needed to extract prospects).", finishedAt: new Date() })
       .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)));
-    return NextResponse.json({ error: "Lead extraction isn't configured (GEMINI_API_KEY)." }, { status: 400 });
+    return NextResponse.json({ error: "Lead extraction isn't configured (OPENROUTER_API_KEY)." }, { status: 400 });
   }
 
   // Atomic claim: only one invocation proceeds.

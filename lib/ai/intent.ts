@@ -1,7 +1,7 @@
 import "server-only";
 // Natural-language intent detection for the team group chat: a message → the
-// capability the user wants + any scrape params. One Gemini JSON call.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+// capability the user wants + any scrape params. One LLM JSON call.
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 
 export interface Intent {
   capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "qualify" | "proposal" | "enrich" | "match" | "assess" | "status" | "chat" | "unknown";
@@ -49,10 +49,10 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
 }
 
 export async function detectIntent(message: string, agents: { name: string; capabilities: string[] }[]): Promise<Intent> {
-  if (!isGeminiConfigured()) return { capability: "chat", params: {}, summary: message.slice(0, 60) };
+  if (!isAIConfigured()) return { capability: "chat", params: {}, summary: message.slice(0, 60) };
   const turns: Turn[] = [{ role: "user", text: message }];
   try {
-    const r = await geminiJSON<Intent>(systemPrompt(agents), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 400, temperature: 0.2 });
+    const r = await aiJSON<Intent>(systemPrompt(agents), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 400, temperature: 0.2 });
     return {
       capability: r.capability ?? "unknown",
       params: r.params ?? {},

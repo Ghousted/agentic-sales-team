@@ -18,10 +18,10 @@ const STALE_GRACE_MS = 60_000;
 export const RUN_LEAD_BUDGET_MS = 180_000;
 /** Don't claim another job after this long in /api/jobs/run. */
 export const RUN_CLAIM_BUDGET_MS = 120_000;
-/** One lead (product search + Gemini call + save). Gemini has its own 30s timeout;
+/** One lead (product search + LLM call + save). the AI client has its own 30s timeout;
  *  this also covers the embedding call, which has none. */
 export const LEAD_TIMEOUT_MS = 75_000;
-/** The Firecrawl + Gemini scrape, leaving time to save leads inside 60s. */
+/** The Firecrawl + LLM scrape, leaving time to save leads inside 60s. */
 export const SCRAPE_TIMEOUT_MS = 45_000;
 
 /** How long a job of this kind may stay 'running' before it is reaped. */

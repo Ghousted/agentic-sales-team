@@ -1,8 +1,8 @@
 import "server-only";
 // Public-web lead discovery for the scrape capability: Firecrawl /v2/search fetches
-// public pages for an ICP query, then Gemini extracts structured Prospects. Replaces
+// public pages for an ICP query, then LLM extracts structured Prospects. Replaces
 // the browser-use worker. Runs synchronously inside a Node route (Vercel Hobby-safe).
-import { geminiJSON, isGeminiConfigured, type Turn } from "@/lib/ai/gemini";
+import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 
 export interface Prospect {
   name: string;
@@ -63,7 +63,7 @@ const PLAN_SCHEMA = {
  * posts. The instruction IS the targeting (what/who/where). Platform-aware. */
 async function planSearch(instruction: string, agentGoal: string): Promise<{ query: string; platform: string }> {
   const fallback = { query: buildQuery(agentGoal), platform: "web" };
-  if (!isGeminiConfigured()) return fallback;
+  if (!isAIConfigured()) return fallback;
   const system = [
     "You write ONE simple web search in the BUYER'S OWN VOICE to surface PUBLIC POSTS where a potential buyer expresses intent — the phrases people actually post: 'looking to buy', 'LF' (looking for), 'want to buy', 'anyone selling', 'recommend a', 'need a'.",
     "Compose it from the specifics in the instruction (what they want, and any location).",
@@ -73,7 +73,7 @@ async function planSearch(instruction: string, agentGoal: string): Promise<{ que
     "Return JSON { query, platform }.",
   ].filter(Boolean).join("\n");
   try {
-    const r = await geminiJSON<{ query: string; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 200, temperature: 0.15 });
+    const r = await aiJSON<{ query: string; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 200, temperature: 0.15 });
     return { query: (r.query || fallback.query).slice(0, 490), platform: (r.platform || "web").toLowerCase() };
   } catch {
     return fallback;
@@ -101,7 +101,7 @@ const PROSPECTS_SCHEMA = {
 /** Extract BUYER prospects (people showing intent / companies to sell to) from
  * public post/page content — not vendors, competitors, directories, or articles. */
 async function extractProspects(targetDesc: string, sells: string, results: SearchResult[], target: number, platformHint: string): Promise<Prospect[]> {
-  if (!isGeminiConfigured() || results.length === 0) return [];
+  if (!isAIConfigured() || results.length === 0) return [];
   const corpus = results
     .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`)
     .join("\n\n---\n\n")
@@ -129,7 +129,7 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
   ].filter(Boolean).join("\n");
   const turns: Turn[] = [{ role: "user", text: corpus }];
   try {
-    const r = await geminiJSON<{ prospects: Prospect[] }>(system, turns, PROSPECTS_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 1500, temperature: 0.3 });
+    const r = await aiJSON<{ prospects: Prospect[] }>(system, turns, PROSPECTS_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 1500, temperature: 0.3 });
     return (r.prospects ?? []).filter((p) => p && p.name).slice(0, target);
   } catch {
     return [];

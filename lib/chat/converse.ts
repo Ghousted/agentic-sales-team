@@ -4,8 +4,8 @@ import "server-only";
 // command. The responding agent answers with knowledge of its own persona, its
 // teammates, and what the platform can do — so "how do you assess leads?" or
 // "how do you guys scrape the web?" get real answers, not a canned line.
-// Falls back to a canned line when Gemini isn't configured or errors.
-import { geminiGenerate, isGeminiConfigured, type Turn } from "@/lib/ai/gemini";
+// Falls back to a canned line when AI isn't configured or errors.
+import { aiGenerate, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { CAPABILITIES } from "@/lib/agentTypes";
 
 interface Responder { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
@@ -43,7 +43,7 @@ function systemPrompt(responder: Responder, roster: RosterMember[]): string {
   ].join("\n");
 }
 
-/** Recent thread → Gemini turns: user = "me", agents/system = the model side.
+/** Recent thread → LLM turns: user = "me", agents/system = the model side.
  *  Drops system lines, drops leading model turns, and merges adjacent same-role
  *  turns (a team thread has many consecutive agent messages) so the transcript
  *  is user-led and well-formed for the API. */
@@ -67,7 +67,7 @@ export async function converse(input: {
   message: string;
 }): Promise<string> {
   const { responder, roster, history, message } = input;
-  if (!isGeminiConfigured()) return FALLBACK;
+  if (!isAIConfigured()) return FALLBACK;
   try {
     const turns = toTurns(history.slice(-10));
     const last = turns[turns.length - 1];
@@ -76,9 +76,9 @@ export async function converse(input: {
     if (!last || last.role !== "user" || last.text !== message) {
       turns.push({ role: "user", text: message });
     }
-    return await geminiGenerate(systemPrompt(responder, roster), turns);
+    return await aiGenerate(systemPrompt(responder, roster), turns);
   } catch (e) {
-    console.error("[converse] Gemini failed, using fallback:", e);
+    console.error("[converse] AI call failed, using fallback:", e);
     return FALLBACK;
   }
 }

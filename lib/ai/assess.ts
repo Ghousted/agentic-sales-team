@@ -1,8 +1,8 @@
 import "server-only";
 // Lead assessment: judge whether a freshly-scraped lead genuinely fits the
 // agent's goal (a real prospect to sell to), so the good ones can be
-// auto-accepted and clear misses dropped. Pure — no DB. One Gemini JSON call.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+// auto-accepted and clear misses dropped. Pure — no DB. One LLM JSON call.
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, AssessResult, ResearchBrief } from "@/lib/leads/types";
 
 const SCHEMA = {
@@ -15,13 +15,13 @@ const SCHEMA = {
   required: ["accept", "score", "reason"],
 } as const;
 
-/** Assess one lead against the agent's goal. On no Gemini / error, accept it
+/** Assess one lead against the agent's goal. On no AI key / error, accept it
  *  (fail-open — the scraper already filtered) with a neutral note. */
 export async function assessLead(
   agent: AgentSnapshot,
   lead: { name: string; title: string; company: string; research?: ResearchBrief | null },
 ): Promise<AssessResult> {
-  if (!isGeminiConfigured()) return { accept: true, reason: "Auto-accepted (assessment not configured).", score: 50 };
+  if (!isAIConfigured()) return { accept: true, reason: "Auto-accepted (assessment not configured).", score: 50 };
   const system = [
     `You are ${agent.name}, screening a newly-found lead before your team works it.`,
     `Your goal / who you sell to: ${agent.goal || agent.role || "(general prospects)"}.`,
@@ -31,7 +31,7 @@ export async function assessLead(
   const rb = lead.research ? `\nResearch: ${lead.research.summary}` : "";
   const turns: Turn[] = [{ role: "user", text: `Lead:\nName: ${lead.name}\nIntent/title: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}` }];
   try {
-    const r = await geminiJSON<AssessResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.2 });
+    const r = await aiJSON<AssessResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.2 });
     return { accept: !!r.accept, score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))), reason: (r.reason ?? "").trim() };
   } catch {
     return { accept: true, reason: "Auto-accepted (assessment unavailable).", score: 50 };

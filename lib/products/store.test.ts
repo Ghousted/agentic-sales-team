@@ -28,8 +28,8 @@ vi.mock("@/lib/db", async () => {
   };
 });
 
-const gemini = vi.hoisted(() => ({ geminiEmbed: vi.fn(), geminiEmbedBatch: vi.fn() }));
-vi.mock("@/lib/ai/gemini", () => gemini);
+const ai = vi.hoisted(() => ({ aiEmbed: vi.fn(), aiEmbedBatch: vi.fn() }));
+vi.mock("@/lib/ai/openrouter", () => ai);
 
 import { addProduct, importProductsCsv, reembedProducts, searchProducts } from "./store";
 
@@ -39,20 +39,20 @@ const has = (c: Chain, name: string, arg?: unknown) => c.calls.some((x) => x.nam
 beforeEach(() => {
   db.queries = [];
   db.respond = () => [];
-  gemini.geminiEmbed.mockReset();
-  gemini.geminiEmbedBatch.mockReset();
+  ai.aiEmbed.mockReset();
+  ai.aiEmbedBatch.mockReset();
 });
 
 describe("searchProducts", () => {
   it("falls back to keyword search when the query can't be embedded", async () => {
-    gemini.geminiEmbed.mockRejectedValue(new Error("Gemini embed 404"));
+    ai.aiEmbed.mockRejectedValue(new Error("OpenRouter embed 404"));
     db.respond = (c) => (has(c, "limit", 1) ? [{ id: "p1" }] : has(c, "limit", 50) ? [row("p2", "Pool condo")] : [row("recent", "Recent")]);
     const res = await searchProducts("u1", "condo with pool");
     expect(res.map((p) => p.id)).toEqual(["p2"]);
   });
 
   it("includes keyword matches for rows that have no embedding", async () => {
-    gemini.geminiEmbed.mockResolvedValue([1, 0]);
+    ai.aiEmbed.mockResolvedValue([1, 0]);
     db.respond = (c) =>
       has(c, "limit", 1) ? [{ id: "p1" }]
       : has(c, "orderBy") ? [row("v1", "Vector hit")]
@@ -60,13 +60,13 @@ describe("searchProducts", () => {
       : [];
     const res = await searchProducts("u1", "pool condo");
     expect(res.map((p) => p.id)).toEqual(["v1", "k1"]);
-    expect(gemini.geminiEmbed).toHaveBeenCalledWith("pool condo", "RETRIEVAL_QUERY");
+    expect(ai.aiEmbed).toHaveBeenCalledWith("pool condo", "search_query");
   });
 });
 
 describe("addProduct", () => {
   it("saves the product and returns a warning when embedding fails", async () => {
-    gemini.geminiEmbed.mockRejectedValue(new Error("Gemini embed 429: quota"));
+    ai.aiEmbed.mockRejectedValue(new Error("OpenRouter embed 429: quota"));
     db.respond = () => [row("p1", "Widget")];
     const res = await addProduct("u1", { name: "Widget" });
     expect(res?.id).toBe("p1");
@@ -76,7 +76,7 @@ describe("addProduct", () => {
 
 describe("importProductsCsv", () => {
   it("reports rows saved without an embedding", async () => {
-    gemini.geminiEmbedBatch.mockResolvedValue({ vectors: [[1], null], error: "Gemini embed 500" });
+    ai.aiEmbedBatch.mockResolvedValue({ vectors: [[1], null], error: "OpenRouter embed 500" });
     const res = await importProductsCsv("u1", "name\nA\nB\n");
     expect(res.added).toBe(2);
     expect(res.warning).toMatch(/^1 product could not be indexed.*500/);
@@ -88,10 +88,10 @@ describe("importProductsCsv", () => {
 
 describe("reembedProducts", () => {
   it("re-embeds every row and counts failures", async () => {
-    gemini.geminiEmbedBatch.mockResolvedValue({ vectors: [[1], null, [2]], error: "Gemini embed 500" });
+    ai.aiEmbedBatch.mockResolvedValue({ vectors: [[1], null, [2]], error: "OpenRouter embed 500" });
     db.respond = (c) => (c.op === "select" ? [row("a", "A"), row("b", "B"), row("c", "C")] : []);
     const res = await reembedProducts("u1");
-    expect(res).toEqual({ embedded: 2, failed: 1, error: "Gemini embed 500" });
+    expect(res).toEqual({ embedded: 2, failed: 1, error: "OpenRouter embed 500" });
     const updates = db.queries.filter((q) => q.op === "update");
     expect(updates.map((u) => (u.calls.find((c) => c.name === "set")!.args[0] as { embedding: number[] }).embedding)).toEqual([[1], [2]]);
   });

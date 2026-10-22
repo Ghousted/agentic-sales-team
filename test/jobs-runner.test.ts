@@ -39,7 +39,7 @@ vi.mock("@/lib/ai/outreach", () => ({ draftOutreach: vi.fn() }));
 vi.mock("@/lib/ai/qualify", () => ({ qualifyLead: vi.fn() }));
 vi.mock("@/lib/ai/proposal", () => ({ draftProposal: vi.fn() }));
 vi.mock("@/lib/ai/match", () => ({ matchLead: vi.fn() }));
-vi.mock("@/lib/ai/gemini", () => ({ isGeminiConfigured: () => true }));
+vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true }));
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []), addProposal: vi.fn() }));
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []), addMatches: vi.fn() }));
 vi.mock("@/lib/products/store", () => ({ searchProducts: vi.fn(async () => []) }));

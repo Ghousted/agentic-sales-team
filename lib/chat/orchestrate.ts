@@ -45,7 +45,7 @@ async function allAgents(userId: string): Promise<{ id: string; name: string; ca
   return created.concat(seed.filter((a) => !seen.has(a.id)));
 }
 
-// Heuristic backstop so status queries work even if Gemini mis-labels them.
+// Heuristic backstop so status queries work even if the model mis-labels them.
 const looksLikeStatus = (m: string): boolean =>
   /\b(update|updates|status|progress|how('?s| is| are| goes| going)|going|working on|doing|done yet|finished|any news|where.*(at|up to)|what'?s happening)\b/i.test(m);
 

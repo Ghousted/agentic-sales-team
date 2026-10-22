@@ -27,7 +27,7 @@ vi.mock("@/lib/auth/session", () => ({ getSession: async () => null }));
 vi.mock("@/lib/scrape/firecrawl", () => ({ runFirecrawlScrape: vi.fn(async () => [{ name: "P" }]), isFirecrawlConfigured: () => true }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true }));
 vi.mock("@/lib/leads/store", () => ({ addScrapedLeads: vi.fn(async () => ["l1", "l2", "l3"]) }));
-vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}) }));
+vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a) }));
 
 const scrapeJob = (id: string, userId: string, extra: Record<string, unknown> = {}) => ({
   id, userId, agentId: "a1", kind: "scrape", status: "queued", params: { target: 5, pod: true, teamId: "t1", ...extra },
@@ -71,6 +71,28 @@ describe("GET /api/cron/scrape", () => {
     // The live timeline: the save step was written while the job still ran.
     expect(fake.state.updates.some((u) => !u.status && (u.result as { steps?: unknown[] })?.steps?.length)).toBe(true);
     expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
+  });
+
+  it("files a team scrape's leads under the owner the team picks, and still credits the runner", async () => {
+    const { GET } = await cronRoute();
+    const { addScrapedLeads } = await import("@/lib/leads/store");
+    const { chainNext, leadOwnerForTeam } = await import("@/lib/pod/orchestrate");
+    vi.mocked(leadOwnerForTeam).mockResolvedValueOnce("as1"); // a1 is from another team
+    fake.state.selects = [[scrapeJob("s1", "u2")]];
+    await GET(cronReq("Bearer s3cret"));
+    expect(vi.mocked(leadOwnerForTeam)).toHaveBeenCalledWith("u2", "t1", "a1");
+    expect(vi.mocked(addScrapedLeads).mock.calls[0][1]).toBe("as1");
+    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
+  });
+
+  it("keeps a non-team scrape's leads with the agent that ran it", async () => {
+    const { GET } = await cronRoute();
+    const { addScrapedLeads } = await import("@/lib/leads/store");
+    const { leadOwnerForTeam } = await import("@/lib/pod/orchestrate");
+    fake.state.selects = [[scrapeJob("s1", "u2", { pod: false, teamId: null })]];
+    await GET(cronReq("Bearer s3cret"));
+    expect(vi.mocked(leadOwnerForTeam)).not.toHaveBeenCalled();
+    expect(vi.mocked(addScrapedLeads).mock.calls[0][1]).toBe("a1");
   });
 
   it("marks the job failed with the reason when the scrape throws", async () => {

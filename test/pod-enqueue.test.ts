@@ -26,7 +26,7 @@ vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => [])
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []) }));
 vi.mock("@/lib/chat/teamMessages", () => ({ postTeamMessage: vi.fn(async () => {}), userFirstName: vi.fn(async () => "Sam") }));
 
-import { chainNext, enqueuePodStage } from "@/lib/pod/orchestrate";
+import { chainNext, enqueuePodStage, leadOwnerForTeam } from "@/lib/pod/orchestrate";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { postTeamMessage } from "@/lib/chat/teamMessages";
 
@@ -94,5 +94,31 @@ describe("chainNext", () => {
     await chainNext("u1", "t1", "scrape", 2, "s1", ids);
     expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "s1", `I found 2 new leads. @Ava, please review them. ⟦leads:${ids.join(",")}⟧`]);
     expect(fake.state.inserts).toHaveLength(1);
+  });
+});
+
+describe("leadOwnerForTeam", () => {
+  const assessor = { ...agentRow, id: "as1", name: "Ava", capabilities: ["assess"] };
+
+  it("keeps the leads with a runner who is on the team", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["s1", "as1"]);
+    expect(await leadOwnerForTeam("u1", "t1", "s1")).toBe("s1");
+  });
+
+  it("gives an outsider's leads to the team's assessor, so the assess stage can see them", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["a1", "as1"]);
+    fake.state.selects = [[agentRow], [], [], [assessor], [], []]; // memberWithCapability(assess)
+    expect(await leadOwnerForTeam("u1", "t1", "s1")).toBe("as1");
+  });
+
+  it("falls back to the first member when the team has no assessor", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["a1"]);
+    fake.state.selects = [[agentRow], [], []];
+    expect(await leadOwnerForTeam("u1", "t1", "s1")).toBe("a1");
+  });
+
+  it("keeps the leads with the runner when the team has no members", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue([]);
+    expect(await leadOwnerForTeam("u1", "t1", "s1")).toBe("s1");
   });
 });

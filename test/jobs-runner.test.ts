@@ -44,7 +44,7 @@ vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () =
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []), addMatches: vi.fn() }));
 vi.mock("@/lib/products/store", () => ({ searchProducts: vi.fn(async () => []) }));
 vi.mock("@/lib/scrape/firecrawl", () => ({ runFirecrawlScrape: vi.fn(), isFirecrawlConfigured: () => true }));
-vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}) }));
+vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a) }));
 
 import { POST as runJobs } from "@/app/api/jobs/run/route";
 import { POST as runScrape } from "@/app/api/scrape/route";

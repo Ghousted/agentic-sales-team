@@ -35,7 +35,7 @@ vi.mock("@/lib/ai/match", () => ({ matchLead: vi.fn() }));
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []), addProposal: vi.fn() }));
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []), addMatches: vi.fn() }));
 vi.mock("@/lib/products/store", () => ({ searchProducts: vi.fn(async () => []) }));
-vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}) }));
+vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a) }));
 
 const agent = { id: "a1", name: "Ann", role: "", goal: "", task: "" };
 const researchJob = (id: string, userId: string) => ({

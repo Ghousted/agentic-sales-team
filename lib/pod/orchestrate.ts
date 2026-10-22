@@ -79,6 +79,16 @@ export async function memberWithCapability(userId: string, teamId: string, capab
   return null;
 }
 
+/** Who owns the leads a pod scrape finds. When no teammate can scrape, chat
+ *  routes the scrape to an agent from another team. Its leads would then belong
+ *  to that agent, where this team's assessor and book can't see them, so they go
+ *  to the team's assessor, else its first member. A member keeps its own leads. */
+export async function leadOwnerForTeam(userId: string, teamId: string, actorId: string): Promise<string> {
+  const members = await membersOfTeam(userId, teamId);
+  if (members.length === 0 || members.includes(actorId)) return actorId;
+  return (await memberWithCapability(userId, teamId, "assess")) ?? members[0];
+}
+
 export async function approvalMode(userId: string, agentId: string, capability: string): Promise<"auto" | "ask"> {
   if (!isDbConfigured()) return "auto";
   const [row] = await getDb().select().from(agentConfig).where(and(eq(agentConfig.userId, userId), eq(agentConfig.agentId, agentId))).limit(1);

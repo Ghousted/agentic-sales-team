@@ -15,6 +15,9 @@ import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, askWhat
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { getDb, isDbConfigured, messages } from "@/lib/db";
+import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS } from "@/lib/jobs/limits";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
@@ -79,6 +82,14 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   if (!userId) return { messages: [{ who: "system", text: "Not signed in." }] };
   const text = (message || "").trim();
   if (!text) return { messages: [] };
+  // Each message goes to the intent model, so an over-long one is refused, and so
+  // is any past the daily cap. Neither is stored; the client shows the notice locally.
+  if (text.length > MAX_CHAT_MESSAGE_CHARS) {
+    return { messages: [{ who: "system", text: `That message is too long. Keep it under ${MAX_CHAT_MESSAGE_CHARS} characters.` }] };
+  }
+  if ((await sentToday(userId)) >= DAILY_CHAT_MESSAGE_QUOTA) {
+    return { messages: [{ who: "system", text: `You've reached today's limit of ${DAILY_CHAT_MESSAGE_QUOTA} messages. Try again tomorrow.` }] };
+  }
 
   // Read the context before storing this message, so "since the user's last
   // message" means since the previous one.
@@ -87,6 +98,14 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   const res = await reply(userId, teamId, text, leadIds, history, safeTimeZone(timeZone));
   if (!res.messages.length && !res.job) res.messages.push({ who: "system", text: "No one picked that up. Try @mentioning an agent on this team." });
   return { ...res, messages: await insertTeamMessages(userId, teamId, res.messages) };
+}
+
+/** Messages this user has sent, in any chat, in the quota window. */
+async function sentToday(userId: string): Promise<number> {
+  if (!isDbConfigured()) return 0;
+  const [r] = await getDb().select({ n: sql<number>`count(*)::int` }).from(messages)
+    .where(and(eq(messages.userId, userId), eq(messages.who, "me"), gte(messages.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
+  return Number(r?.n ?? 0);
 }
 
 async function reply(userId: string, teamId: string, message: string, leadIds: string[] | undefined, history: StoredMsg[], tz: string): Promise<TeamChatResult> {

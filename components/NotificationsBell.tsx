@@ -9,6 +9,7 @@ import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { liveAgentCount } from "@/lib/agents/derive";
+import { usePolling } from "@/lib/usePolling";
 
 const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
@@ -34,7 +35,8 @@ function LiveCount({ style }: { style: string }) {
 export default function NotificationsBell() {
   const { byId, showToast } = useApp();
   const [open, setOpen] = useState(false);
-  const [seen, setSeen] = useState(false);
+  // Ids on screen the last time the panel was opened. Anything newer counts as unread.
+  const [seen, setSeen] = useState<Set<string>>(() => new Set());
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on click outside the bell + panel. Use "click" (not "mousedown") so a
@@ -49,23 +51,34 @@ export default function NotificationsBell() {
   }, [open]);
 
   const [acts, setActs] = useState<NotificationItem[]>([]);
-  useEffect(() => { listNotifications(12).then(setActs); }, []);
+  // Agents log activity in the background, so re-read every 30 s and on focus.
+  // A dismiss or clear bumps the generation, so a fetch that started before it
+  // can't bring the cleared rows back.
+  const gen = useRef(0);
+  usePolling(async () => {
+    const g = gen.current;
+    const next = await listNotifications(12);
+    if (g === gen.current) setActs(next);
+  }, 30_000);
   const items = acts.map((f) => ({ f, a: byId(f.agentId) })).filter((x) => x.a);
-  const unread = !seen && items.length > 0;
+  const newCount = items.filter((x) => !seen.has(x.f.id)).length;
+  const unread = newCount > 0;
 
   const toggle = () => {
     setOpen((o) => !o);
-    setSeen(true);
+    setSeen(new Set(items.map((x) => x.f.id)));
   };
 
   // Clearing is a soft-hide: the row leaves the bell but stays in the activity
   // log, so the dashboard/analytics/calendar are unaffected. Update state first
   // for an instant response, then persist.
   const dismiss = (id: string) => {
+    gen.current++;
     setActs((prev) => prev.filter((a) => a.id !== id));
     dismissNotification(id).catch(() => {});
   };
   const clearAll = () => {
+    gen.current++;
     setActs([]);
     clearAllNotifications()
       .then((n) => { if (n > 0) showToast(`Cleared ${n} notification${n === 1 ? "" : "s"}`); })
@@ -76,7 +89,7 @@ export default function NotificationsBell() {
     <div ref={ref} style={css("position:relative;flex:none")}>
       <Box
         onClick={toggle}
-        aria-label={unread ? items.length + " new notifications" : "Notifications"}
+        aria-label={unread ? newCount + " new notifications" : "Notifications"}
         style="position:relative;width:40px;height:40px;border-radius:50%;background:#F2F4F7;display:flex;align-items:center;justify-content:center;color:#006AFF;cursor:pointer"
         styleHover="background:#D6E6FF"
       >
@@ -84,7 +97,7 @@ export default function NotificationsBell() {
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {unread && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #F2F4F7")}>{items.length}</span>}
+        {unread && <span style={css("position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#F43F7E;color:#fff;font-size:10px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;border:2px solid #F2F4F7")}>{newCount}</span>}
       </Box>
 
       {open && (

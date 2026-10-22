@@ -1,11 +1,12 @@
 "use server";
 // Job queue: enqueue an outreach run (a `jobs` row) and read job status.
 // The run itself is done by POST /api/jobs/run (a Node route handler).
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import type { AgentSnapshot } from "@/lib/leads/types";
+import { limitJobSize, jobQuotaError, QUOTA_WINDOW_MS } from "./limits";
 
 // Callers still send a whole snapshot; only its id is read.
 type AgentRef = Pick<AgentSnapshot, "id"> & Partial<AgentSnapshot>;
@@ -28,10 +29,21 @@ export async function enqueueJob(input: { agent: AgentRef; kind: string; capabil
   if (!info.capabilities.includes(input.kind)) {
     return { error: "This agent can't run " + input.kind + "." };
   }
+  // Size and quota are checked here, where every user-started job is created, so
+  // neither the run route nor the cron can be handed a job that skipped them.
+  const size = limitJobSize(input);
+  if ("error" in size) return size;
+  const db = getDb();
+  const [recent] = await db.select({
+    total: sql<number>`count(*)::int`,
+    scrapes: sql<number>`(count(*) filter (where ${jobs.kind} = 'scrape'))::int`,
+  }).from(jobs).where(and(eq(jobs.userId, userId), gte(jobs.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
+  const quota = jobQuotaError(input.kind, { total: Number(recent?.total ?? 0), scrapes: Number(recent?.scrapes ?? 0) });
+  if (quota) return { error: quota };
   const agent = { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task };
-  const [row] = await getDb().insert(jobs).values({
+  const [row] = await db.insert(jobs).values({
     userId, agentId: agent.id, kind: input.kind, status: "queued",
-    params: { agent, leadIds: input.leadIds ?? null, batchSize: input.batchSize ?? 5, target: input.target ?? 10, instruction: input.instruction ?? null, pod: input.pod ?? false, teamId: input.teamId ?? null },
+    params: { agent, leadIds: size.leadIds, batchSize: size.batchSize, target: size.target, instruction: size.instruction, pod: input.pod === true, teamId: typeof input.teamId === "string" ? input.teamId : null },
   }).returning({ id: jobs.id });
   return { jobId: row.id };
 }

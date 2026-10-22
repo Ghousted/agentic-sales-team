@@ -1,20 +1,27 @@
 "use client";
-// Top-bar global search: live results across agents and teams.
+// Top-bar global search: live results across agents, teams, leads and products.
+// Agents and teams are filtered client-side; leads and products come from a
+// capped server search, debounced so typing doesn't fire a query per key.
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
+import { searchRecords } from "@/lib/search/actions";
+import type { SearchResults } from "@/lib/search/store";
 import { av } from "@/lib/visuals";
 import { css, Box } from "./primitives";
 
 interface Result {
   key: string;
-  type: "Agent" | "Team";
+  type: "Agent" | "Team" | "Lead" | "Product";
   title: string;
   subtitle: string;
   avatar: string; // inline style for the leading swatch/avatar
   initials?: string;
   go: () => void;
 }
+
+const TILE = "width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;";
+const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 
 export default function GlobalSearch({ compact = false, autoFocus = false }: { compact?: boolean; autoFocus?: boolean }) {
   const { s, set, agents, teams } = useApp();
@@ -23,6 +30,18 @@ export default function GlobalSearch({ compact = false, autoFocus = false }: { c
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
   const q = s.search.trim().toLowerCase();
+  const [remote, setRemote] = useState<{ q: string; r: SearchResults } | null>(null);
+
+  useEffect(() => {
+    if (q.length < 2) return;
+    let live = true;
+    const t = setTimeout(() => {
+      searchRecords(q)
+        .catch((e): SearchResults => { console.error("[search] failed:", e); return { leads: [], products: [] }; })
+        .then((r) => { if (live) setRemote({ q, r }); });
+    }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [q]);
 
   const results: Result[] = [];
   if (q) {
@@ -32,6 +51,15 @@ export default function GlobalSearch({ compact = false, autoFocus = false }: { c
     }
     for (const t of teams.filter((t) => has(t.name, t.desc, t.goal)).slice(0, 4)) {
       results.push({ key: "t:" + t.id, type: "Team", title: t.name, subtitle: t.desc, avatar: "width:28px;height:28px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:15px;background:" + t.iconBg, initials: t.icon, go: () => router.push("/teams/" + t.id) });
+    }
+    // Only show server hits for the current query, never a previous one.
+    if (remote?.q === q) {
+      for (const l of remote.r.leads) {
+        results.push({ key: "l:" + l.id, type: "Lead", title: l.title, subtitle: l.subtitle, avatar: TILE + "background:#EAF2FF;color:#006AFF;font-size:11px;font-weight:700", initials: initialsOf(l.title), go: () => router.push("/leads") });
+      }
+      for (const p of remote.r.products) {
+        results.push({ key: "p:" + p.id, type: "Product", title: p.title, subtitle: p.subtitle, avatar: TILE + "background:#F4F4F5;color:#3F3F46;font-size:11px;font-weight:700", initials: initialsOf(p.title), go: () => router.push("/products") });
+      }
     }
   }
 
@@ -43,13 +71,13 @@ export default function GlobalSearch({ compact = false, autoFocus = false }: { c
         {compact ? <i className="icon-search" aria-hidden="true" style={{ fontSize: 17, color: "#4a5565" }} /> : <span aria-hidden="true" style={{ fontSize: "16px", color: "#A1A1AA" }}>⌕</span>}
         <input
           ref={inputRef}
-          aria-label="Search agents and teams"
+          aria-label="Search agents, teams, leads and products"
           value={s.search}
           onChange={(e) => set({ search: e.target.value })}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => { if (e.key === "Escape") { (e.target as HTMLInputElement).blur(); } }}
-          placeholder={compact ? "Search" : "Search agents, teams…"}
+          placeholder={compact ? "Search" : "Search agents, teams, leads…"}
           style={css("flex:1;border:none;outline:none;background:transparent;font-size:" + (compact ? "14px" : "13px") + ";color:#18181B;min-width:0")}
         />
       </div>
@@ -57,7 +85,7 @@ export default function GlobalSearch({ compact = false, autoFocus = false }: { c
       {showDropdown && (
         <div style={css("position:absolute;top:" + (compact ? "42px;width:300px" : "52px;right:0") + ";left:0;background:#fff;border:1px solid #ECECF1;border-radius:14px;box-shadow:0 12px 32px rgba(24,24,27,.12);padding:6px;z-index:40;max-height:60vh;overflow-y:auto")}>
           {results.length === 0 ? (
-            <div style={css("padding:14px 12px;font-size:12.5px;color:#A1A1AA")}>No matches for “{s.search.trim()}”</div>
+            <div style={css("padding:14px 12px;font-size:12.5px;color:#A1A1AA")}>{q.length >= 2 && remote?.q !== q ? "Searching…" : <>No matches for “{s.search.trim()}”</>}</div>
           ) : (
             results.map((r) => (
               <Box

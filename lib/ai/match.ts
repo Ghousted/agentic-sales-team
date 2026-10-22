@@ -3,6 +3,7 @@ import "server-only";
 // via searchProducts), pick the listings that genuinely fit. Each has a 0-100
 // fit score and a one-line reason. Pure (no DB). One LLM JSON call.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
+import { untrusted, UNTRUSTED_RULE } from "./untrusted";
 import type { AgentSnapshot, MatchResult, ResearchBrief } from "@/lib/leads/types";
 import type { ProductDTO } from "@/lib/products/store";
 
@@ -40,10 +41,11 @@ export async function matchLead(
     "From the candidate listings below, return ONLY the ones that actually fit the prospect's stated intent (budget, location, type, size, etc.). Do not include poor fits. Never force a match.",
     "For each fitting listing: score its fit from 0 to 100 (100 = ideal), and give a ONE-line reason tying the listing to the prospect's need, naming the specific factor (e.g. budget or location).",
     "Order best fit first. Use productId values ONLY from the list below. Never invent an id. Return ONLY JSON { matches: [{ productId, score, reason }] }.",
+    UNTRUSTED_RULE,
     "\nCandidate listings:\n" + catalog,
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
-  const turns: Turn[] = [{ role: "user", text: `Prospect:\nName: ${lead.name}\nIntent: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}` }];
+  const turns: Turn[] = [{ role: "user", text: `Prospect:\n${untrusted(`Name: ${lead.name}\nIntent: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}`)}` }];
   const r = await aiJSON<{ matches: MatchResult[] }>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.3 });
   const valid = new Set(listings.map((p) => p.id));
   return (r.matches ?? [])

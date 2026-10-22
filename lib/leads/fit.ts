@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, isDbConfigured, leads } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { aiJSON, isAIConfigured } from "@/lib/ai/openrouter";
+import { untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { agentInfo } from "@/lib/pod/orchestrate";
 
 const SCHEMA = {
@@ -33,6 +34,7 @@ export async function ensureFitReason(leadId: string): Promise<string> {
     `The salesperson sells / is looking for: ${goal}.`,
     "Write fit: ONE short line (under 20 words). Use only the facts given about the lead. Name the concrete reason (their need, role, industry, size or location). If the facts show no clear fit, say what is missing, for example 'No clear training need shown; a large IT services firm in Manila.'",
     "Return JSON { fit }.",
+    UNTRUSTED_RULE,
   ].join("\n");
   const facts = [
     `Name: ${lead.name}`,
@@ -42,7 +44,7 @@ export async function ensureFitReason(leadId: string): Promise<string> {
     lead.research?.summary ? `Research: ${lead.research.summary}` : "",
   ].filter(Boolean).join("\n");
   try {
-    const r = await aiJSON<{ fit?: string }>(system, [{ role: "user", text: facts }], SCHEMA as unknown as Record<string, unknown>, { maxTokens: 120, temperature: 0.2 });
+    const r = await aiJSON<{ fit?: string }>(system, [{ role: "user", text: untrusted(facts) }], SCHEMA as unknown as Record<string, unknown>, { maxTokens: 120, temperature: 0.2 });
     const fit = (r.fit ?? "").trim().slice(0, 300);
     if (!fit) return "";
     // Only fill an empty reason: the Assessor may have written one meanwhile.

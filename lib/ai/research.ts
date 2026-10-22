@@ -2,6 +2,7 @@ import "server-only";
 // The research engine: one structured LLM call per lead that produces a
 // personalization brief. Pure (no DB). Mirrors lib/ai/outreach.ts.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
+import { untrusted, UNTRUSTED_RULE } from "./untrusted";
 import type { AgentSnapshot, ResearchBrief } from "@/lib/leads/types";
 
 const SCHEMA = {
@@ -23,6 +24,7 @@ function systemPrompt(a: AgentSnapshot): string {
     `Reason from the prospect's title, company, and platform using what you know about that kind of company and role.`,
     `Return: a 2-3 sentence summary; 3-5 likely priorities or pain points; 3-5 specific personalization hooks a rep could reference; and one recommended outreach angle.`,
     `Be concrete and specific. Do not use generic filler. Return ONLY JSON matching the schema.`,
+    UNTRUSTED_RULE,
   ].join(" ");
 }
 
@@ -37,7 +39,7 @@ export async function draftResearch(agent: AgentSnapshot, lead: { name: string; 
   }
   const turns: Turn[] = [{
     role: "user",
-    text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\nPlatform: ${lead.platform || "(unknown)"}`,
+    text: `Prospect:\n${untrusted(`Name: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}`)}\nPlatform: ${lead.platform || "(unknown)"}`,
   }];
   const r = await aiJSON<ResearchBrief>(systemPrompt(agent), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
   return {

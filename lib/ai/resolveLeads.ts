@@ -2,6 +2,7 @@ import "server-only";
 // Interpret a free-text reply to Outreach's "who should I write to?" against the
 // user's actual leads → which lead ids they mean (or all / none). One LLM call.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
+import { untrusted, UNTRUSTED_RULE } from "./untrusted";
 import type { TeamLeadPick } from "@/lib/leads/types";
 
 export interface TargetResolution { mode: "all" | "some" | "none"; leadIds: string[] }
@@ -44,8 +45,9 @@ export async function resolveTargetLeads(reply: string, leads: TeamLeadPick[]): 
     "- mode='some' if they name or describe specific lead(s); set leadIds to the matching id(s) from the list ONLY.",
     "- mode='none' if you cannot tell which (a vague pointer like 'this'/'that one' with no detail, or unrelated). leadIds: [].",
     "Match on name, title, company, or platform. NEVER invent ids. Use only ids from the list.",
+    UNTRUSTED_RULE,
     "LEADS:",
-    list,
+    untrusted(list),
   ].join("\n");
   try {
     const r = await aiJSON<TargetResolution>(system, [{ role: "user", text: reply }] as Turn[], SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.15 });

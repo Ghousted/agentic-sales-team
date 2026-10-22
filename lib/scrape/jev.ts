@@ -6,6 +6,7 @@ import "server-only";
 // each request, and that model writes the JSON answer.
 // Fails open: when a call fails or the time budget runs out, the result is kept.
 import { aiJSON, isAIConfigured } from "@/lib/ai/openrouter";
+import { untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 
 export interface GateResult { title?: string; description?: string; url?: string }
 
@@ -44,6 +45,7 @@ function systemFor(mode: Mode, sells: string, wants: string): string {
       "You get ONE LinkedIn search result (a company page or a person's profile).",
       "competitor: true if this company or person offers, advertises or delivers the same kind of product or service as the salesperson (a competitor, agency, consultant or vendor of it). false if they would buy or use it, or are in a different business.",
       "Return JSON { competitor }.",
+      UNTRUSTED_RULE,
     ].join("\n");
   }
   return [
@@ -54,6 +56,7 @@ function systemFor(mode: Mode, sells: string, wants: string): string {
     "- seller: the author offers, promotes or advertises their own product or service of this kind, or describes what their company provides ('At <company>, we build ...', 'DM me', 'we help teams ...').",
     "- other: news, an article, an opinion, a discussion, a job post, or a question with no wish to buy.",
     "Return JSON { side }.",
+    UNTRUSTED_RULE,
   ].join("\n");
 }
 
@@ -81,7 +84,7 @@ export async function gateResults<T extends GateResult>(
       if (left <= 0) return;
       const i = next++;
       const r = results[i];
-      const text = `URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}`;
+      const text = untrusted(`URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}`);
       try {
         const a = await aiJSON<GateAnswer>(system, [{ role: "user", text }], SCHEMAS[ctx.mode], {
           model: GATE_MODEL, maxTokens: 60, temperature: 0, timeoutMs: Math.min(GATE_TIMEOUT_MS, left),

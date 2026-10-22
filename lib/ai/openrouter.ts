@@ -3,9 +3,7 @@
 import "server-only";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
-const DEFAULT_BASE = "https://openrouter.ai/api/v1";
-// OPENROUTER_BASE_URL points calls at an OpenAI-compatible gateway in front of OpenRouter.
-const apiBase = () => (process.env.OPENROUTER_BASE_URL || DEFAULT_BASE).replace(/\/+$/, "");
+const API_BASE = "https://openrouter.ai/api/v1";
 
 const authHeaders = (key: string) => ({
   "Content-Type": "application/json",
@@ -37,7 +35,7 @@ const toMessages = (system: string, turns: Turn[]) => [
 ];
 
 async function chat(body: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${apiBase()}/chat/completions`, {
+  const res = await fetch(`${API_BASE}/chat/completions`, {
     method: "POST",
     headers: authHeaders(apiKey()),
     body: JSON.stringify({
@@ -111,7 +109,7 @@ function toUnitVector(values: unknown): number[] {
 
 /** One /embeddings call. Returns the vectors' raw values in input order. */
 async function embedFetch(texts: string[], inputType: EmbedTask): Promise<unknown[]> {
-  const res = await fetch(`${apiBase()}/embeddings`, {
+  const res = await fetch(`${API_BASE}/embeddings`, {
     method: "POST",
     headers: authHeaders(apiKey()),
     body: JSON.stringify({

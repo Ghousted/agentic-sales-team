@@ -57,7 +57,6 @@ Create `.env.local` (git-ignored):
 | `OPENROUTER_API_KEY` | optional | Enables all AI features. Without it, engines return canned output. |
 | `FIRECRAWL_API_KEY` | optional | Enables the `scrape` capability (find leads from the public web). |
 | `OPENROUTER_MODEL` | optional | Override the chat/JSON model (default `google/gemini-2.5-flash`). |
-| `OPENROUTER_BASE_URL` | optional | Send AI calls through an OpenAI-compatible gateway instead of `https://openrouter.ai/api/v1`. |
 
 The app **degrades gracefully**: it boots and is usable with no database, no OpenRouter key, and no Firecrawl key.
 

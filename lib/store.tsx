@@ -10,6 +10,12 @@ import { teamChat, reportTeamJob } from "./chat/actions";
 import type { ThreadMsg } from "./chat/thread";
 import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
+// Ticked ids in the create-team modal that are still real agents. A stale id
+// (a deleted agent, or a leftover default) is neither counted nor saved.
+export function selectedMembers(tSel: Record<string, boolean>, agents: Pick<Agent, "id">[]): string[] {
+  return agents.filter((a) => tSel[a.id]).map((a) => a.id);
+}
+
 interface WizardState {
   wStep: number;
   wName: string;
@@ -85,7 +91,7 @@ const initialState: State = {
   hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", toastError: false, paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
-  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom", tGapName: {},
+  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {},
   toggles: { t0: true, t1: true, t2: false },
   workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
@@ -470,7 +476,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     if (creating.current) return null;
     const cur = sRef.current;
     const name = cur.tName.trim() || "New Team";
-    const members = Object.keys(cur.tSel).filter((k) => cur.tSel[k]);
+    const members = selectedMembers(cur.tSel, agents);
     const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
       id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#EAF2FF",
@@ -490,7 +496,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {} }));
     showToast(name + " created");
     return id;
-  }, [set, showToast, showError]);
+  }, [agents, set, showToast, showError]);
 
   const createAgent = useCallback(async () => {
     if (creating.current) return;

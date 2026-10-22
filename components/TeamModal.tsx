@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useApp } from "@/lib/store";
+import { useApp, selectedMembers } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
 import { TEAM_TEMPLATES, templateById, AGENT_TYPES, type Capability } from "@/lib/agentTypes";
@@ -10,7 +10,8 @@ const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 export default function TeamModal() {
   const { s, set, agents, createTeam, quickCreateAgent } = useApp();
   const router = useRouter();
-  const selCount = Object.keys(s.tSel).filter((k) => s.tSel[k]).length;
+  const selectedIds = selectedMembers(s.tSel, agents);
+  const selCount = selectedIds.length;
   const close = () => set({ showTeamModal: false });
 
   return (
@@ -90,7 +91,6 @@ export default function TeamModal() {
           {(() => {
             const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
             if (!req.length) return null;
-            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
             const covered = new Set<string>();
             for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
             return (
@@ -108,7 +108,6 @@ export default function TeamModal() {
 
           {(() => {
             const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
-            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
             const covered = new Set<string>();
             for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
             const gaps = req.filter((c) => !covered.has(c));

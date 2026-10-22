@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const ai = vi.hoisted(() => ({ aiJSON: vi.fn(), configured: false }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => ai.configured, aiJSON: ai.aiJSON }));
 
-import { briefFromRequest, readScrapeAnswer, ruleAnswer } from "./scrapeBrief";
+import { briefFromRequest, readScrapeAnswer, ruleAnswer, withLastSearch } from "./scrapeBrief";
 
 describe("briefFromRequest", () => {
   it("takes the place and count from intent detection", () => {
@@ -63,5 +63,31 @@ describe("readScrapeAnswer", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     ai.aiJSON.mockRejectedValueOnce(new Error("OpenRouter 500"));
     expect(await readScrapeAnswer("Ohio, 12", { what: "dentists" }, ["where", "count"])).toEqual({ where: "Ohio", count: 12 });
+  });
+});
+
+describe("withLastSearch", () => {
+  const last = { what: "find AI training buyers", where: "Metro Manila Philippines" };
+
+  it("does not take 'look for more' as who to find", () => {
+    expect(briefFromRequest("Lets look for more @Nina", {}).what).toBeUndefined();
+  });
+
+  it("repeats the last who and where for 'look for more'", () => {
+    expect(withLastSearch(briefFromRequest("Lets look for more @Nina", {}), "Lets look for more @Nina", last))
+      .toEqual({ what: last.what, where: last.where, count: undefined, again: true });
+  });
+
+  it("keeps a new place given with 'more'", () => {
+    expect(withLastSearch({ where: "Cebu" }, "find more in Cebu", last)).toMatchObject({ what: last.what, where: "Cebu", again: true });
+  });
+
+  it("offers the last values when the request names no target", () => {
+    expect(withLastSearch({}, "yes", last)).toEqual({ suggest: last });
+  });
+
+  it("leaves a request with its own target alone", () => {
+    expect(withLastSearch({ what: "dentists" }, "find dentists", last)).toEqual({ what: "dentists" });
+    expect(withLastSearch({}, "yes", null)).toEqual({});
   });
 });

@@ -3,9 +3,9 @@ import { drizzle } from "drizzle-orm/pg-proxy";
 import * as schema from "@/lib/db/schema";
 
 // The fake database answers only the "messages sent today" count.
-const db = drizzle(async (sql) => ({ rows: /^select count/.test(sql) ? [[0]] : [] }), { schema });
+const db = drizzle(async (sql) => ({ rows: /^select count/.test(sql) ? [[0]] : /from "jobs"/.test(sql) ? state.lastJobs : [] }), { schema });
 const scout = { id: "s1", name: "Ava Reyes", role: "Scout", goal: "find buyers", task: "", capabilities: ["scrape"] };
-const state = vi.hoisted(() => ({ history: [] as { id: number; who: string; text: string }[] }));
+const state = vi.hoisted(() => ({ history: [] as { id: number; who: string; text: string }[], lastJobs: [] as unknown[][] }));
 
 vi.mock("@/lib/db", async (importActual) => ({ ...(await importActual<typeof import("@/lib/db")>()), isDbConfigured: () => true, getDb: () => db }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
@@ -18,7 +18,8 @@ vi.mock("./orchestrate", () => ({
   parseMentions: () => [],
   resolve: async () => ({ actor: scout, capability: "scrape", messages: [{ who: "s1", text: "Understood. I'm finding leads now." }] }),
 }));
-vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "job-1" })) }));
+const JOB_ID = "33333333-3333-4333-8333-333333333333";
+vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "33333333-3333-4333-8333-333333333333" })) }));
 vi.mock("./teamMessages", () => ({
   listTeamMessages: async () => state.history,
   insertTeamMessages: vi.fn(async (_u: string, _t: string, msgs: { who: string; text: string }[]) => msgs.map((m, i) => ({ id: 100 + i, ...m }))),
@@ -31,6 +32,8 @@ vi.mock("@/lib/meetings/store", () => ({ bookMeeting: async () => false, meeting
 const { teamChat } = await import("./actions");
 const { detectIntent } = await import("@/lib/ai/intent");
 const { enqueueJob } = await import("@/lib/jobs/actions");
+const { stripMarkers } = await import("./thread");
+const { runIdFrom } = await import("@/lib/scrape/steps");
 
 function intent(capability: string, params: Record<string, unknown> = {}) {
   vi.mocked(detectIntent).mockResolvedValueOnce({ capability, params, summary: "" } as never);
@@ -42,6 +45,7 @@ function agentSaid(text: string) {
 
 beforeEach(() => {
   state.history = [];
+  state.lastJobs = [];
   team.members = ["s1"];
   vi.mocked(enqueueJob).mockClear();
 });
@@ -67,8 +71,9 @@ describe("scrape clarifying questions", () => {
       kind: "scrape", target: 15, pod: true, teamId: "t1",
       instruction: "Look for business in linkedin looking for an ai training provider. Location: Austin.",
     });
-    expect(res.job).toEqual({ id: "job-1", kind: "scrape", agentId: "s1" });
-    expect(res.messages[0].text).toBe([
+    expect(res.job).toEqual({ id: JOB_ID, kind: "scrape", agentId: "s1" });
+    expect(runIdFrom(res.messages[0].text)).toBe(JOB_ID); // the live timeline
+    expect(stripMarkers(res.messages[0].text)).toBe([
       "Understood. I am starting the search:",
       "• Looking for: Look for business in linkedin looking for an ai training provider",
       "• Where: Austin",
@@ -129,7 +134,7 @@ describe("scrape clarifying questions", () => {
     intent("scrape");
     const res = await teamChat("t1", scrapeAnswerText({ where: "Metro Manila Philippines", count: "5" }));
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 5, instruction: "find businesses that need AI training. Location: Metro Manila Philippines." });
-    expect(res.messages[0].text).not.toMatch(/·|⟦/);
+    expect(stripMarkers(res.messages[0].text)).not.toMatch(/·|⟦/);
   });
 
   it("never searches for a card answer's text", async () => {
@@ -138,6 +143,25 @@ describe("scrape clarifying questions", () => {
     const res = await teamChat("t1", scrapeAnswerText({ where: "Manila", count: "5" }));
     expect(enqueueJob).not.toHaveBeenCalled();
     expect(res.messages[0].text).toMatch(/Who should I look for\?/);
+  });
+
+  it("asks only how many for 'look for more', with the last search's who and where", async () => {
+    state.lastJobs = [[{ teamId: "t1", instruction: "find AI training buyers. Location: Metro Manila Philippines." }]];
+    intent("scrape");
+    const res = await teamChat("t1", "Lets look for more @Nina");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/^I will search again for find AI training buyers, in Metro Manila Philippines\. One detail first\.\nHow many leads/);
+    agentSaid(res.messages[0].text);
+    intent("chat");
+    await teamChat("t1", "10");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Location: Metro Manila Philippines." });
+  });
+
+  it("passes the agent's last message to intent detection", async () => {
+    agentSaid("If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
+    intent("chat");
+    await teamChat("t1", "yes");
+    expect(vi.mocked(detectIntent).mock.calls.at(-1)?.[2]).toBe("If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
   });
 
   it("caps the count and says so", async () => {

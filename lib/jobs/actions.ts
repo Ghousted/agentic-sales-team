@@ -6,6 +6,7 @@ import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import type { AgentSnapshot } from "@/lib/leads/types";
+import type { ScrapeStep } from "@/lib/scrape/steps";
 import { limitJobSize, jobQuotaError, QUOTA_WINDOW_MS } from "./limits";
 
 // Callers still send a whole snapshot; only its id is read.
@@ -59,4 +60,16 @@ export async function getJob(id: string): Promise<{ status: string; result: unkn
   const [row] = await getDb().select({ status: jobs.status, result: jobs.result, error: jobs.error })
     .from(jobs).where(and(eq(jobs.id, id), eq(jobs.userId, userId))).limit(1);
   return row ?? null;
+}
+
+/** A scrape job's live steps for the chat timeline. The user's own jobs only. */
+export async function getScrapeProgress(jobId: string): Promise<{ status: string; steps: ScrapeStep[]; error: string | null } | null> {
+  if (!isDbConfigured() || typeof jobId !== "string" || !/^[0-9a-f-]{36}$/i.test(jobId)) return null;
+  const userId = await uid();
+  if (!userId) return null;
+  const [job] = await getDb().select({ status: jobs.status, kind: jobs.kind, result: jobs.result, error: jobs.error })
+    .from(jobs).where(and(eq(jobs.id, jobId), eq(jobs.userId, userId))).limit(1);
+  if (!job || job.kind !== "scrape") return null;
+  const steps = (job.result as { steps?: ScrapeStep[] } | null)?.steps;
+  return { status: job.status, steps: Array.isArray(steps) ? steps : [], error: job.status === "failed" ? "That search didn't complete." : null };
 }

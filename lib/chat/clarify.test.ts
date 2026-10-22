@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  briefFromInstruction,
+  briefOptions,
+  isMoreRequest,
   askedBriefFields,
   scrapeAnswerFrom,
   scrapeAnswerText,
@@ -141,5 +144,31 @@ describe("scrape brief", () => {
   it("adds the place to the instruction unless it is anywhere", () => {
     expect(briefInstruction({ what: "dentists", where: "Austin, Texas" })).toBe("dentists. Location: Austin, Texas.");
     expect(briefInstruction({ what: "dentists", where: "anywhere" })).toBe("dentists");
+  });
+});
+
+describe("repeat searches", () => {
+  it("reads who and where back from a search instruction", () => {
+    expect(briefFromInstruction("find AI training buyers. Location: Metro Manila Philippines.")).toEqual({ what: "find AI training buyers", where: "Metro Manila Philippines" });
+    expect(briefFromInstruction("find AI training buyers")).toEqual({ what: "find AI training buyers", where: undefined });
+    expect(briefFromInstruction(briefInstruction({ what: "dentists", where: "Austin, TX" }))).toEqual({ what: "dentists", where: "Austin, TX" });
+  });
+
+  it.each(["Lets look for more @Nina", "search again", "find more leads", "another batch please", "same search"])("is a more request: %j", (m) =>
+    expect(isMoreRequest(m)).toBe(true));
+  it.each(["find dentists in Texas", "@Moreno find leads"])("is not a more request: %j", (m) => expect(isMoreRequest(m)).toBe(false));
+
+  it("says it searches again, and carries the flag and suggestions in the marker", () => {
+    const text = askScrapeDetailsText({ what: "AI training buyers", where: "Manila", again: true }, ["count"], 25);
+    expect(text).toMatch(/^I will search again for AI training buyers, in Manila\. One detail first\.\nHow many leads/);
+    expect(pendingScrapeBrief(text)).toMatchObject({ again: true });
+  });
+
+  it("offers the last search as the first quick picks", () => {
+    const text = askScrapeDetailsText({ suggest: { what: "AI training buyers", where: "Europe" } }, ["what", "where", "count"], 25);
+    const o = briefOptions(text);
+    expect(o.what).toEqual(["AI training buyers"]);
+    expect(o.where).toEqual(["Europe", "Anywhere", "United States", "United Kingdom"]);
+    expect(o.count).toEqual(["5", "10", "25"]);
   });
 });

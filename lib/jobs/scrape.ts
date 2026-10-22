@@ -6,6 +6,7 @@ import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, jobs } from "@/lib/db";
 import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecrawl";
+import { createStepLog } from "@/lib/scrape/steps";
 import { isAIConfigured } from "@/lib/ai/openrouter";
 import { addScrapedLeads } from "@/lib/leads/store";
 import { chainNext } from "@/lib/pod/orchestrate";
@@ -43,14 +44,27 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
 
   let leadsFound: number;
   let leadIds: string[];
+  // The live steps, written into the job row so the chat can show the timeline.
+  const log = createStepLog(async (steps) => {
+    await getDb().update(jobs).set({ result: { steps } })
+      .where(and(eq(jobs.id, job.id), eq(jobs.userId, job.userId), eq(jobs.status, "running")));
+  });
   try {
     // Finish inside maxDuration so the job is marked failed, not left 'running'.
-    const prospects = await withDeadline(runFirecrawlScrape(agent, target, instruction), SCRAPE_TIMEOUT_MS, "Search");
+    const prospects = await withDeadline(runFirecrawlScrape(agent, target, instruction, log), SCRAPE_TIMEOUT_MS, "Search");
+    log.put({ id: "save", status: "active", label: "Saving to Leads" });
     leadIds = await addScrapedLeads(job.userId, job.agentId, prospects);
     leadsFound = leadIds.length;
-    await getDb().update(jobs).set({ status: "done", result: { leadsFound, leadIds }, finishedAt: new Date() })
+    const already = prospects.length - leadsFound;
+    log.put({
+      id: "save", status: "done", label: `${leadsFound} new lead${leadsFound === 1 ? "" : "s"} saved`,
+      detail: already > 0 ? `${already} ${already === 1 ? "was" : "were"} already in your leads.` : undefined,
+    });
+    await log.flush();
+    await getDb().update(jobs).set({ status: "done", result: { leadsFound, leadIds, steps: log.all() }, finishedAt: new Date() })
       .where(and(eq(jobs.id, job.id), eq(jobs.userId, job.userId)));
   } catch (e) {
+    await log.flush();
     await failScrapeJob(job, String(e));
     throw e;
   }

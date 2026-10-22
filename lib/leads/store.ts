@@ -2,7 +2,8 @@ import "server-only";
 // All persistence for the leads/outreach domain. Plain async functions so the
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
-import { and, count, desc, eq, inArray, asc, isNull, ne } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, count, desc, eq, exists, inArray, asc, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
@@ -49,15 +50,20 @@ export async function addLead(input: { agentId: string; name: string; title?: st
   const userId = await uid();
   if (!userId) return null;
   const db = getDb();
-  const [row] = await db.insert(leads).values({
-    userId, agentId: input.agentId, name: input.name.trim(),
-    title: (input.title ?? "").trim(), company: (input.company ?? "").trim(),
-    email: input.email.trim(),
-  }).returning();
-  await db.insert(activity).values({
-    userId, agentId: input.agentId, type: "lead_added", leadId: row.id,
-    text: `Added lead ${row.name}${row.company ? " · " + row.company : ""}`,
-  });
+  // The id is made here so the lead and its activity row go in one transaction.
+  const id = randomUUID();
+  const name = input.name.trim(), company = (input.company ?? "").trim();
+  const [[row]] = await db.batch([
+    db.insert(leads).values({
+      id, userId, agentId: input.agentId, name,
+      title: (input.title ?? "").trim(), company,
+      email: input.email.trim(),
+    }).returning(),
+    db.insert(activity).values({
+      userId, agentId: input.agentId, type: "lead_added", leadId: id,
+      text: `Added lead ${name}${company ? " · " + company : ""}`,
+    }),
+  ]);
   return toLeadDTO(row);
 }
 
@@ -72,26 +78,30 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
     .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
   const seenUrl = new Set(existing.map((e) => safeHttpUrl(e.profileUrl)).filter(Boolean));
   const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
-  const added: string[] = [];
+  const rows: (typeof leads.$inferInsert & { id: string })[] = [];
   for (const p of prospects) {
     const url = safeHttpUrl(p.profileUrl) ?? "";
     const email = (p.email ?? "").trim();
     if (url && seenUrl.has(url)) continue;
     if (email && seenEmail.has(email.toLowerCase())) continue;
-    const [row] = await db.insert(leads).values({
-      userId, agentId, name: p.name, title: p.title ?? "", company: p.company ?? "",
+    rows.push({
+      id: randomUUID(), userId, agentId, name: p.name, title: p.title ?? "", company: p.company ?? "",
       email, status: "new", score: 0, source: "scrape", review: "pending",
       profileUrl: url || null, platform: p.platform || null, fitReason: (p.fit ?? "").trim().slice(0, 300),
-    }).returning({ id: leads.id });
-    await db.insert(activity).values({
-      userId, agentId, type: "lead_added", leadId: row.id,
-      text: `Scraped ${p.name}${p.company ? " · " + p.company : ""}`,
     });
     if (url) seenUrl.add(url);
     if (email) seenEmail.add(email.toLowerCase());
-    added.push(row.id);
   }
-  return added;
+  if (!rows.length) return [];
+  // All leads and their activity rows in one transaction: no lead without its log line.
+  await db.batch([
+    db.insert(leads).values(rows),
+    db.insert(activity).values(rows.map((r) => ({
+      userId, agentId, type: "lead_added", leadId: r.id,
+      text: `Scraped ${r.name}${r.company ? " · " + r.company : ""}`,
+    }))),
+  ]);
+  return rows.map((r) => r.id);
 }
 
 /** The user's leads with these ids, in the order given. For the scrape results
@@ -156,17 +166,19 @@ export async function importLeadsCsv(csvText: string, agentId: string): Promise<
   const db = getDb();
   const existing = await db.select({ email: leads.email }).from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
   const seen = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
-  const values: (typeof leads.$inferInsert)[] = [];
+  const values: (typeof leads.$inferInsert & { id: string })[] = [];
   for (const r of rows) {
     const email = r.email.trim();
     if (email && seen.has(email.toLowerCase())) continue; // skip duplicate emails
-    values.push({ userId, agentId, name: r.name.trim(), title: r.title.trim(), company: r.company.trim(), email, status: "new", score: 0, source: "import", review: "accepted" });
+    values.push({ id: randomUUID(), userId, agentId, name: r.name.trim(), title: r.title.trim(), company: r.company.trim(), email, status: "new", score: 0, source: "import", review: "accepted" });
     if (email) seen.add(email.toLowerCase());
   }
   if (values.length === 0) return { added: 0 };
-  const inserted = await db.insert(leads).values(values).returning({ id: leads.id, name: leads.name, company: leads.company });
-  await db.insert(activity).values(inserted.map((l) => ({ userId, agentId, type: "lead_added", leadId: l.id, text: `Imported ${l.name}${l.company ? " · " + l.company : ""}` })));
-  return { added: inserted.length };
+  await db.batch([
+    db.insert(leads).values(values),
+    db.insert(activity).values(values.map((l) => ({ userId, agentId, type: "lead_added", leadId: l.id, text: `Imported ${l.name}${l.company ? " · " + l.company : ""}` }))),
+  ]);
+  return { added: values.length };
 }
 
 export async function listLeads(filter?: { agentId?: string; status?: string; source?: string; review?: string }): Promise<LeadDTO[]> {
@@ -323,6 +335,21 @@ export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
   }));
 }
 
+/** An activity insert that copies user, agent and lead from the drafts matching
+ *  `where`, as INSERT ... SELECT. It writes a row only if such a draft exists,
+ *  which lets a batch make the log line depend on an earlier write in it.
+ *  Drizzle wants every column, in table order. */
+function activityForDraft(where: SQL | undefined, type: string, text: string) {
+  const db = getDb();
+  return db.insert(activity).select(db.select({
+    id: sql<string>`gen_random_uuid()`.as("id"),
+    userId: outreachDrafts.userId, agentId: outreachDrafts.agentId,
+    type: sql<string>`${type}`.as("type"), leadId: outreachDrafts.leadId,
+    text: sql<string>`${text}`.as("text"),
+    dismissed: sql<boolean>`false`.as("dismissed"), createdAt: sql<Date>`now()`.as("created_at"),
+  }).from(outreachDrafts).where(where));
+}
+
 export async function markDraftSent(draftId: string): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
@@ -330,12 +357,21 @@ export async function markDraftSent(draftId: string): Promise<void> {
   const db = getDb();
   const [d] = await db.select().from(outreachDrafts)
     .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId))).limit(1);
-  if (!d) return;
-  await db.update(outreachDrafts).set({ status: "sent", sentAt: new Date() }).where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId)));
-  // Advance the lead new → contacted (only if still 'new', so we never rewind a stage).
-  await db.update(leads).set({ status: "contacted", updatedAt: new Date() })
-    .where(and(eq(leads.id, d.leadId), eq(leads.userId, userId), eq(leads.status, "new")));
-  await db.insert(activity).values({ userId, agentId: d.agentId, type: "email_sent", leadId: d.leadId, text: `Sent "${d.subject}"` });
+  if (!d || d.status === "sent") return;
+  // One transaction. The draft update stamps this exact sentAt and skips a draft
+  // that is already sent, so the lead and activity writes run only when this
+  // call is the one that sent it (a double click logs one "Sent").
+  const sentAt = new Date();
+  const sentNow = and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.sentAt, sentAt));
+  await db.batch([
+    db.update(outreachDrafts).set({ status: "sent", sentAt })
+      .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId), ne(outreachDrafts.status, "sent"))),
+    // Advance the lead new → contacted (only if still 'new', so we never rewind a stage).
+    db.update(leads).set({ status: "contacted", updatedAt: sentAt })
+      .where(and(eq(leads.id, d.leadId), eq(leads.userId, userId), eq(leads.status, "new"),
+        exists(db.select({ id: outreachDrafts.id }).from(outreachDrafts).where(sentNow)))),
+    activityForDraft(sentNow, "email_sent", `Sent "${d.subject}"`),
+  ]);
 }
 
 /** Hide a single draft from the Emails page (soft-hide, not a delete. The row
@@ -412,19 +448,27 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
 
 /** Persist one engine result: the draft, the lead's new score/stage, and activity.
  *  Returns false, writing nothing, when the lead already has a live draft (a
- *  concurrent run got there first; see outreach_drafts_live_lead_idx). */
+ *  concurrent run got there first; see outreach_drafts_live_lead_idx).
+ *
+ *  All three writes go in one transaction. The draft id is made here, and the
+ *  lead update and activity insert only match when a draft with that id exists.
+ *  So when ON CONFLICT DO NOTHING skips the draft, the other two write nothing. */
 export async function applyOutreachResult(userId: string, agentId: string, lead: LeadRow, result: OutreachResult): Promise<boolean> {
   const db = getDb();
-  const inserted = await db.insert(outreachDrafts).values({
-    userId, agentId, leadId: lead.id, subject: result.subject, body: result.body, rationale: result.rationale,
-  }).onConflictDoNothing().returning({ id: outreachDrafts.id });
-  if (!inserted.length) return false;
+  const draftId = randomUUID();
+  const ours = eq(outreachDrafts.id, draftId);
   const stage = LEAD_STAGES.includes(result.stage as (typeof LEAD_STAGES)[number]) ? result.stage : lead.status;
-  await db.update(leads).set({
-    score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
-  }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "email_drafted", leadId: lead.id, text: `Drafted "${result.subject}" for ${lead.name}` });
-  return true;
+  const [inserted] = await db.batch([
+    db.insert(outreachDrafts).values({
+      id: draftId, userId, agentId, leadId: lead.id, subject: result.subject, body: result.body, rationale: result.rationale,
+    }).onConflictDoNothing().returning({ id: outreachDrafts.id }),
+    db.update(leads).set({
+      score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
+    }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId),
+      exists(db.select({ id: outreachDrafts.id }).from(outreachDrafts).where(ours)))),
+    activityForDraft(ours, "email_drafted", `Drafted "${result.subject}" for ${lead.name}`),
+  ]);
+  return inserted.length > 0;
 }
 
 /** Pick the agent's leads that don't have a research brief yet (or the given
@@ -445,9 +489,11 @@ export async function pickLeadsForResearch(userId: string, agentId: string, lead
 /** Persist one research brief onto the lead + log activity. */
 export async function applyResearchResult(userId: string, agentId: string, lead: LeadRow, brief: ResearchBrief): Promise<void> {
   const db = getDb();
-  await db.update(leads).set({ research: brief, updatedAt: new Date() })
-    .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_researched", leadId: lead.id, text: `Researched ${lead.name}` });
+  await db.batch([
+    db.update(leads).set({ research: brief, updatedAt: new Date() })
+      .where(and(eq(leads.id, lead.id), eq(leads.userId, userId))),
+    db.insert(activity).values({ userId, agentId, type: "lead_researched", leadId: lead.id, text: `Researched ${lead.name}` }),
+  ]);
 }
 
 /** Pick the agent's teammate-book leads not yet qualified (no qualifiedAt), or the
@@ -473,9 +519,11 @@ export async function applyQualifyResult(userId: string, agentId: string, lead: 
   const db = getDb();
   const score = Math.max(1, Math.min(100, Math.round(result.score)));
   const now = new Date();
-  await db.update(leads).set({ score, qualifiedAt: now, updatedAt: now })
-    .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name}: ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
+  await db.batch([
+    db.update(leads).set({ score, qualifiedAt: now, updatedAt: now })
+      .where(and(eq(leads.id, lead.id), eq(leads.userId, userId))),
+    db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name}: ${result.tier} (${score}): ${result.reason}`.slice(0, 400) }),
+  ]);
 }
 
 /** Pick PENDING (freshly-scraped) teammate-book leads for the Assessor to review,
@@ -503,8 +551,10 @@ export async function applyAssessResult(userId: string, agentId: string, lead: L
   // The Assessor's reason replaces the scraper's line. Its fail-open notes say nothing about fit.
   const reason = (result.reason ?? "").trim();
   if (reason && !/^Auto-accepted\b/.test(reason)) set.fitReason = reason.slice(0, 300);
-  await db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name}: ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
+  await db.batch([
+    db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId))),
+    db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name}: ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) }),
+  ]);
 }
 
 /** Running research/outreach jobs → who is actively working which leads now

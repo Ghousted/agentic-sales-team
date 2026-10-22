@@ -68,7 +68,11 @@ async function firecrawlSearch(query: string, limit: number, recentOnly: boolean
     if ((e as Error)?.name === "TimeoutError") throw new Error(`Firecrawl search timed out after ${FIRECRAWL_TIMEOUT_MS / 1000}s`);
     throw e;
   });
-  if (!res.ok) throw new Error(`Firecrawl ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+  if (!res.ok) {
+    // The body can echo the request or account details; log it, keep it out of job errors.
+    console.error(`[firecrawl] search ${res.status}:`, (await res.text().catch(() => "")).slice(0, 500));
+    throw new Error(`Firecrawl ${res.status}`);
+  }
   const data = await res.json();
   const web = data?.data?.web;
   return Array.isArray(web) ? (web as SearchResult[]) : [];

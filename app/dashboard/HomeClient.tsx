@@ -6,6 +6,8 @@ import { statusMeta } from "@/lib/data";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { agentNow, liveAgentCount, teamSubtitle } from "@/lib/agents/derive";
 
 const hubTypes: Record<string, string> = { sk: "meeting", mt: "email", ew: "research", rp: "writing", al: "call", nc: "analytics", ps: "idle", lm: "alert" };
 const hubIcons: Record<string, [string, string, string]> = {
@@ -19,6 +21,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
   const { s, set, agents, teams, byId } = useApp();
   const router = useRouter();
   const [dims, setDims] = useState({ w: 1280, h: 800 });
+  const { live } = useLiveWork();
   const ws = initialStats;
   const acts = initialActs;
   const paMap = new Map((ws?.perAgent ?? []).map((p) => [p.agentId, p]));
@@ -42,9 +45,10 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
     const x = Math.round(380 + Math.cos(ang) * 272);
     const y = Math.round(262 + Math.sin(ang) * 186);
     const ic = hubIcons[hubTypes[a.id] || "writing"];
-    const m = statusMeta(a.status);
+    const now = agentNow(a.id, live, !!s.paused[a.id]);
+    const m = statusMeta(now.status);
     const latest = acts.find((f) => f.agentId === a.id);
-    return { a, i, x, y, m, ic, badge: latest ? latest.text.slice(0, 40) : (a.status === "working" ? "Working…" : "Idle") };
+    return { a, i, x, y, m, ic, working: now.status === "working", badge: now.status === "working" ? now.task.slice(0, 40) : latest ? latest.text.slice(0, 40) : now.task };
   });
   const collabs = HN >= 5 ? [[0, 2], [1, 4]] : [];
 
@@ -122,7 +126,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
                   <div style={css("padding:3px;border-radius:50%;background:#fff;box-shadow:0 0 22px " + n.a.color + "66")}><div style={css(av(n.a, 46) + ";border:2px solid #0A1E4D")}>{n.a.initials}</div></div>
                   <div style={css("position:absolute;top:-8px;right:-10px;width:22px;height:22px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#18181B;box-shadow:0 3px 10px rgba(0,0,0,.35);animation:" + n.ic[1])}>{n.ic[0]}</div>
                 </div>
-                <div style={css("display:flex;align-items:center;gap:5px;margin-top:2px")}><span style={css("width:7px;height:7px;border-radius:50%;background:" + n.m.dot + ";flex:none;" + (n.a.status === "working" ? "animation:pulse 2s infinite" : ""))} /><span style={css("font-size:12px;font-weight:700;color:#F1F6FF")}>{n.a.name}</span></div>
+                <div style={css("display:flex;align-items:center;gap:5px;margin-top:2px")}><span style={css("width:7px;height:7px;border-radius:50%;background:" + n.m.dot + ";flex:none;" + (n.working ? "animation:pulse 2s infinite" : ""))} /><span style={css("font-size:12px;font-weight:700;color:#F1F6FF")}>{n.a.name}</span></div>
                 <div style={css("width:60px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden")}><div style={css("width:" + Math.round(((paMap.get(n.a.id)?.leadsWorked ?? 0) / maxOut) * 100) + "%;height:100%;border-radius:2px;background:linear-gradient(90deg," + n.a.color + ",#60A5FA)")} /></div>
                 <div style={css("display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:#DCE7FF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);border-radius:99px;padding:4px 10px;white-space:nowrap;max-width:168px;overflow:hidden;text-overflow:ellipsis;animation:" + (tick % 2 ? "badgePopA" : "badgePopB") + " .4s ease")}><span>{n.badge}</span></div>
               </div>
@@ -158,7 +162,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
             <Box key={t.id} onClick={() => router.push("/teams/" + t.id)} style="background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:18px 20px;box-shadow:0 1px 3px rgba(24,24,27,.04);cursor:pointer;transition:transform .15s,box-shadow .15s" styleHover="transform:translateY(-3px);box-shadow:0 10px 24px rgba(24,24,27,.08)">
               <div style={css("display:flex;align-items:center;gap:12px")}>
                 <div style={css("width:42px;height:42px;border-radius:12px;background:" + t.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:19px;flex:none")}>{t.icon}</div>
-                <div><div style={css("font-size:14.5px;font-weight:700")}>{t.name}</div><div style={css("font-size:12px;color:#71717A")}>{t.desc}</div></div>
+                <div><div style={css("font-size:14.5px;font-weight:700")}>{t.name}</div><div style={css("font-size:12px;color:#71717A")}>{teamSubtitle(t)}</div></div>
                 <div style={css("margin-left:auto;display:flex")}>
                   {avatars.map((a, i) => <div key={a!.id} style={css(av(a!, 26) + ";border:2px solid #fff;margin-left:" + (i ? "-8" : "0") + "px")}>{a!.initials}</div>)}
                 </div>
@@ -166,7 +170,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
               <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px")}>
                 <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
                 <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.filter((id) => byId(id)?.status === "working").length}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{liveAgentCount(live, t.members)}</div></div>
               </div>
             </Box>
           );

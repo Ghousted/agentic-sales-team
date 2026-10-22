@@ -10,6 +10,7 @@ import { enqueueOutreachJob, enqueueJob } from "@/lib/jobs/actions";
 import type { DraftDTO, LeadDTO } from "@/lib/leads/types";
 import { CAPABILITIES, AGENT_TYPES } from "@/lib/agentTypes";
 import { useLiveWork } from "@/lib/useLiveWork";
+import { agentNow } from "@/lib/agents/derive";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import Link from "next/link";
 import { getAgentStats } from "@/lib/agents/actions";
@@ -65,7 +66,7 @@ export default function AgentDetail() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
-  const { byLead } = useLiveWork();
+  const { live, byLead } = useLiveWork();
 
   const sel = byId(params.id) || agents[0];
 
@@ -207,7 +208,7 @@ export default function AgentDetail() {
   }, [selId, refetchDrafts]);
 
   if (!sel) return null;
-  const selM = statusMeta(paused ? "waiting" : sel.status);
+  const selM = statusMeta(agentNow(sel.id, live, paused).status);
 
   const caps = sel.capabilities ?? [];
   const visibleSections = SECTIONS.filter(([, , cap]) => !cap || caps.includes(cap));

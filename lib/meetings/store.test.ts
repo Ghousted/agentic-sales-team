@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import * as schema from "@/lib/db/schema";
+import { withBatch } from "../../test/fake-batch";
 
 // Every statement the store sends, and the rows the fake database answers with.
 const sent: string[] = [];
 let answer: (sql: string) => unknown[][] = () => [];
 
-const db = drizzle(async (sql) => {
+const batches: number[] = [];
+const db = withBatch(drizzle(async (sql) => {
   sent.push(sql);
   return { rows: answer(sql) };
-}, { schema });
+}, { schema }), batches);
 
 let sessionUser: string | null = null;
 
@@ -32,23 +34,29 @@ const LEAD_OF_A = "00000000-0000-4000-8000-0000000000a1";
 
 beforeEach(() => {
   sent.length = 0;
+  batches.length = 0;
   answer = () => [];
   sessionUser = null;
 });
 
 describe("bookMeeting", () => {
   it("refuses a lead that belongs to another user", async () => {
-    // The lead lookup scoped to user A finds nothing.
+    // The insert selects from user A's leads, finds nothing, and returns no row.
     const ok = await bookMeeting(USER_A, "agent-1", LEAD_OF_B, "2026-10-22T14:00:00.000Z", "Thu 2pm");
     expect(ok).toBe(false);
-    expect(sent.some((s) => /^insert into "meetings"/.test(s))).toBe(false);
   });
 
   it("books a lead the user owns", async () => {
-    answer = (sql) => (/^select/.test(sql) ? [[LEAD_OF_A]] : []);
+    answer = (sql) => (/^insert into "meetings"/.test(sql) ? [["meeting-1"]] : []);
     const ok = await bookMeeting(USER_A, "agent-1", LEAD_OF_A, "2026-10-22T14:00:00.000Z", "Thu 2pm");
     expect(ok).toBe(true);
-    expect(sent.some((s) => /^insert into "meetings"/.test(s))).toBe(true);
+  });
+
+  it("books and advances the lead in one batch, scoped to the user's own lead", async () => {
+    await bookMeeting(USER_A, "agent-1", LEAD_OF_A, "2026-10-22T14:00:00.000Z", "Thu 2pm");
+    expect(batches).toEqual([2]);
+    expect(sent[0]).toMatch(/^insert into "meetings" \(.*\) select .* from "leads" where \("leads"\."id" = \$\d+ and "leads"\."user_id" = \$\d+\)/);
+    expect(sent[1]).toMatch(/^update "leads" .* where \("leads"\."id" = \$\d+ and "leads"\."user_id" = \$\d+\)/);
   });
 });
 
@@ -64,7 +72,7 @@ describe("listMeetings", () => {
 describe("bookMeetingForLead", () => {
   it("parses the time in the timezone the client sent", async () => {
     sessionUser = USER_A;
-    answer = (sql) => (/from "leads"/.test(sql) ? [[LEAD_OF_A, "agent-1"]] : []);
+    answer = (sql) => (/^insert into "meetings"/.test(sql) ? [["meeting-1"]] : /from "leads"/.test(sql) ? [[LEAD_OF_A, "agent-1"]] : []);
     vi.mocked(parseMeetingTime).mockResolvedValue({ iso: "2026-10-23T18:00:00.000Z", label: "Fri, Oct 23 · 2:00–2:30 PM", hasTime: true });
     const res = await bookMeetingForLead(LEAD_OF_A, "tomorrow 2pm", "America/New_York");
     expect(res).toEqual({ ok: true, label: "Fri, Oct 23 · 2:00–2:30 PM" });

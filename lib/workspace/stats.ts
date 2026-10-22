@@ -16,6 +16,12 @@ export interface WorkspaceStats {
   perAgent: { agentId: string; leadsWorked: number; drafted: number; sent: number }[];
   daily: { date: string; drafted: number; sent: number }[]; // last 14 days, oldest→newest (YYYY-MM-DD)
 }
+/** Clamp a client-supplied list size to 1..100 (default 30). */
+export function clampListLimit(limit: unknown): number {
+  const n = typeof limit === "number" && Number.isFinite(limit) ? Math.floor(limit) : 30;
+  return Math.min(100, Math.max(1, n));
+}
+
 export interface ActivityItem { agentId: string; type: string; text: string; createdAt: string }
 
 const EMPTY: WorkspaceStats = { leadsWorked: 0, drafted: 0, sent: 0, replies: 0, replyRate: 0, activeAgents: 0, tasksRunning: 0, perAgent: [], daily: [] };
@@ -80,7 +86,7 @@ export async function listActivity(limit = 30): Promise<ActivityItem[]> {
   const userId = await uid();
   if (!userId) return [];
   const rows = await getDb().select().from(activity)
-    .where(eq(activity.userId, userId)).orderBy(desc(activity.createdAt)).limit(limit);
+    .where(eq(activity.userId, userId)).orderBy(desc(activity.createdAt)).limit(clampListLimit(limit));
   return rows.map((a) => ({ agentId: a.agentId, type: a.type, text: a.text, createdAt: a.createdAt.toISOString() }));
 }
 
@@ -96,7 +102,7 @@ export async function listNotifications(limit = 30): Promise<NotificationItem[]>
   if (!userId) return [];
   const rows = await getDb().select().from(activity)
     .where(and(eq(activity.userId, userId), eq(activity.dismissed, false)))
-    .orderBy(desc(activity.createdAt)).limit(limit);
+    .orderBy(desc(activity.createdAt)).limit(clampListLimit(limit));
   return rows.map((a) => ({ id: a.id, agentId: a.agentId, type: a.type, text: a.text, createdAt: a.createdAt.toISOString() }));
 }
 

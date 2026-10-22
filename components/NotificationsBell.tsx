@@ -7,6 +7,8 @@ import { listNotifications, dismissNotification, clearAllNotifications } from "@
 import type { NotificationItem } from "@/lib/workspace/stats";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { liveAgentCount } from "@/lib/agents/derive";
 
 const ACT_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   lead_added: { label: "Lead", bg: "#E7F7EC", fg: "#1B7A3D" },
@@ -22,8 +24,15 @@ function relTime(iso: string): string {
   if (h < 24) return h + "h"; return Math.round(h / 24) + "d";
 }
 
+// Agents with a live job right now. Its own component so the live-work poll only
+// runs while the panel is open.
+function LiveCount({ style }: { style: string }) {
+  const { live } = useLiveWork();
+  return <div style={css(style)}>{liveAgentCount(live)} live</div>;
+}
+
 export default function NotificationsBell() {
-  const { byId, agents, showToast } = useApp();
+  const { byId, showToast } = useApp();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -85,7 +94,7 @@ export default function NotificationsBell() {
               {items.length > 0 && (
                 <Btn onClick={clearAll} style="margin-left:auto;background:transparent;border:none;color:#71717A;font-size:11px;font-weight:600;cursor:pointer;padding:2px 4px" styleHover="color:#F43F7E">Clear all</Btn>
               )}
-              <div style={css((items.length > 0 ? "" : "margin-left:auto;") + "font-size:11px;font-weight:600;color:#1B7A3D;background:#E7F7EC;border-radius:99px;padding:2px 9px")}>{agents.filter((a) => a.status === "working").length} live</div>
+              <LiveCount style={(items.length > 0 ? "" : "margin-left:auto;") + "font-size:11px;font-weight:600;color:#1B7A3D;background:#E7F7EC;border-radius:99px;padding:2px 9px"} />
             </div>
             <div style={css("max-height:60vh;overflow-y:auto")}>
               {items.length === 0 ? (

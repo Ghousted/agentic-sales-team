@@ -25,6 +25,8 @@ export interface LeadDTO {
   profileUrl: string | null;
   platform: string | null;
   research: ResearchBrief | null;
+  /** Why the lead fits the agent's goal ('' when unknown). See leads.fit_reason. */
+  fitReason: string;
   workedBy: string[];
   createdAt: string;
   updatedAt: string;

@@ -10,7 +10,7 @@ import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
 import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type SeenIds } from "./unread";
 import { listChatUnread } from "@/lib/chat/actions";
-import { countUnsentDrafts } from "@/lib/leads/actions";
+import { navCounts } from "@/lib/leads/actions";
 import { setFaviconDot } from "./faviconBadge";
 
 // Lucide "calendar" (not in the design's icon-font subset).
@@ -105,10 +105,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     await clearChat(id);
     showToast(`Deleted the chat history of ${name}.`);
   };
-  // Drafts waiting to be sent, as a badge on the Emails item. Re-read on every page
-  // change, so a draft sent on the Emails page drops off when you move on.
-  const [toSend, setToSend] = useState(0);
-  useEffect(() => { countUnsentDrafts().then(setToSend).catch(() => {}); }, [path]);
+  // Badges on the Leads (to review) and Emails (to send) items. Re-read on every
+  // page change, and every 30 s, because scrapes add leads in the background.
+  const [counts, setCounts] = useState({ leads: 0, emails: 0 });
+  useEffect(() => {
+    const load = () => { if (document.visibilityState === "visible") navCounts().then(setCounts).catch(() => {}); };
+    load();
+    const iv = setInterval(load, 30_000);
+    window.addEventListener("focus", load);
+    return () => { clearInterval(iv); window.removeEventListener("focus", load); };
+  }, [path]);
+  const badge = (href: string): { n: number; label: string } | null => {
+    if (href === "/leads" && counts.leads > 0) return { n: counts.leads, label: `${counts.leads} to review` };
+    if (href === "/emails" && counts.emails > 0) return { n: counts.emails, label: `${counts.emails} to send` };
+    return null;
+  };
   const anyUnread = teams.some((t) => t.id !== viewing && (unread[t.id] ?? 0) > 0);
   // The browser tab shows new messages too: a red dot on the favicon.
   useEffect(() => { setFaviconDot(anyUnread); }, [anyUnread]);
@@ -146,7 +157,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <GlobalSearch compact autoFocus={focusSearch} />
             <Btn onClick={() => router.push("/")} style={ROW + ";" + bg(path === "/")} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name="square-pen" /></span>New chat</Btn>
             {NAV.map((nv) => (
-              <Btn key={nv.href} onClick={() => router.push(nv.href)} style={ROW + ";" + bg(isActive(nv.href, path))} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name={nv.icon} /></span>{nv.label}{nv.href === "/emails" && toSend > 0 && <span aria-label={toSend + " to send"} style={css("margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:#006aff;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{toSend}</span>}</Btn>
+              <Btn key={nv.href} onClick={() => router.push(nv.href)} style={ROW + ";" + bg(isActive(nv.href, path))} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name={nv.icon} /></span>{nv.label}{badge(nv.href) && <span aria-label={badge(nv.href)!.label} style={css("margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:#006aff;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{badge(nv.href)!.n}</span>}</Btn>
             ))}
           </div>
 
@@ -217,7 +228,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <Btn onClick={() => router.push("/")} aria-label="New chat" title="New chat" style={RAIL_BTN + ";background:" + (path === "/" ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="square-pen" size={18} /></Btn>
           <Btn onClick={() => { setFocusSearch(true); set({ sidebarOpen: true }); }} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>
           {NAV.map((nv) => (
-            <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={nv.href === "/emails" && toSend > 0 ? `Emails, ${toSend} to send` : nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} />{nv.href === "/emails" && toSend > 0 && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
+            <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={badge(nv.href) ? `${nv.label}, ${badge(nv.href)!.label}` : nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} />{badge(nv.href) && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           ))}
           <Btn onClick={() => router.push("/chats")} aria-label={anyUnread ? "Chats, unread messages" : "Chats"} title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} />{anyUnread && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           <div style={{ flex: 1 }} />

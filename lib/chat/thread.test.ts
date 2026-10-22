@@ -61,3 +61,27 @@ describe("jobOutcomeText", () => {
     expect(jobOutcomeText("research", "running", null, false)).toBeNull();
   });
 });
+
+describe("scrape results marker", () => {
+  const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+
+  it("round-trips lead ids and hides from the reader", async () => {
+    const { leadsMarker, leadIdsFrom, stripMarkers } = await import("./thread");
+    const text = `I found 2 new leads. @Ava, please review them.${leadsMarker(ids)}`;
+    expect(leadIdsFrom(text)).toEqual(ids);
+    expect(stripMarkers(text)).toBe("I found 2 new leads. @Ava, please review them.");
+  });
+
+  it("adds nothing for no leads, and ignores bad ids", async () => {
+    const { leadsMarker, leadIdsFrom } = await import("./thread");
+    expect(leadsMarker([])).toBe("");
+    expect(leadsMarker(undefined)).toBe("");
+    expect(leadIdsFrom("⟦leads:not-an-id,11111111-1111-4111-8111-111111111111⟧")).toEqual([ids[0]]);
+  });
+
+  it("puts the results card on a scrape outcome outside the pod chain", async () => {
+    const { jobOutcomeText, leadIdsFrom } = await import("./thread");
+    expect(leadIdsFrom(jobOutcomeText("scrape", "done", { leadsFound: 2, leadIds: ids }, false) ?? "")).toEqual(ids);
+    expect(jobOutcomeText("scrape", "done", { leadsFound: 0 }, false)).toBe("I found 0 leads.");
+  });
+});

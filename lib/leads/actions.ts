@@ -2,6 +2,7 @@
 // Client-facing server actions for the leads domain. Thin wrappers over the
 // server-only store so client components never import server-only code.
 import * as store from "./store";
+import { ensureFitReason as _ensureFitReason } from "./fit";
 import type { LeadDTO, DraftDTO, LiveWorkDTO, TeamLeadPick } from "./types";
 
 export async function addLead(input: { agentId: string; name: string; title?: string; company?: string; email: string }): Promise<LeadDTO | null> {
@@ -34,6 +35,13 @@ export async function dismissLeads(ids: string[]): Promise<void> {
 export async function deleteLeads(ids: string[]): Promise<void> {
   return store.deleteLeads(ids);
 }
+export async function listLeadsByIds(ids: string[]): Promise<LeadDTO[]> {
+  return store.listLeadsByIds(Array.isArray(ids) ? ids.filter((x) => typeof x === "string") : []);
+}
+/** The lead's fit reason, written now when it has none. */
+export async function ensureFitReason(leadId: string): Promise<string> {
+  return typeof leadId === "string" ? _ensureFitReason(leadId) : "";
+}
 export async function getLead(id: string): Promise<LeadDTO | null> {
   return store.getLead(id);
 }
@@ -58,8 +66,8 @@ export async function discardDraft(draftId: string): Promise<void> {
 export async function clearSentDrafts(): Promise<number> {
   return store.clearSentDrafts();
 }
-export async function countUnsentDrafts(): Promise<number> {
-  return store.countUnsentDrafts();
+export async function navCounts(): Promise<{ leads: number; emails: number }> {
+  return store.navCounts();
 }
 export async function clearDraftsForLead(leadId: string): Promise<number> {
   return store.clearDraftsForLead(leadId);

@@ -34,7 +34,7 @@ const toMessages = (system: string, turns: Turn[]) => [
   ...turns.map((t) => ({ role: t.role === "model" ? "assistant" : "user", content: t.text })),
 ];
 
-async function chat(body: Record<string, unknown>): Promise<string> {
+async function chat(body: Record<string, unknown>, timeoutMs = GEN_TIMEOUT_MS): Promise<string> {
   const res = await fetch(`${API_BASE}/chat/completions`, {
     method: "POST",
     headers: authHeaders(apiKey()),
@@ -47,7 +47,7 @@ async function chat(body: Record<string, unknown>): Promise<string> {
     }),
     cache: "no-store",
     // Never leave a chat hanging on a stalled request.
-    signal: AbortSignal.timeout(GEN_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -72,15 +72,16 @@ export async function aiGenerate(system: string, turns: Turn[], opts?: { maxToke
 }
 
 /** Generate JSON against a JSON schema. Returns the parsed object. Throws on failure. */
-export async function aiJSON<T>(system: string, turns: Turn[], schema: Record<string, unknown>, opts?: { maxTokens?: number; temperature?: number }): Promise<T> {
+export async function aiJSON<T>(system: string, turns: Turn[], schema: Record<string, unknown>, opts?: { maxTokens?: number; temperature?: number; model?: string; timeoutMs?: number }): Promise<T> {
   const text = await chat({
+    ...(opts?.model ? { model: opts.model } : {}),
     messages: toMessages(system, turns),
     temperature: opts?.temperature ?? 0.6,
     max_tokens: opts?.maxTokens ?? 700,
     response_format: { type: "json_schema", json_schema: { name: "result", strict: false, schema } },
     // Only route to providers that honour response_format.
     provider: { require_parameters: true },
-  });
+  }, opts?.timeoutMs);
   if (!text) throw new Error("OpenRouter returned no JSON text.");
   // Some providers wrap JSON in a markdown fence even in JSON mode.
   return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")) as T;

@@ -1,5 +1,5 @@
 "use client";
-// Emails page: an overview of every outreach draft across all agents. A list on
+// Emails page: every outreach draft across all agents. A list on
 // the left (status tabs, agent picker, search) and the full selected draft on the
 // right, with the send actions.
 import { useMemo, useState } from "react";
@@ -54,23 +54,8 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
     if (n > 0) showToast(`Cleared ${n} sent draft${n === 1 ? "" : "s"}`);
   };
 
-  const summary = [
-    { label: "To send", value: counts.unsent, bg: "#EAF2FF", color: "#006AFF", icon: "mail" },
-    { label: "Sent", value: counts.sent, bg: "#E7F7EC", color: "#1B7A3D", icon: "mail-check" },
-    { label: "Drafted in total", value: counts.total, bg: "#F4F4F5", color: "#52525B", icon: "send" },
-  ];
-
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px")}>
-        {summary.map((s) => (
-          <div key={s.label} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:18px;display:flex;align-items:center;gap:14px")}>
-            <div style={css("width:40px;height:40px;border-radius:12px;background:" + s.bg + ";color:" + s.color + ";display:flex;align-items:center;justify-content:center;flex:none;font-size:19px")}><i className={"icon-" + s.icon} /></div>
-            <div><div style={css("font-size:22px;font-weight:700;color:#18181B;letter-spacing:-.02em")}>{s.value}</div><div style={css("font-size:11.5px;color:#71717A;margin-top:2px")}>{s.label}</div></div>
-          </div>
-        ))}
-      </div>
-
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
           {TABS.map((t) => {

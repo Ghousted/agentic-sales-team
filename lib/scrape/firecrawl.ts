@@ -6,6 +6,7 @@ import "server-only";
 // decision-makers that match a target customer (public LinkedIn pages Google indexed).
 import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
+import { gateResults } from "./jev";
 
 export interface Prospect {
   name: string;
@@ -14,6 +15,8 @@ export interface Prospect {
   profileUrl: string;
   platform: string;
   email: string;
+  /** One line on why this lead fits what the salesperson is looking for. */
+  fit?: string;
 }
 
 export function isFirecrawlConfigured(): boolean {
@@ -158,13 +161,17 @@ const PROSPECTS_SCHEMA = {
         properties: {
           name: { type: "string" }, title: { type: "string" }, company: { type: "string" },
           profileUrl: { type: "string" }, platform: { type: "string" }, email: { type: "string" },
+          fit: { type: "string" },
         },
-        required: ["name", "title", "company", "profileUrl", "platform", "email"],
+        required: ["name", "title", "company", "profileUrl", "platform", "email", "fit"],
       },
     },
   },
   required: ["prospects"],
 } as const;
+
+/** Every lead gets a reason the salesperson can read at a glance. */
+const FIT_RULE = "- fit: ONE short line (under 20 words) on why this lead fits what the salesperson is looking for. Use only facts in the result. Example: 'HR director at a 300-person Ohio manufacturer; owns staff training.'";
 
 /** Extraction rules for a fit scrape: LinkedIn company pages and profiles of
  *  decision-makers that match the target customer. */
@@ -180,6 +187,7 @@ function fitRules(targetDesc: string, sells: string, target: number): string[] {
     "- For a company page (SOURCE_URL contains '/company/'): name = the company name. company = the company name. title = one line on what the company does and why it fits (industry, location, size when shown).",
     "- profileUrl: the SOURCE_URL. platform: 'LinkedIn'.",
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
+    FIT_RULE,
     "Use ONLY facts in the TITLE and SNIPPET. NEVER fabricate a name, title or company. If the result does not show who or which company it is, skip it.",
     "EXCLUDE: companies or people that do not match the target (wrong industry, wrong location when one is given, wrong role); recruiters and staffing agencies (unless they are the target); job postings; LinkedIn posts, articles, 'pulse' pages, groups and school pages; LinkedIn's own pages.",
     "Return ONLY JSON.",
@@ -210,6 +218,7 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     "- company: '' unless clearly stated.",
     `- profileUrl: the SOURCE_URL (the post/page link. The salesperson uses it to contact them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
+    FIT_RULE,
     "INCLUDE a lead even when the name is not shown. The post link is the contact path.",
     "RECENCY: only include posts from the PAST MONTH. If a post visibly shows its age and it is older than ~1 month (e.g. '2mo', '3 months ago', '1y', or a date more than ~30 days back), SKIP it. An old buying-intent post is a dead lead.",
     "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to. A lead is never a seller or an article about the topic.",
@@ -250,8 +259,10 @@ export async function runFirecrawlScrape(
     for (const hit of r.value) if (hit.url && !seen.has(hit.url)) { seen.add(hit.url); results.push(hit); }
   }
   const sells = [agent.role, agent.goal].filter(Boolean).join(". "); // seller context, to exclude competitors
-  const prospects = await extractProspects(targetDesc, sells, results, target, plan.mode === "fit" ? "linkedin" : plan.platform, plan.mode);
-  return normalizeProspects(prospects, results.map((r) => r.url));
+  // Jev drops sellers and competitors one result at a time, before extraction.
+  const gated = await gateResults(results, { mode: plan.mode, sells, wants: targetDesc });
+  const prospects = await extractProspects(targetDesc, sells, gated, target, plan.mode === "fit" ? "linkedin" : plan.platform, plan.mode);
+  return normalizeProspects(prospects, gated.map((r) => r.url));
 }
 
 /** The model sometimes turns the subreddit in the URL into a fake handle
@@ -273,7 +284,7 @@ export function normalizeProspects(prospects: Prospect[], sourceUrls: (string | 
     const profileUrl = url && allowed.has(url) ? url : "";
     return {
       name: subredditAsUser(p.name, profileUrl), title: p.title ?? "", company: p.company ?? "",
-      profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || p.platform || "web", email: p.email ?? "",
+      profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || p.platform || "web", email: p.email ?? "", fit: (p.fit ?? "").trim(),
     };
   });
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "leads" ADD COLUMN "fit_reason" text DEFAULT '' NOT NULL;

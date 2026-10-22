@@ -183,6 +183,13 @@
       "when": 1792657992186,
       "tag": "0025_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792662251938,
+      "tag": "0026_unique_drafts_proposals",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import * as schema from "@/lib/db/schema";
 const USER = "00000000-0000-4000-8000-000000000001";
 let allLeads: { id: string; agentId: string; createdAt: Date }[] = [];
 let withProposal = new Set<string>();
+let inserts: string[] = [];
 
 const leadCols = Object.values(getTableColumns(schema.leads)).map((c) => c.name);
 
@@ -36,6 +37,14 @@ const fakeDb = drizzle(async (sql, params) => {
     const ids = params.filter((p) => typeof p === "string" && allLeads.some((l) => l.id === p));
     return { rows: ids.filter((id) => withProposal.has(id as string)).map((id) => [id]) };
   }
+  if (/^insert into "proposals"/.test(q)) {
+    // Mirrors ON CONFLICT DO NOTHING on proposals_lead_id_idx: no row back if the lead has one.
+    inserts.push(q);
+    const leadId = params[2] as string; // ($1 user_id, $2 agent_id, $3 lead_id)
+    if (withProposal.has(leadId)) return { rows: [] };
+    withProposal.add(leadId);
+    return { rows: [["p-" + leadId]] };
+  }
   throw new Error(`unexpected query: ${sql}`);
 }, { schema });
 
@@ -45,7 +54,7 @@ vi.mock("@/lib/db", async () => ({
   getDb: () => fakeDb,
 }));
 
-const { pickLeadsForProposal } = await import("./store");
+const { pickLeadsForProposal, addProposal } = await import("./store");
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -53,6 +62,7 @@ beforeEach(() => {
   // 100 accepted leads, one per minute; the oldest 70 already have proposals.
   allLeads = Array.from({ length: 100 }, (_, i) => ({ id: id(i + 1), agentId: "proposal", createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)) }));
   withProposal = new Set(allLeads.slice(0, 70).map((l) => l.id));
+  inserts = [];
 });
 
 describe("pickLeadsForProposal", () => {
@@ -69,5 +79,19 @@ describe("pickLeadsForProposal", () => {
   it("skips explicitly requested leads that already have a proposal", async () => {
     const picked = await pickLeadsForProposal(USER, "proposal", [id(1), id(80)], 5);
     expect(picked.map((l) => l.id)).toEqual([id(80)]);
+  });
+});
+
+describe("addProposal", () => {
+  const p = { title: "Plan", body: "Body", productsUsed: [] };
+
+  it("inserts with ON CONFLICT DO NOTHING and reports a new proposal", async () => {
+    expect(await addProposal(USER, "proposal", id(80), p)).toBe(true);
+    expect(inserts[0]).toContain("on conflict do nothing");
+  });
+
+  it("reports false when a concurrent run already wrote one for the lead", async () => {
+    expect(await addProposal(USER, "proposal", id(80), p)).toBe(true);
+    expect(await addProposal(USER, "proposal", id(80), p)).toBe(false);
   });
 });

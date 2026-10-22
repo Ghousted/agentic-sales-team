@@ -138,7 +138,7 @@ export default function CreatePage() {
 
         <div style={css("background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(12,12,13,.05);padding:" + (step === 0 ? "40px" : "32px 40px") + ";display:flex;flex-direction:column;gap:32px;width:" + (step === 1 ? "800px" : step === 2 ? "100%" : step === 3 ? "708px" : "673px") + ";max-width:100%" + (step === 2 ? ";flex:1;min-height:0" : ""))}>
 
-          {/* ===== Step 1 — Identity ===== */}
+          {/* ===== Step 1: Identity ===== */}
           {step === 0 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
@@ -150,12 +150,12 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 2 — Type ===== */}
+          {/* ===== Step 2: Type ===== */}
           {step === 1 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
                 <div style={css(titleStyle)}>What will this agent do?</div>
-                <div style={css(subtitleStyle)}>Pick a type — its capabilities are preset. Choose Custom to hand-pick.</div>
+                <div style={css(subtitleStyle)}>Pick a type. Each type has preset capabilities. Choose Custom to pick them yourself.</div>
               </div>
               <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:12px")}>
                 {AGENT_TYPES.map((t) => {
@@ -168,7 +168,7 @@ export default function CreatePage() {
                       <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:8px")}>
                         {chips.map((c) => {
                           const soon = !t.custom && !isEngineReady(c as Capability);
-                          return <span key={c} title={soon ? "Coming soon — not run by the engine yet" : undefined} style={css("font-size:10.5px;font-weight:600;border-radius:99px;padding:2px 9px;" + (soon ? "color:#71717A;background:#F4F4F5" : "color:#006AFF;background:#EAF2FF"))}>{c}{soon ? " · soon" : ""}</span>;
+                          return <span key={c} title={soon ? "Coming soon. The engine does not run this yet." : undefined} style={css("font-size:10.5px;font-weight:600;border-radius:99px;padding:2px 9px;" + (soon ? "color:#71717A;background:#F4F4F5" : "color:#006AFF;background:#EAF2FF"))}>{c}{soon ? " · soon" : ""}</span>;
                         })}
                       </div>
                     </Box>
@@ -196,7 +196,7 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 3 — Appearance ===== */}
+          {/* ===== Step 3: Appearance ===== */}
           {step === 2 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
@@ -221,7 +221,7 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 4 — Settings ===== */}
+          {/* ===== Step 4: Settings ===== */}
           {step === 3 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
@@ -234,7 +234,7 @@ export default function CreatePage() {
               <div style={css("display:flex;flex-direction:column;gap:20px")}>
                 {caps.includes("scrape") && (
                   <div style={css("font-size:12.5px;color:#606b79;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:14px 16px")}>
-                    <b>Lead scraping</b> is driven by what you ask in chat — e.g. “find property buyers near Makati.” No target setup needed here.
+                    <b>Lead scraping</b> starts from what you ask in chat, for example “find property buyers near Makati.” You do not need to set a target here.
                   </div>
                 )}
                 {caps.filter((c) => !isEngineReady(c)).length > 0 && (
@@ -252,7 +252,7 @@ export default function CreatePage() {
                         setSetting("book-meeting", "length", e.target.value);
                         setSetting("book-meeting", "duration", parseMeetingMinutes(e.target.value));
                       }}
-                      placeholder="Meeting length (e.g. 30 min) — default 30 min"
+                      placeholder="Meeting length (for example, 30 min). The default is 30 min."
                       style={css("width:100%;border:1px solid #E4E4E7;border-radius:12px;padding:12px 15px;font-size:14px;outline:none")}
                     />
                     {sv("book-meeting", "length").trim() !== "" && parseMeetingMinutes(sv("book-meeting", "length")) === undefined && (
@@ -264,12 +264,12 @@ export default function CreatePage() {
             </>
           )}
 
-          {/* ===== Step 5 — Goal ===== */}
+          {/* ===== Step 5: Goal ===== */}
           {step === 4 && (
             <>
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
                 <div style={css(titleStyle)}>What does success look like?</div>
-                <div style={css(subtitleStyle)}>Describe your agent&rsquo;s goals — plain language works.</div>
+                <div style={css(subtitleStyle)}>Describe the goals of your agent in plain language.</div>
               </div>
               <textarea aria-label="Agent goals" value={s.wGoals} onChange={(e) => set({ wGoals: e.target.value })} placeholder="Book 30 meetings every month. Target CTOs. Prioritize companies using AWS. Always personalize outreach. Avoid duplicate contacts." style={css("width:100%;min-height:200px;border:0.5px solid #f2f2f2;background:#f2f2f2;border-radius:12px;padding:24px;font-size:14px;line-height:1.6;color:#181d27;outline:none;resize:vertical")} />
             </>

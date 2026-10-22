@@ -51,7 +51,7 @@ export const teams = pgTable(
     members: jsonb("members").$type<string[]>().notNull().default([]),
     activity: jsonb("activity").$type<string[]>().notNull().default([]),
     meetings: integer("meetings").notNull().default(0),
-    pipeline: text("pipeline").notNull().default("—"),
+    pipeline: text("pipeline").notNull().default("-"),
     leads: integer("leads").notNull().default(0),
     template: text("template").notNull().default("custom"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -75,7 +75,7 @@ export const agentConfig = pgTable(
 );
 
 // Per-user membership override for any team (seed or created). When present it
-// replaces the team's base member list — lets users add agents to seed teams.
+// replaces the team's base member list. This lets users add agents to seed teams.
 export const teamMembers = pgTable(
   "team_members",
   {
@@ -87,7 +87,7 @@ export const teamMembers = pgTable(
 );
 
 // Password-reset tokens. A request creates one (1-hour expiry); using it to set
-// a new password consumes it. No email infra — the link is surfaced on-screen.
+// a new password consumes it. No email infra. The link shows on the screen.
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   token: text("token").primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -163,7 +163,7 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   rationale: text("rationale").notNull().default(""),
   status: text("status").notNull().default("draft"), // draft|sent
   // Hidden from the top-bar Email-drafts inbox (Discard / Clear sent). Soft-hide
-  // only — analytics counts still read every row, so this never rewinds a total.
+  // only. Analytics counts still read every row, so this never rewinds a total.
   dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
@@ -183,7 +183,7 @@ export const proposals = pgTable("proposals", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });
 
-// Meetings booked by a Meeting agent — the only source for the calendar view.
+// Meetings that a Meeting agent booked. This is the only source for the calendar view.
 export const meetings = pgTable("meetings", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -218,7 +218,7 @@ export const activity = pgTable("activity", {
   text: text("text").notNull(),
   // Cleared from the Notifications bell only. The dashboard/analytics/calendar
   // read the raw log via listActivity (unfiltered), so clearing never drops a
-  // metric or a calendar entry — only listNotifications honors this flag.
+  // metric or a calendar entry. Only listNotifications uses this flag.
   dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -272,7 +272,7 @@ export const products = pgTable("products", {
   // Vertical-agnostic extra fields (e.g. real-estate: location/features; SaaS:
   // plan/seats). Any non-standard CSV column lands here as key→value.
   attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
-  embedding: vector("embedding", { dimensions: 768 }), // hnsw cosine index lives only in the raw migration (0012) — drizzle doesn't manage vector indexes
+  embedding: vector("embedding", { dimensions: 768 }), // hnsw cosine index lives only in the raw migration (0012). Drizzle does not manage vector indexes.
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ProductRow = typeof products.$inferSelect;

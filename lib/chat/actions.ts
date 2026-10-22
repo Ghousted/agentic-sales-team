@@ -57,23 +57,23 @@ async function resolveTimeAndBook(userId: string, actor: Member, teamId: string,
   const { iso, label, hasTime } = await parseMeetingTime(phrase, { ...settings, timeZone: tz });
   if (!iso) return [{ who: actor.id, text: askWhenText(names, leadIds) }];
   if (!hasTime) {
-    // Format the day from the parsed date only — never reuse `label`, which carries
+    // Format the day from the parsed date only. Never reuse `label`, which has
     // the defaulted placeholder time (e.g. "9:00–9:30 AM") we're asking to replace.
     // Both are taken in the user's timezone: iso is UTC, so its own date can be a day off.
     return [{ who: actor.id, text: askWhatTimeText(names, dayLabel(iso, tz), leadIds, zonedDate(iso, tz)) }];
   }
-  // Report only what bookMeeting actually booked — it refuses a lead that isn't the user's.
+  // Report only what bookMeeting actually booked. It refuses a lead that is not the user's.
   const booked: string[] = [];
   for (const id of leadIds) if (await bookMeeting(userId, actor.id, id, iso, label, settings.type)) booked.push(id);
   const nameOf = (id: string) => teamLeads.find((l) => l.id === id)?.name ?? "the lead";
-  if (!booked.length) return [{ who: actor.id, text: `I couldn't book that — I couldn't find ${names} in your leads.` }];
+  if (!booked.length) return [{ who: actor.id, text: `I could not book that. I could not find ${names} in your leads.` }];
   const missed = leadIds.filter((id) => !booked.includes(id));
-  const text = `Booked — a ${settings.type} with ${booked.map(nameOf).join(", ")} on ${label}. It's on your calendar.`;
-  return [{ who: actor.id, text: missed.length ? `${text} I couldn't book ${missed.map(nameOf).join(", ")} — not found in your leads.` : text }];
+  const text = `Booked a ${settings.type} with ${booked.map(nameOf).join(", ")} on ${label}. It is on your calendar.`;
+  return [{ who: actor.id, text: missed.length ? `${text} I could not book ${missed.map(nameOf).join(", ")}. I did not find them in your leads.` : text }];
 }
 
 /** Handle one user message in a team thread. Both the user's message and the
- *  agents' replies are stored here, on the server, in that order — so the thread
+ *  agents' replies are stored here, on the server, in that order. Thus the thread
  *  in the DB is complete even if the tab closes, and the client only renders it.
  *  Returns the stored replies (with ids) and any job to follow. */
 export async function teamChat(teamId: string, message: string, leadIds?: string[], timeZone?: string): Promise<TeamChatResult> {
@@ -116,7 +116,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // Conversation context from the stored thread: the last agent to speak
   // (continuity), and the open clarifying question, if any. The question is the
   // newest member prompt since the user's last message, so pod narration posted
-  // in between doesn't close it. Only member rows count — the user can't write
+  // in between doesn't close it. Only member rows count. The user cannot write
   // an agent row (appendMessages takes "me" only), so markers can't be forged.
   let lastSpeaker: Member | undefined;
   for (let i = history.length - 1; i >= 0 && !lastSpeaker; i--) lastSpeaker = byId.get(history[i].who);
@@ -139,7 +139,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })));
   const mentions = parseMentions(message, members);
 
-  // Pending meeting time: the Meeting agent asked "when?" or "what time?" — this
+  // Pending meeting time: the Meeting agent asked "when?" or "what time?". This
   // unmentioned reply is the answer. When a day is already known (the marker
   // carries it), prepend it so a bare "2pm" lands on that day. resolveTimeAndBook
   // books, or re-asks for whichever detail is still missing.
@@ -175,7 +175,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
       pod: true, teamId,
     });
     if ("error" in enq) return { messages: [{ who: a.id, text: "I wasn't able to start that: " + enq.error }] };
-    return { messages: [{ who: a.id, text: "Understood — searching for that now. I'll post the results here." }], job: { id: enq.jobId, kind: "scrape", agentId: a.id } };
+    return { messages: [{ who: a.id, text: "Understood. I am searching for that now. I will post the results here." }], job: { id: enq.jobId, kind: "scrape", agentId: a.id } };
   }
 
   // Pending-answer path: Outreach just asked "who?", and this is an unmentioned
@@ -204,7 +204,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
 
   const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
   // The rerouting agent (e.g. the mentioned Assessor) speaks first; prepend its
-  // line to whatever the capable actor replies — including a clarifying question,
+  // line to whatever the capable actor replies, including a clarifying question,
   // which used to be returned alone and dropped the hand-off.
   const pre = res.handoff ?? [];
   if (!res.actor || !res.capability) return { messages: [...pre, ...res.messages] };
@@ -231,7 +231,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
 
-  // Scrape needs a target — ask before running a bare "find leads".
+  // A scrape needs a target. Ask before it runs a bare "find leads".
   if (cap === "scrape" && !scrapeHasTarget(message)) {
     return { messages: [...pre, { who: actor.id, text: askScrapeText() }] };
   }

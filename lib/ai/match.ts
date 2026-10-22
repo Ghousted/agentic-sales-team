@@ -1,7 +1,7 @@
 import "server-only";
 // Matchmaking: given a lead's intent and candidate catalog listings (retrieved
-// via searchProducts), pick the listings that genuinely fit — each with a 0-100
-// fit score and a one-line reason. Pure — no DB. One LLM JSON call.
+// via searchProducts), pick the listings that genuinely fit. Each has a 0-100
+// fit score and a one-line reason. Pure (no DB). One LLM JSON call.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, MatchResult, ResearchBrief } from "@/lib/leads/types";
 import type { ProductDTO } from "@/lib/products/store";
@@ -37,9 +37,9 @@ export async function matchLead(
     .join("\n");
   const system = [
     `You are ${agent.name}, matching one prospect to the listings in our catalog that genuinely fit their need.`,
-    "From the candidate listings below, return ONLY the ones that actually fit the prospect's stated intent (budget, location, type, size, etc.). Omit poor fits entirely — never force a match.",
+    "From the candidate listings below, return ONLY the ones that actually fit the prospect's stated intent (budget, location, type, size, etc.). Do not include poor fits. Never force a match.",
     "For each fitting listing: score its fit from 0 to 100 (100 = ideal), and give a ONE-line reason tying the listing to the prospect's need, naming the specific factor (e.g. budget or location).",
-    "Order best fit first. Use productId values ONLY from the list below — never invent an id. Return ONLY JSON { matches: [{ productId, score, reason }] }.",
+    "Order best fit first. Use productId values ONLY from the list below. Never invent an id. Return ONLY JSON { matches: [{ productId, score, reason }] }.",
     "\nCandidate listings:\n" + catalog,
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";

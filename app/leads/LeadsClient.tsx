@@ -246,10 +246,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                     </div>
                   )}
                 </div>
-                <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
+                <div style={css("color:#3F3F46")}>{l.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
                 <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-                <div style={css("font-weight:700;color:#006AFF")}>{l.score || "—"}</div>
+                <div style={css("font-weight:700;color:#006AFF")}>{l.score || "-"}</div>
                 <div style={css("display:flex;gap:6px")}>
                   <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E6F0FF;color:#006AFF;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#D6E6FF">{running === l.id ? "Running…" : "Run outreach"}</Btn>
                   <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
@@ -262,7 +262,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       ) : (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
           <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-            <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates — accept the good ones</div>
+            <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates. Accept the good ones.</div>
             {candidates.length > 0 && (<>
               <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Accept all</Btn>
               <Btn onClick={() => review(candidates.map((c) => c.id), false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Dismiss all</Btn>
@@ -276,8 +276,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             const a = byId(c.agentId);
             return (
               <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
-                <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "-")}</div></div>
+                <div style={css("color:#3F3F46")}>{c.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
                   {safeHttpUrl(c.profileUrl) && <Box onClick={() => openExternal(c.profileUrl)} style="font-size:11.5px;font-weight:600;color:#006AFF;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
@@ -340,7 +340,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div>
                   <div style={css(SEC)}>Matches</div>
                   {detailLoading ? <div style={css(MUTED)}>Loading…</div>
-                    : leadMatches.length === 0 ? <div style={css(MUTED)}>No matches yet — ask a Matchmaker to match this lead to your listings.</div>
+                    : leadMatches.length === 0 ? <div style={css(MUTED)}>No matches yet. Ask a Matchmaker to match this lead to your listings.</div>
                     : <div style={css("display:flex;flex-direction:column;gap:8px")}>{leadMatches.map((m) => (
                         <div key={m.id} style={css("border:1px solid #ECECF1;border-radius:12px;padding:11px 13px")}>
                           <div style={css("display:flex;align-items:center;gap:8px")}>

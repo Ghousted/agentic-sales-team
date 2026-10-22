@@ -1,6 +1,6 @@
 import "server-only";
 // The research engine: one structured LLM call per lead that produces a
-// personalization brief. Pure — no DB. Mirrors lib/ai/outreach.ts.
+// personalization brief. Pure (no DB). Mirrors lib/ai/outreach.ts.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, ResearchBrief } from "@/lib/leads/types";
 
@@ -22,7 +22,7 @@ function systemPrompt(a: AgentSnapshot): string {
     `Given ONE prospect, produce a concise research brief that helps a teammate personalize outreach.`,
     `Reason from the prospect's title, company, and platform using what you know about that kind of company and role.`,
     `Return: a 2-3 sentence summary; 3-5 likely priorities or pain points; 3-5 specific personalization hooks a rep could reference; and one recommended outreach angle.`,
-    `Be concrete and specific — avoid generic filler. Return ONLY JSON matching the schema.`,
+    `Be concrete and specific. Do not use generic filler. Return ONLY JSON matching the schema.`,
   ].join(" ");
 }
 

@@ -2,7 +2,7 @@ import "server-only";
 // A real, in-character conversational reply for the team chat: used when a
 // message is a question or small talk (intent = chat/unknown) rather than a
 // command. The responding agent answers with knowledge of its own persona, its
-// teammates, and what the platform can do — so "how do you assess leads?" or
+// teammates, and what the platform can do. Thus "how do you assess leads?" or
 // "how do you guys scrape the web?" get real answers, not a canned line.
 // When AI isn't configured or the call fails it says so plainly, rather than
 // passing a canned line off as an answer.
@@ -13,9 +13,9 @@ interface Responder { id: string; name: string; role: string; goal: string; task
 interface RosterMember { id: string; name: string; capabilities: string[] }
 interface HistMsg { who: string; text: string }
 
-const COMMANDS = `Direct requests still work — for example "book a meeting", "draft outreach" or "any updates?".`;
+const COMMANDS = `Direct requests also work, for example "book a meeting", "draft outreach" or "any updates?".`;
 export const AI_NOT_CONFIGURED = `I can't answer questions right now: AI isn't configured on this workspace (OPENROUTER_API_KEY). ${COMMANDS}`;
-export const AI_FAILED = `I couldn't answer that — the AI service didn't respond. Please try again in a moment. ${COMMANDS}`;
+export const AI_FAILED = `I could not answer that. The AI service did not respond. Please try again in a moment. ${COMMANDS}`;
 
 const capLabel = (id: string) => CAPABILITIES.find((c) => c.id === id)?.label ?? id;
 
@@ -36,7 +36,7 @@ function systemPrompt(responder: Responder, roster: RosterMember[]): string {
     `What the platform's agents can do, and how the team works:`,
     platform,
     ``,
-    `The user (your manager) is asking a question or making conversation — this is NOT a command to run a task. Answer it helpfully and in character:`,
+    `The user (your manager) is asking a question or making conversation. This is NOT a command to run a task. Give a helpful answer and stay in character:`,
     `- If asked how you or the team does something (how leads are assessed, how prospects are found, etc.), explain the actual approach clearly, grounded in the capabilities above.`,
     `- If the topic is a teammate's specialty, explain it and name the teammate who owns it (e.g. "our Scout finds prospects by...").`,
     `- Stay on sales, prospecting, and how this team and platform work. If asked something unrelated, briefly steer back to how you can help with sales.`,
@@ -75,7 +75,7 @@ export async function converse(input: {
     const turns = toTurns(history.slice(-10));
     const last = turns[turns.length - 1];
     // The client persists the user's message before this runs, so it may already
-    // be the last history turn — don't append it twice.
+    // be the last history turn. Do not append it twice.
     if (!last || last.role !== "user" || last.text !== message) {
       turns.push({ role: "user", text: message });
     }

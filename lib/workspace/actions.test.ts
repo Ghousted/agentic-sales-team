@@ -31,7 +31,7 @@ const agent: Agent = {
 };
 const team: Team = {
   id: "txabc", name: "EMEA", icon: "🚀", iconBg: "#EAF2FF", desc: "", members: ["xabc"],
-  meetings: 0, pipeline: "—", leads: 0, goal: "", activity: [], template: "custom",
+  meetings: 0, pipeline: "-", leads: 0, goal: "", activity: [], template: "custom",
 };
 
 beforeEach(() => {

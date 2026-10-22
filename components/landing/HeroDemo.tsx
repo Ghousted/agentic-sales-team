@@ -28,7 +28,7 @@ const QROWS = [
   { id: "q4", name: "Sam Patel", title: "Finance Manager", company: "Orchard Labs", score: 58, why: "Based in the UK. Your criteria say US or Canada." },
   { id: "q5", name: "Victor Hughes", title: "VP Finance", company: "Pallet & Co", score: 52, why: "Right title, but they recently signed with a competitor." },
 ];
-// [text, highlight?] — 1 = from lead research, 2 = unverified claim
+// [text, highlight?]. 1 = from lead research, 2 = unverified claim.
 type Seg = [string, number?];
 const DRAFTS: { id: string; name: string; company: string; subject: string; seg: Seg[]; flagged?: boolean; tint: [string, string] }[] = [
   { id: "d1", name: "Aisha Rahman", company: "Controller, Quillstack", subject: "Month-end at Quillstack", tint: ["#e6f0ff", "#0b57d0"], seg: [["Hi Aisha,\n\n"], ["Saw Quillstack opened a second office in Austin", 1], [". That’s usually when month-end starts to drag: more cards, more receipts, more people to chase.\n\nWorth a 20-minute look next week?"]] },

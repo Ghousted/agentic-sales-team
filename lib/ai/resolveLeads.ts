@@ -35,7 +35,7 @@ export async function resolveTargetLeads(reply: string, leads: TeamLeadPick[]): 
   if (leads.length === 0) return { mode: "none", leadIds: [] };
   if (!isAIConfigured()) return matchLeadsByName(reply, leads);
   const list = leads
-    .map((l) => `id=${l.id} | ${l.name}${l.title ? " — " + l.title : ""}${l.company ? " @ " + l.company : ""}${l.platform ? " (" + l.platform + ")" : ""}`)
+    .map((l) => `id=${l.id} | ${l.name}${l.title ? ", " + l.title : ""}${l.company ? " @ " + l.company : ""}${l.platform ? " (" + l.platform + ")" : ""}`)
     .join("\n");
   const system = [
     "A salesperson was asked which of their leads to write outreach to. Read their reply and map it to the lead list.",
@@ -43,7 +43,7 @@ export async function resolveTargetLeads(reply: string, leads: TeamLeadPick[]): 
     "- mode='all' if they mean everyone / the whole list / 'all' / 'everyone'. leadIds: [].",
     "- mode='some' if they name or describe specific lead(s); set leadIds to the matching id(s) from the list ONLY.",
     "- mode='none' if you cannot tell which (a vague pointer like 'this'/'that one' with no detail, or unrelated). leadIds: [].",
-    "Match on name, title, company, or platform. NEVER invent ids — use only ids from the list.",
+    "Match on name, title, company, or platform. NEVER invent ids. Use only ids from the list.",
     "LEADS:",
     list,
   ].join("\n");

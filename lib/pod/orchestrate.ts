@@ -1,6 +1,6 @@
 import "server-only";
 // Pod orchestration: resolve a team's members/capabilities/approval-modes and
-// enqueue or chain pod-stage jobs. Server-only. No engine work here — it wires
+// enqueue or chain pod-stage jobs. Server-only. No engine work here. It wires
 // the existing capability jobs into an auto-handed-off pipeline.
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
@@ -109,7 +109,7 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
 
   if (mode === "ask") {
     const first = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
+    await postTeamMessage(userId, teamId, info.id, `@${first}, ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
   } else {
     await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${DOING[capability] ?? capability} now.`);
   }
@@ -129,7 +129,7 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
   return null;
 }
 
-/** After a pod stage completes, narrate the hand-off and enqueue the next stage —
+/** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
 export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0): Promise<void> {
   const finisherId = await memberWithCapability(userId, teamId, completedKind);
@@ -143,12 +143,12 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
     if (assessorId) {
       const info = await agentInfo(userId, assessorId);
       if (info) {
-        await postTeamMessage(userId, teamId, finisher.id, `Found the new leads. @${first(info)} — over to you to review them.`);
+        await postTeamMessage(userId, teamId, finisher.id, `I found the new leads. @${first(info)}, please review them.`);
         await enqueuePodStage(userId, teamId, "assess", assessorId);
       }
     } else {
       const userName = await userFirstName(userId);
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName} — they're waiting for you to review and accept.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName}, they are ready for you to review and accept.`);
     }
     return;
   }
@@ -157,11 +157,11 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   if (next) {
     const info = await agentInfo(userId, next.agentId);
     if (info) {
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)} — over to you for ${NOUN[next.capability] ?? next.capability}.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)}, please do the ${NOUN[next.capability] ?? next.capability}.`);
       await enqueuePodStage(userId, teamId, next.capability, next.agentId);
     }
   } else {
     const userName = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName} — ${finalAction(completedKind)}.`);
+    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName}, ${finalAction(completedKind)}.`);
   }
 }

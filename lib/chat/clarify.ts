@@ -1,6 +1,6 @@
 // Pure helpers for the team-chat "ask for a missing detail" clarifications.
 // A scrape needs a target (what/who/where); a bare "find leads" has none, so the
-// agent asks before running a weak search. No I/O — unit-checkable.
+// agent asks before it runs a weak search. No I/O, so unit tests can check it.
 
 // Generic scrape verbs/nouns/platforms that carry no targeting on their own.
 const SCRAPE_STOPWORDS = new Set([
@@ -44,7 +44,7 @@ export function askWhenText(leadLabel: string, leadIds: string[]): string {
   return `When should I set the meeting with ${leadLabel}? ⟦meet:${leadIds.join(",")}⟧`;
 }
 
-/** The "what time?" prompt — shown when a day is set but no clock time was given.
+/** The "what time?" prompt. It shows when a day is set but the user gave no clock time.
  *  The marker also carries the resolved date (ISO yyyy-mm-dd) so a bare time reply
  *  ("2pm") lands on the right day. */
 export function askWhatTimeText(leadLabel: string, dayLabel: string, leadIds: string[], isoDate: string): string {

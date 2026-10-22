@@ -32,6 +32,6 @@ describe("converse", () => {
   it("says the AI call failed when it errors", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockResolvedValue(new Response("down", { status: 503 }));
-    expect(await converse(input)).toMatch(/AI service didn't respond/);
+    expect(await converse(input)).toMatch(/AI service did not respond/);
   });
 });

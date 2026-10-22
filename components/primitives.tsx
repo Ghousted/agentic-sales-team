@@ -3,7 +3,7 @@
 // - css(): parse a CSS declaration string into a React style object (so ported
 //   style strings can be copied over verbatim).
 // - Box: a div/span that supports `styleHover` (the old `style-hover`) via hover
-//   state, and — when given onClick — becomes a keyboard-activatable role="button".
+//   state. When it gets onClick, it becomes a role="button" that the keyboard can activate.
 // - Btn: a real <button> with hover support and the base transition/active styles.
 import React, { useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
@@ -41,7 +41,7 @@ interface BoxProps {
   style?: Style;
   styleHover?: Style;
   onClick?: (e: MouseEvent | KeyboardEvent) => void;
-  // Suppress role="button"/tabindex/keyboard — for clickable containers that
+  // Remove role="button"/tabindex/keyboard. Use this for clickable containers that
   // already hold their own real buttons (avoids nested interactive controls).
   noButton?: boolean;
   children?: ReactNode;

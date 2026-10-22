@@ -1,5 +1,5 @@
 // LLM text, JSON and embeddings via OpenRouter's OpenAI-compatible REST API.
-// No SDK — a single fetch keeps it dependency-free and edge/node friendly.
+// No SDK. A single fetch keeps it free of dependencies and compatible with edge and node.
 import "server-only";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
@@ -40,7 +40,7 @@ async function chat(body: Record<string, unknown>): Promise<string> {
     headers: authHeaders(apiKey()),
     body: JSON.stringify({
       model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
-      // Thinking counts against max_tokens and can truncate short replies —
+      // Thinking counts against max_tokens and can truncate short replies.
       // turn it off for fast, complete answers.
       reasoning: { effort: "none" },
       ...body,

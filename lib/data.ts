@@ -1,12 +1,12 @@
 // Seed data + pure helpers ported verbatim from the v5 prototype.
 import type { Agent, Team, StatusKey, StatusMeta, Chats } from "./types";
 
-// No seed agents — every user builds their own workforce via the creation wizard
+// No seed agents. Every user builds their own workforce via the creation wizard
 // (from the AGENT_TYPES presets in lib/agentTypes.ts). Typed empty array so every
 // AGENTS_BASE consumer just iterates nothing.
 export const AGENTS_BASE: Agent[] = [];
 
-// No seed team instances — users create their own teams from the team TEMPLATES
+// No seed team instances. Users create their own teams from the team TEMPLATES
 // (TEAM_TEMPLATES in lib/agentTypes.ts, offered in the New Team modal). Kept as a
 // typed empty array so every TEAMS_BASE consumer just iterates nothing.
 export const TEAMS_BASE: Team[] = [];
@@ -21,7 +21,7 @@ export function statusMeta(s: StatusKey): StatusMeta {
   return STATUS_META[s];
 }
 
-// No seed conversations — chats begin once the user creates agents/teams.
+// No seed conversations. Chats start when the user creates agents/teams.
 export function chatsInit(): Chats {
   return {};
 }

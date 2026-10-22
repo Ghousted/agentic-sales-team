@@ -107,7 +107,7 @@ function parseCsv(text: string): Record<string, string>[] {
 }
 
 // Standard fields (+ aliases). Every OTHER CSV column becomes a vertical-specific
-// attribute (key→value) — so real-estate location/features/selling-points, SaaS
+// attribute (key→value). Thus real-estate location/features/selling-points, SaaS
 // plan/seats, etc. all import without hardcoding any vertical.
 const FIELD_ALIASES: Record<string, "name" | "description" | "price" | "category"> = {
   name: "name", title: "name",

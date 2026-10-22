@@ -5,6 +5,7 @@ import "server-only";
 // Two modes: "intent" finds buyer posts (Facebook/Reddit), "fit" finds companies and
 // decision-makers that match a target customer (public LinkedIn pages Google indexed).
 import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
+import { cleanField, LEAD_FIELD_LIMITS, untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
 import { gateResults } from "./jev";
 import { cleanTitle, domainOf, trunc, type StepLog } from "./steps";
@@ -31,6 +32,8 @@ const FIRECRAWL_TIMEOUT_MS = 15_000;
 /** Room for ~30 prospects of JSON. 1500 cut the reply off mid-array, and the
  *  parse error used to surface as "found 0 leads". */
 const EXTRACT_MAX_TOKENS = 4000;
+/** Room for every search's snippets (up to 6 searches). */
+const CORPUS_MAX_CHARS = 40_000;
 
 /** Buyer-voice fallback query when no instruction is given (derived from the goal). */
 function buildQuery(agentGoal: string): string {
@@ -189,6 +192,7 @@ function fitRules(targetDesc: string, sells: string, target: number): string[] {
     "- profileUrl: the SOURCE_URL. platform: 'LinkedIn'.",
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
     FIT_RULE,
+    UNTRUSTED_RULE,
     "Use ONLY facts in the TITLE and SNIPPET. NEVER fabricate a name, title or company. If the result does not show who or which company it is, skip it.",
     "EXCLUDE: companies or people that do not match the target (wrong industry, wrong location when one is given, wrong role); recruiters and staffing agencies (unless they are the target); job postings; LinkedIn posts, articles, 'pulse' pages, groups and school pages; LinkedIn's own pages.",
     "Return ONLY JSON.",
@@ -199,10 +203,18 @@ function fitRules(targetDesc: string, sells: string, target: number): string[] {
  * public post/page content. Not vendors, competitors, directories, or articles. */
 async function extractProspects(targetDesc: string, sells: string, results: SearchResult[], target: number, platformHint: string, mode: ScrapeMode): Promise<Prospect[]> {
   if (!isAIConfigured() || results.length === 0) return [];
-  const corpus = results
-    .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`)
-    .join("\n\n---\n\n")
-    .slice(0, 40000); // room for every search's snippets (up to 6 searches)
+  // Each source is its own untrusted block. Drop whole blocks past the cap, never
+  // cut one in the middle, so every block keeps its closing delimiter.
+  const SEP = "\n\n---\n\n";
+  const blocks: string[] = [];
+  let size = 0;
+  for (const r of results) {
+    const b = untrusted(`SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`);
+    if (size + b.length > CORPUS_MAX_CHARS) break;
+    blocks.push(b);
+    size += b.length + SEP.length;
+  }
+  const corpus = blocks.join(SEP);
   const system = (mode === "fit" ? fitRules(targetDesc, sells, target) : [
     "You turn PUBLIC posts/listings into SALES LEADS. A lead is a person the salesperson can contact.",
     `The salesperson is looking for: ${targetDesc}.`,
@@ -220,6 +232,7 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     `- profileUrl: the SOURCE_URL (the post/page link. The salesperson uses it to contact them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
     FIT_RULE,
+    UNTRUSTED_RULE,
     "INCLUDE a lead even when the name is not shown. The post link is the contact path.",
     "RECENCY: only include posts from the PAST MONTH. If a post visibly shows its age and it is older than ~1 month (e.g. '2mo', '3 months ago', '1y', or a date more than ~30 days back), SKIP it. An old buying-intent post is a dead lead.",
     "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to. A lead is never a seller or an article about the topic.",
@@ -308,15 +321,20 @@ function subredditAsUser(name: string, url: string): string {
 
 /** Derive platform from the source URL, and keep a profileUrl only when it is one
  *  of the URLs Firecrawl returned. The LLM writes profileUrl, so a prompt
- *  injection in a post could otherwise plant a `javascript:` or phishing link. */
+ *  injection in a post could otherwise plant a `javascript:` or phishing link.
+ *  The other fields are cut to LEAD_FIELD_LIMITS and lose hidden characters, so a
+ *  post cannot carry a long payload into the later assess/outreach prompts. */
 export function normalizeProspects(prospects: Prospect[], sourceUrls: (string | undefined)[]): Prospect[] {
   const allowed = new Set(sourceUrls.map(safeHttpUrl).filter((u): u is string => !!u));
   return prospects.map((p) => {
     const url = safeHttpUrl(p.profileUrl);
     const profileUrl = url && allowed.has(url) ? url : "";
+    const L = LEAD_FIELD_LIMITS;
+    const email = cleanField(p.email, L.email);
     return {
-      name: subredditAsUser(p.name, profileUrl), title: p.title ?? "", company: p.company ?? "",
-      profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || p.platform || "web", email: p.email ?? "", fit: (p.fit ?? "").trim(),
+      name: subredditAsUser(cleanField(p.name, L.name), profileUrl), title: cleanField(p.title, L.title), company: cleanField(p.company, L.company),
+      profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || cleanField(p.platform, 40) || "web",
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "", fit: cleanField(p.fit, L.fit),
     };
   });
 }

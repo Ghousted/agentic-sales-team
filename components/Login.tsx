@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useApp } from "@/lib/store";
 import { signIn, signUp, requestPasswordReset } from "@/lib/auth/actions";
+import { callAction } from "@/lib/auth/call-action";
 import { css } from "./primitives";
 import { SIGNUP_EMAIL_KEY } from "./landing/LandingPage";
 
@@ -61,9 +62,8 @@ export default function Login() {
     e.preventDefault();
     if (loading) return;
     setError("");
-    setLoading(true);
-    const res = await requestPasswordReset({ email });
-    setLoading(false);
+    const res = await callAction(() => requestPasswordReset({ email }), fail, setLoading);
+    if (!res) return;
     if (!res.ok) return fail(res.error || "Something went wrong. Please try again.");
     setResetDone(true);
   };
@@ -72,9 +72,8 @@ export default function Login() {
     e.preventDefault();
     if (loading || ok) return;
     setError("");
-    setLoading(true);
-    const res = isSignup ? await signUp({ email, password, name: name.trim() || undefined }) : await signIn({ email, password });
-    setLoading(false);
+    const res = await callAction(() => (isSignup ? signUp({ email, password, name: name.trim() || undefined }) : signIn({ email, password })), fail, setLoading);
+    if (!res) return;
     if (!res.ok || !res.user) return fail(res.error || "Something went wrong. Please try again.");
     setOk(true);
     // Full navigation so the server re-hydrates THIS user's workspace and nothing

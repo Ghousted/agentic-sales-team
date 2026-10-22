@@ -151,6 +151,10 @@ export interface AccountInfo {
 /** Server helper: current user for hydrating the client on load. Runs during the
  *  root layout's SSR, so it must never throw: on a session/DB failure it logs and
  *  returns null (treated as logged-out) rather than crashing the app. */
+function isDynamicUsage(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE";
+}
+
 export async function currentUser(): Promise<AccountInfo | null> {
   if (!isDbConfigured()) return null;
   try {
@@ -165,6 +169,9 @@ export async function currentUser(): Promise<AccountInfo | null> {
       .limit(1);
     return user ?? null;
   } catch (e) {
+    // During a static render Next throws DYNAMIC_SERVER_USAGE from cookies() to mark the
+    // route dynamic. It must reach Next, not be logged and swallowed as a failed read.
+    if (isDynamicUsage(e)) throw e;
     console.error("[currentUser] session/db read failed; treating as logged-out:", e);
     return null;
   }

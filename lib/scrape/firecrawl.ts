@@ -19,6 +19,12 @@ export function isFirecrawlConfigured(): boolean {
 
 interface SearchResult { title?: string; description?: string; url?: string; markdown?: string }
 
+/** One Firecrawl search call. Two run per scrape, inside the route's 45s budget. */
+const FIRECRAWL_TIMEOUT_MS = 15_000;
+/** Room for ~30 prospects of JSON. 1500 cut the reply off mid-array, and the
+ *  parse error used to surface as "found 0 leads". */
+const EXTRACT_MAX_TOKENS = 4000;
+
 /** Buyer-voice fallback query when no instruction is given (derived from the goal). */
 function buildQuery(agentGoal: string): string {
   return `${agentGoal || "potential customers"} looking to buy recommendations`.replace(/\s+/g, " ").trim().slice(0, 490);
@@ -46,6 +52,10 @@ async function firecrawlSearch(query: string, limit: number): Promise<SearchResu
     // tbs: only recent results (past month) — stale buying-intent posts are dead leads.
     body: JSON.stringify({ query, limit, tbs: "qdr:m" }),
     cache: "no-store",
+    signal: AbortSignal.timeout(FIRECRAWL_TIMEOUT_MS),
+  }).catch((e) => {
+    if ((e as Error)?.name === "TimeoutError") throw new Error(`Firecrawl search timed out after ${FIRECRAWL_TIMEOUT_MS / 1000}s`);
+    throw e;
   });
   if (!res.ok) throw new Error(`Firecrawl ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
   const data = await res.json();
@@ -128,12 +138,14 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     "Return ONLY JSON.",
   ].filter(Boolean).join("\n");
   const turns: Turn[] = [{ role: "user", text: corpus }];
+  // Let a failure throw: swallowing it ended the job 'done' with "found 0 leads".
+  let r: { prospects?: Prospect[] };
   try {
-    const r = await aiJSON<{ prospects: Prospect[] }>(system, turns, PROSPECTS_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 1500, temperature: 0.3 });
-    return (r.prospects ?? []).filter((p) => p && p.name).slice(0, target);
-  } catch {
-    return [];
+    r = await aiJSON<{ prospects: Prospect[] }>(system, turns, PROSPECTS_SCHEMA as unknown as Record<string, unknown>, { maxTokens: EXTRACT_MAX_TOKENS, temperature: 0.3 });
+  } catch (e) {
+    throw new Error(`Lead extraction failed: ${e instanceof Error ? e.message : String(e)}`);
   }
+  return (r.prospects ?? []).filter((p) => p && p.name).slice(0, target);
 }
 
 export async function runFirecrawlScrape(

@@ -21,14 +21,16 @@ const SCHEMA = {
   required: ["matches"],
 } as const;
 
-/** Match one lead to the listings that fit. Returns [] on empty catalog, no
- *  LLM, or error. Only ever returns productIds from the provided listings. */
+/** Match one lead to the listings that fit. Returns [] when nothing fits, and
+ *  null when it can't run (no LLM, empty catalog); throws on an LLM error. Null
+ *  and errors leave the lead to be tried again. Only ever returns productIds
+ *  from the provided listings. */
 export async function matchLead(
   agent: AgentSnapshot,
   lead: { name: string; title: string; company: string; research?: ResearchBrief | null },
   listings: ProductDTO[],
-): Promise<MatchResult[]> {
-  if (!isAIConfigured() || listings.length === 0) return [];
+): Promise<MatchResult[] | null> {
+  if (!isAIConfigured() || listings.length === 0) return null;
   const attrs = (p: ProductDTO) => Object.entries(p.attributes ?? {}).map(([k, v]) => ` | ${k}: ${v}`).join("");
   const catalog = listings
     .map((p) => `id=${p.id} | ${p.name}${p.price ? " (" + p.price + ")" : ""}${p.category ? " [" + p.category + "]" : ""}${p.description ? ": " + p.description : ""}${attrs(p)}`)
@@ -42,14 +44,10 @@ export async function matchLead(
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `Prospect:\nName: ${lead.name}\nIntent: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}` }];
-  try {
-    const r = await aiJSON<{ matches: MatchResult[] }>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.3 });
-    const valid = new Set(listings.map((p) => p.id));
-    return (r.matches ?? [])
-      .filter((m) => m && valid.has(m.productId))
-      .map((m) => ({ productId: m.productId, score: Math.max(0, Math.min(100, Math.round(Number(m.score) || 0))), reason: (m.reason ?? "").trim() }))
-      .slice(0, listings.length);
-  } catch {
-    return [];
-  }
+  const r = await aiJSON<{ matches: MatchResult[] }>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.3 });
+  const valid = new Set(listings.map((p) => p.id));
+  return (r.matches ?? [])
+    .filter((m) => m && valid.has(m.productId))
+    .map((m) => ({ productId: m.productId, score: Math.max(0, Math.min(100, Math.round(Number(m.score) || 0))), reason: (m.reason ?? "").trim() }))
+    .slice(0, listings.length);
 }

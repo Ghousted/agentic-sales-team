@@ -52,6 +52,8 @@ import { pickLeadsForResearch } from "@/lib/leads/store";
 import { draftResearch } from "@/lib/ai/research";
 import { runFirecrawlScrape } from "@/lib/scrape/firecrawl";
 import { chainNext } from "@/lib/pod/orchestrate";
+import { pickLeadsForMatch, addMatches } from "@/lib/matches/store";
+import { matchLead } from "@/lib/ai/match";
 import { isStale, staleAfterMs } from "@/lib/jobs/runtime";
 
 const agent = { id: "a1", name: "Ann", role: "", goal: "", task: "" };
@@ -163,5 +165,22 @@ describe("POST /api/scrape", () => {
     const body = await res.json();
     expect(body.note).toBeUndefined();
     expect(res.status).toBe(409);
+  });
+});
+
+describe("match job", () => {
+  const matchJob = { ...researchJob(), kind: "match" };
+
+  it("stamps leads nothing fit, counts only leads that got a match, and leaves failed or unrunnable leads for later", async () => {
+    fake.state.selects = [[matchJob]];
+    vi.mocked(pickLeadsForMatch).mockResolvedValueOnce([lead("fit"), lead("nofit"), lead("nocatalog"), lead("error")] as never);
+    vi.mocked(matchLead)
+      .mockResolvedValueOnce([{ productId: "p1", score: 90, reason: "budget" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error("LLM down"));
+    await runJobs();
+    expect(vi.mocked(addMatches).mock.calls.map((c) => c[2])).toEqual(["fit", "nofit"]);
+    expect(doneUpdate()?.result).toEqual({ matched: 1, failed: 1 });
   });
 });

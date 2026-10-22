@@ -60,9 +60,9 @@ export async function bookMeeting(userId: string, agentId: string, leadId: strin
   return true;
 }
 
-/** Book a meeting for a lead directly (from the lead modal): parse the time,
- *  honor the Meeting agent's settings, and book. Session-scoped. */
-export async function bookMeetingForLead(leadId: string, whenText: string): Promise<{ ok: boolean; label?: string; error?: string }> {
+/** Book a meeting for a lead directly (from the lead modal): parse the time in
+ *  the user's timezone, honor the Meeting agent's settings, and book. Session-scoped. */
+export async function bookMeetingForLead(leadId: string, whenText: string, timeZone?: string): Promise<{ ok: boolean; label?: string; error?: string }> {
   if (!isDbConfigured()) return { ok: false, error: "Server not configured." };
   const userId = await uid();
   if (!userId) return { ok: false, error: "Not signed in." };
@@ -71,9 +71,9 @@ export async function bookMeetingForLead(leadId: string, whenText: string): Prom
   const meetingAgent = await findMeetingAgent(userId);
   const agentId = meetingAgent?.id ?? lead.agentId;
   const settings = await meetingSettings(userId, agentId);
-  const { iso, label } = await parseMeetingTime(whenText, settings);
+  const { iso, label } = await parseMeetingTime(whenText, { ...settings, timeZone });
   if (!iso) return { ok: false, error: "I couldn't read that time — try “tomorrow 2pm”." };
-  await bookMeeting(userId, agentId, leadId, iso, label, settings.type);
+  if (!(await bookMeeting(userId, agentId, leadId, iso, label, settings.type))) return { ok: false, error: "Lead not found." };
   return { ok: true, label };
 }
 

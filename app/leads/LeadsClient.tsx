@@ -45,7 +45,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   const bookMeetingNow = async () => {
     if (!openLead || !bookingWhen.trim() || booking) return;
     setBooking(true);
-    const res = await bookMeetingForLead(openLead.id, bookingWhen.trim());
+    const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
     setBooking(false);
     if (res.error) { showToast(res.error); return; }
     showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);

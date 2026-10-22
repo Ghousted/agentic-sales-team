@@ -8,6 +8,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   workspaceName: text("workspace_name").notNull().default("My Workspace"),
   notifications: jsonb("notifications").$type<Record<string, boolean>>().notNull().default({}),
+  // Stamped into every session token; bumping it (logout, password reset) revokes
+  // all of the user's existing sessions.
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -135,6 +138,8 @@ export const leads = pgTable("leads", {
   research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),
   // Set by the qualify stage. Separate from `score`, which assess and outreach also write.
   qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
+  // Set when the matchmaker has run on the lead, whether or not anything fit.
+  matchedAt: timestamp("matched_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

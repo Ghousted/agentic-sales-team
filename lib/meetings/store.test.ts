@@ -23,7 +23,8 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/lib/ai/meetingTime", () => ({ parseMeetingTime: vi.fn() }));
 
-const { bookMeeting, listMeetings } = await import("./store");
+const { bookMeeting, bookMeetingForLead, listMeetings } = await import("./store");
+const { parseMeetingTime } = await import("@/lib/ai/meetingTime");
 
 const USER_A = "00000000-0000-4000-8000-00000000000a";
 const LEAD_OF_B = "00000000-0000-4000-8000-0000000000b1";
@@ -57,5 +58,16 @@ describe("listMeetings", () => {
     await listMeetings();
     const select = sent.find((s) => /from "meetings"/.test(s));
     expect(select).toMatch(/inner join "leads" on \(.*"leads"\."user_id" = \$\d+.*\)/);
+  });
+});
+
+describe("bookMeetingForLead", () => {
+  it("parses the time in the timezone the client sent", async () => {
+    sessionUser = USER_A;
+    answer = (sql) => (/from "leads"/.test(sql) ? [[LEAD_OF_A, "agent-1"]] : []);
+    vi.mocked(parseMeetingTime).mockResolvedValue({ iso: "2026-10-23T18:00:00.000Z", label: "Fri, Oct 23 · 2:00–2:30 PM", hasTime: true });
+    const res = await bookMeetingForLead(LEAD_OF_A, "tomorrow 2pm", "America/New_York");
+    expect(res).toEqual({ ok: true, label: "Fri, Oct 23 · 2:00–2:30 PM" });
+    expect(parseMeetingTime).toHaveBeenCalledWith("tomorrow 2pm", expect.objectContaining({ timeZone: "America/New_York" }));
   });
 });

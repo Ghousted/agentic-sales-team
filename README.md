@@ -19,12 +19,12 @@ A single **Next.js** app: web UI, server actions, and the job/scrape runners all
 
 ## Tech stack
 
-- **Next.js `14.2.15`** (App Router) · **React `18.3.1`** · **TypeScript `5.5.3`**
+- **Next.js `14.2.35`** (App Router) · **React `18.3.1`** · **TypeScript `5.5.3`**
 - **Neon Postgres** (`@neondatabase/serverless`) via **Drizzle ORM**, with the **pgvector** extension for catalog embeddings
 - **Auth**: `jose` (HS256 JWT session cookie) + `bcryptjs`
 - **AI**: **OpenRouter** (`google/gemini-2.5-flash` for text/JSON, `google/gemini-embedding-001` at 768 dims for embeddings) via raw `fetch` — no SDK
 - **Lead scraping**: **Firecrawl** (`/v2/search`) + LLM extraction, inside a Node route
-- **Landing hero**: **GSAP** + **anime.js**
+- **Landing hero**: **GSAP**
 - Package manager **`pnpm@11.3.0`**
 
 ## Quick start
@@ -57,6 +57,7 @@ Create `.env.local` (git-ignored):
 | `OPENROUTER_API_KEY` | optional | Enables all AI features. Without it, engines return canned output. |
 | `FIRECRAWL_API_KEY` | optional | Enables the `scrape` capability (find leads from the public web). |
 | `OPENROUTER_MODEL` | optional | Override the chat/JSON model (default `google/gemini-2.5-flash`). |
+| `CRON_SECRET` | ✅ in production | Bearer token Vercel Cron sends to `/api/cron/jobs` and `/api/cron/scrape` (any long random string). While unset, both routes refuse every call, so queued jobs and scrapes only run from an open tab. |
 
 The app **degrades gracefully**: it boots and is usable with no database, no OpenRouter key, and no Firecrawl key.
 
@@ -64,9 +65,10 @@ The app **degrades gracefully**: it boots and is usable with no database, no Ope
 
 | Command | Description |
 |---|---|
-| `pnpm dev` | Dev server (Turbopack) at `http://localhost:3000` |
+| `pnpm dev` | Dev server at `http://localhost:3000` |
 | `pnpm build` / `pnpm start` | Production build / serve |
 | `pnpm lint` | ESLint (`next lint`) |
+| `pnpm test` | Unit tests (`vitest run`) |
 | `pnpm db:generate` | Generate a migration from a `lib/db/schema.ts` diff |
 | `pnpm db:migrate` | Apply migrations (**custom runner** — see below) |
 | `pnpm db:studio` | Drizzle Studio |
@@ -74,11 +76,12 @@ The app **degrades gracefully**: it boots and is usable with no database, no Ope
 ## Project structure
 
 ```
-app/                 App Router pages + two API routes
+app/                 App Router pages + API routes
   api/jobs/run/        Node job runner (research/qualify/assess/match/outreach/proposal)
   api/scrape/          Node scrape runner (Firecrawl + LLM)
+  api/cron/            Vercel Cron entry points (jobs, scrape), gated by CRON_SECRET
   page.tsx / *Client   Server pages fetch initial data → client components render it
-components/          UI primitives + Shell, Landing, Constellation, bells, modals
+components/          UI primitives + Shell, Landing, bells, modals
 lib/
   db/                  Drizzle schema, Neon client, SQL migrations
   auth/                JWT (edge-safe) + cookie session + form actions
@@ -86,13 +89,13 @@ lib/
                        assess, match, proposal, meetingTime, intent, resolveLeads)
   scrape/              Firecrawl search + prospect extraction
   jobs/                enqueueJob / getJob
+  cron/                CRON_SECRET check for the /api/cron/* routes
   leads/ products/ proposals/ matches/ meetings/   domain stores + "use server" actions
   pod/                 full-funnel pod pipeline (chaining, approvals)
   chat/                team group-chat orchestration
   workspace/ agents/   aggregates + persistence
   store.tsx            the React Context store (useApp)
 scripts/             migrate.mjs (custom migration runner)
-worker/              OPTIONAL legacy Python scrape worker (not used by the app)
 ```
 
 The backend uses a **`server-only` / `"use server"` split**: real logic lives in `server-only` modules that take an explicit `userId`; thin `"use server"` action modules resolve the session and delegate. Client components import only the actions.
@@ -103,7 +106,7 @@ Migrations use a **custom runner** — apply with `pnpm db:migrate` (`node scrip
 
 Migration `0012` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates the products HNSW cosine index — **pgvector must be enabled** on your database (it is on Neon).
 
-Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`. #redeploy trigger
+Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`.
 
 ## Deployment
 

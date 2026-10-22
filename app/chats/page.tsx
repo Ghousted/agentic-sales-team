@@ -5,6 +5,7 @@ import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listTeamMessages } from "@/lib/chat/actions";
+import { mergeThread, stripMarkers, threadCursor, type StoredMsg, type ThreadMsg } from "@/lib/chat/thread";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
@@ -60,7 +61,7 @@ function renderComposer(text: string): ReactNode[] {
 }
 
 function ChatsInner() {
-  const { s, set, teams, byId, sendTeamChat, clearChat } = useApp();
+  const { s, set, teams, byId, sendTeamChat, clearChat, registerThreadPoll } = useApp();
   const router = useRouter();
 
   const teamById = (id: string) => teams.find((t) => t.id === id);
@@ -74,11 +75,17 @@ function ChatsInner() {
   const activeTeam = teamById(activeId);
   const teamMembers = (activeTeam?.members.map((id) => byId(id)).filter(Boolean) ?? []) as NonNullable<ReturnType<typeof byId>>[];
   const messages = s.chats[activeId] || [];
-  // Track how many messages are shown + whether a staggered reveal is running, so
-  // the live poll can reveal newly-arrived hand-off lines one at a time.
-  const revealingRef = useRef(false);
-  const shownRef = useRef(0);
-  shownRef.current = messages.length;
+  // The poll cursor (highest stored id fetched for the open thread), the stored
+  // rows fetched but not yet revealed, and whether a clear is in flight. Refs, so
+  // Clear chat can reach into the running poll.
+  const chatsRef = useRef(s.chats);
+  chatsRef.current = s.chats;
+  const cursorRef = useRef(0);
+  const queueRef = useRef<StoredMsg[]>([]);
+  const clearingRef = useRef(false);
+  // The agent whose next line is being revealed. Only the reveal below writes it;
+  // the store's chatAwaiting (a send still waiting on the server) is separate.
+  const [typer, setTyper] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
@@ -122,56 +129,88 @@ function ChatsInner() {
   };
 
   // Live-poll the open team thread so agent-written hand-offs / approvals appear.
-  // New messages (e.g. the pod chain narrating stage → stage) are revealed one at
-  // a time behind a per-agent typing indicator, so they read like a live
-  // conversation instead of all popping in at once. Thread history is hydrated
-  // instantly on the first tick.
+  // Each fetch asks only for rows after the cursor and the thread is merged by
+  // id, so rows are never dropped, doubled or reordered whoever wrote them (the
+  // reply, the pod chain, a job outcome). New rows (e.g. the pod chain narrating
+  // stage → stage) are revealed one at a time behind a per-agent typing
+  // indicator, so they read like a live conversation instead of all popping in
+  // at once. Thread history is shown instantly on the first fetch.
   useEffect(() => {
     if (!activeTeam) return;
     const teamId = activeTeam.id;
     let alive = true;
-    let firstTick = true;
+    let first = true;
+    let revealing = false;
+    let busy = false;
+    let chain: Promise<void> = Promise.resolve();
+    cursorRef.current = threadCursor(chatsRef.current[teamId]);
+    queueRef.current = [];
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const replyDelay = (t: string) => Math.min(2000, Math.max(650, Math.round((t || "").length * 18)));
-    const tick = async () => {
-      if (revealingRef.current) return; // a reveal is running — let it finish
-      let msgs: { who: string; text: string }[];
-      let pend: { id: string }[];
-      try { [msgs, pend] = await Promise.all([listTeamMessages(teamId), listPendingApprovals(teamId)]); }
-      catch { return; } // transient — try again next tick
-      if (!alive) return;
-      setPendingIds(new Set(pend.map((p) => p.id)));
-      const shown = shownRef.current;
-      const wasFirst = firstTick;
-      firstTick = false;
-      if (msgs.length <= shown) return;
-      if (wasFirst) {
-        // Initial hydration for this thread — show history instantly, no typing.
-        set((prev) => ({ chats: { ...prev.chats, [teamId]: msgs } }));
-        return;
-      }
-      // Reveal the new tail sequentially, with a typing indicator per agent.
-      revealingRef.current = true;
+    const show = (rows: StoredMsg[]) => set((prev) => ({ chats: { ...prev.chats, [teamId]: mergeThread(prev.chats[teamId], rows) } }));
+    const reveal = async () => {
+      if (revealing) return;
+      revealing = true;
       try {
-        for (const m of msgs.slice(shown)) {
-          if (!alive) return;
+        while (alive && queueRef.current.length) {
+          const m = queueRef.current[0];
           if (m.who !== "me" && m.who !== "system") {
-            set({ chatTyping: m.who });
+            setTyper(m.who);
             await sleep(replyDelay(m.text));
             if (!alive) return;
+            if (queueRef.current[0] !== m) continue; // a clear emptied the queue meanwhile
           }
-          set((prev) => ({ chatTyping: false, chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
+          queueRef.current.shift();
+          setTyper(null);
+          show([m]);
         }
       } finally {
-        revealingRef.current = false;
-        set({ chatTyping: false });
+        revealing = false;
+        if (alive) setTyper(null);
       }
     };
-    tick();
-    const iv = setInterval(tick, 4000);
-    return () => { alive = false; revealingRef.current = false; clearInterval(iv); };
+    const fetchNew = async () => {
+      busy = true;
+      try {
+        const [rows, pend] = await Promise.all([listTeamMessages(teamId, cursorRef.current), listPendingApprovals(teamId)]);
+        if (!alive) return;
+        setPendingIds(new Set(pend.map((p) => p.id)));
+        // Read the cursor now, not at request time: a clear may have moved it past
+        // rows this request still returned.
+        const fresh = clearingRef.current ? [] : rows.filter((r) => r.id > cursorRef.current);
+        if (fresh.length) cursorRef.current = fresh[fresh.length - 1].id;
+        if (first) { first = false; show(fresh); return; } // history: no typing
+        queueRef.current.push(...fresh);
+        reveal();
+      } catch { /* transient — try again next tick */ }
+      finally { busy = false; }
+    };
+    // Fetches run one at a time, so a send's fetch always starts after the one
+    // in flight and sees the replies the server just stored.
+    const pull = () => (chain = chain.then(fetchNew));
+    registerThreadPoll(teamId, pull);
+    pull();
+    const iv = setInterval(() => { if (!busy) pull(); }, 4000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+      registerThreadPoll(teamId, null);
+      show(queueRef.current.splice(0)); // leave nothing fetched-but-hidden behind
+      setTyper(null);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTeam?.id, set]);
+  }, [activeTeam?.id, set, registerThreadPoll]);
+
+  const onClear = async () => {
+    setConfirmClear(false);
+    clearingRef.current = true;
+    queueRef.current = [];
+    try {
+      const lastDeleted = await clearChat(activeId);
+      cursorRef.current = Math.max(cursorRef.current, lastDeleted);
+    } finally { clearingRef.current = false; }
+  };
+  const typing: string | true | null = typer ?? ((s.chatAwaiting[activeId] ?? 0) > 0 ? true : null);
 
   // No teams yet — chatting happens with a team, so prompt the user to make one.
   if (!activeTeam) {
@@ -197,7 +236,7 @@ function ChatsInner() {
             <Btn onClick={() => setConfirmClear(true)} style="flex:none;height:32px;background:transparent;color:#6b7686;border:0;border-radius:999px;padding:0 12px;font-size:13px;cursor:pointer" styleHover="background:#f1f3f6;color:#101418">Clear chat</Btn>
           ) : (
             <div style={css("flex:none;display:flex;align-items:center;gap:6px")}>
-              <Btn onClick={() => { clearChat(activeId); setConfirmClear(false); }} style="background:#C0392B;color:#fff;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#A93226">Clear</Btn>
+              <Btn onClick={onClear} style="background:#C0392B;color:#fff;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#A93226">Clear</Btn>
               <Btn onClick={() => setConfirmClear(false)} style="background:#F4F4F5;color:#71717A;border:none;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
             </div>
           )}
@@ -209,10 +248,10 @@ function ChatsInner() {
             const mine = m.who === "me";
             const speaker = !mine ? byId(m.who) : null;
             const am = m.text.match(APPROVE_RE);
-            const clean = m.text.replace(APPROVE_RE, "").replace(/⟦meet:[^⟧]*⟧/, "").trim();
+            const clean = stripMarkers(m.text);
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
-              <div key={i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
+              <div key={(m as ThreadMsg).id ?? "local-" + i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
                 {!mine && <span style={css("width:30px;flex:none")}>{speaker && (i === 0 || messages[i - 1].who !== m.who) && <span style={css(av(speaker, 30))}>{speaker.initials}</span>}</span>}
                 <div style={css("display:flex;flex-direction:column;gap:6px;min-width:0;" + (mine ? "max-width:78%;align-items:flex-end" : "flex:1"))}>
                   {speaker && (i === 0 || messages[i - 1].who !== m.who) && <div style={css("font-size:13px;font-weight:500;padding-top:5px")}>{speaker.name.split(" ")[0]}</div>}
@@ -231,8 +270,8 @@ function ChatsInner() {
               </div>
             );
           })}
-          {s.chatTyping && (() => {
-            const typer = typeof s.chatTyping === "string" ? byId(s.chatTyping) : null;
+          {typing && (() => {
+            const typer = typeof typing === "string" ? byId(typing) : null;
             return (
               <div style={css("display:flex;gap:12px;animation:cFade .2s backwards")}>
                 <span style={css("width:30px;flex:none")}>{typer && <span style={css(av(typer, 30))}>{typer.initials}</span>}</span>

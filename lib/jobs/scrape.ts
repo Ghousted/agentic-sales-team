@@ -9,7 +9,7 @@ import { runFirecrawlScrape, isFirecrawlConfigured } from "@/lib/scrape/firecraw
 import { createStepLog } from "@/lib/scrape/steps";
 import { isAIConfigured } from "@/lib/ai/openrouter";
 import { addScrapedLeads } from "@/lib/leads/store";
-import { chainNext } from "@/lib/pod/orchestrate";
+import { chainNext, leadOwnerForTeam } from "@/lib/pod/orchestrate";
 import { reapStaleJobs, withDeadline, SCRAPE_TIMEOUT_MS } from "@/lib/jobs/runtime";
 
 type Job = typeof jobs.$inferSelect;
@@ -53,7 +53,10 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
     // Finish inside maxDuration so the job is marked failed, not left 'running'.
     const prospects = await withDeadline(runFirecrawlScrape(agent, target, instruction, log), SCRAPE_TIMEOUT_MS, "Search");
     log.put({ id: "save", status: "active", label: "Saving to Leads" });
-    leadIds = await addScrapedLeads(job.userId, job.agentId, prospects);
+    // A team-chat scrape run by an agent from another team files its leads under
+    // a team member, so this team's assessor picks them up and they land in its book.
+    const owner = params.pod && params.teamId ? await leadOwnerForTeam(job.userId, params.teamId, job.agentId) : job.agentId;
+    leadIds = await addScrapedLeads(job.userId, owner, prospects);
     leadsFound = leadIds.length;
     const already = prospects.length - leadsFound;
     log.put({

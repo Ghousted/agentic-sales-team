@@ -347,7 +347,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set({ chatInput: "", chatLeadPicks: [] });
     awaiting(1);
 
-    teamChat(teamId, t, leadIds).then(async (res) => {
+    teamChat(teamId, t, leadIds, Intl.DateTimeFormat().resolvedOptions().timeZone).then(async (res) => {
       // Fetch the stored replies before dropping the dots, so the typing
       // indicator hands straight over to the reveal.
       await pullThread(teamId);

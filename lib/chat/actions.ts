@@ -13,7 +13,7 @@ import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
 import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
-import { parseMeetingTime } from "@/lib/ai/meetingTime";
+import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 
 export interface TeamChatResult {
@@ -44,29 +44,36 @@ async function startOutreach(actor: Member, target: { leadIds?: string[]; all?: 
  *   - no usable date        → ask "when?"        (marker carries the lead ids)
  *   - a day but no clock time → ask "what time?" (marker also carries the date)
  *   - a full date + time     → book it.
- *  Shared by the fresh request, the "who?" answer, and the "when/what time?" answers. */
-async function resolveTimeAndBook(userId: string, actor: Member, teamId: string, leadIds: string[], phrase: string): Promise<ChatOutMsg[]> {
+ *  Shared by the fresh request, the "who?" answer, and the "when/what time?" answers.
+ *  `tz` is the user's IANA timezone: the phrase is read, and the window checked, in it. */
+async function resolveTimeAndBook(userId: string, actor: Member, teamId: string, leadIds: string[], phrase: string, tz: string): Promise<ChatOutMsg[]> {
   await setLeadReview(leadIds, "accepted"); // picking = approving
   const teamLeads = await listTeamLeadsForPicker(teamId);
   const names = leadIds.map((id) => teamLeads.find((l) => l.id === id)?.name ?? "the lead").join(", ");
   const settings = await meetingSettings(userId, actor.id);
-  const { iso, label, hasTime } = await parseMeetingTime(phrase, settings);
+  const { iso, label, hasTime } = await parseMeetingTime(phrase, { ...settings, timeZone: tz });
   if (!iso) return [{ who: actor.id, text: askWhenText(names, leadIds) }];
   if (!hasTime) {
     // Format the day from the parsed date only — never reuse `label`, which carries
     // the defaulted placeholder time (e.g. "9:00–9:30 AM") we're asking to replace.
-    const day = new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    return [{ who: actor.id, text: askWhatTimeText(names, day, leadIds, iso.slice(0, 10)) }];
+    // Both are taken in the user's timezone: iso is UTC, so its own date can be a day off.
+    return [{ who: actor.id, text: askWhatTimeText(names, dayLabel(iso, tz), leadIds, zonedDate(iso, tz)) }];
   }
-  for (const id of leadIds) await bookMeeting(userId, actor.id, id, iso, label, settings.type);
-  return [{ who: actor.id, text: `Booked — a ${settings.type} with ${names} on ${label}. It's on your calendar.` }];
+  // Report only what bookMeeting actually booked — it refuses a lead that isn't the user's.
+  const booked: string[] = [];
+  for (const id of leadIds) if (await bookMeeting(userId, actor.id, id, iso, label, settings.type)) booked.push(id);
+  const nameOf = (id: string) => teamLeads.find((l) => l.id === id)?.name ?? "the lead";
+  if (!booked.length) return [{ who: actor.id, text: `I couldn't book that — I couldn't find ${names} in your leads.` }];
+  const missed = leadIds.filter((id) => !booked.includes(id));
+  const text = `Booked — a ${settings.type} with ${booked.map(nameOf).join(", ")} on ${label}. It's on your calendar.`;
+  return [{ who: actor.id, text: missed.length ? `${text} I couldn't book ${missed.map(nameOf).join(", ")} — not found in your leads.` : text }];
 }
 
 /** Handle one user message in a team thread. Both the user's message and the
  *  agents' replies are stored here, on the server, in that order — so the thread
  *  in the DB is complete even if the tab closes, and the client only renders it.
  *  Returns the stored replies (with ids) and any job to follow. */
-export async function teamChat(teamId: string, message: string, leadIds?: string[]): Promise<TeamChatResult> {
+export async function teamChat(teamId: string, message: string, leadIds?: string[], timeZone?: string): Promise<TeamChatResult> {
   const s = await getSession();
   const userId = s?.userId;
   if (!userId) return { messages: [{ who: "system", text: "Not signed in." }] };
@@ -77,12 +84,12 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   // message" means since the previous one.
   const history = await _listTeamMessages(userId, teamId);
   await insertTeamMessages(userId, teamId, [{ who: "me", text }]);
-  const res = await reply(userId, teamId, text, leadIds, history);
+  const res = await reply(userId, teamId, text, leadIds, history, safeTimeZone(timeZone));
   if (!res.messages.length && !res.job) res.messages.push({ who: "system", text: "No one picked that up. Try @mentioning an agent on this team." });
   return { ...res, messages: await insertTeamMessages(userId, teamId, res.messages) };
 }
 
-async function reply(userId: string, teamId: string, message: string, leadIds: string[] | undefined, history: StoredMsg[]): Promise<TeamChatResult> {
+async function reply(userId: string, teamId: string, message: string, leadIds: string[] | undefined, history: StoredMsg[], tz: string): Promise<TeamChatResult> {
   const memberIds = await membersOfTeam(userId, teamId);
   const members = (await Promise.all(memberIds.map((id) => agentInfo(userId, id)))).filter(Boolean) as Member[];
   const byId = new Map(members.map((m) => [m.id, m] as const));
@@ -119,7 +126,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // books, or re-asks for whichever detail is still missing.
   if (pendingMeet && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
     const phrase = pendingMeet.date ? `${pendingMeet.date} ${message}` : message;
-    return { messages: await resolveTimeAndBook(userId, pendingMeet.agent, teamId, pendingMeet.leadIds, phrase) };
+    return { messages: await resolveTimeAndBook(userId, pendingMeet.agent, teamId, pendingMeet.leadIds, phrase, tz) };
   }
 
   // Pending meeting "who?": the Meeting agent asked which lead to book with, and
@@ -136,7 +143,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
       if (r.mode === "some" && r.leadIds.length) ids = r.leadIds;
     }
     if (!ids.length) return { messages: [{ who: a.id, text: askMeetingWhoText() }] };
-    return { messages: await resolveTimeAndBook(userId, a, teamId, ids, message) };
+    return { messages: await resolveTimeAndBook(userId, a, teamId, ids, message, tz) };
   }
 
   // Pending scrape clarification: the agent just asked what to look for, and this
@@ -215,7 +222,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   if (cap === "book-meeting") {
     const bmPicks = (leadIds ?? []).filter(Boolean);
     if (!bmPicks.length) return { messages: [...pre, { who: actor.id, text: askMeetingWhoText() }] };
-    return { messages: [...pre, ...(await resolveTimeAndBook(userId, actor, teamId, bmPicks, message))] };
+    return { messages: [...pre, ...(await resolveTimeAndBook(userId, actor, teamId, bmPicks, message, tz))] };
   }
 
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.

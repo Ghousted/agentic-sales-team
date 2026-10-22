@@ -21,6 +21,7 @@ export interface AuthResult {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIGNUP_REFUSED = "We couldn’t create an account with these details. If you already have one, sign in instead.";
 const NOT_CONFIGURED = "Server isn’t configured yet (missing database). Add DATABASE_URL to .env.local.";
 
 function nameFromEmail(email: string): string {
@@ -37,16 +38,19 @@ export async function signUp(input: { email: string; password: string; name?: st
   const limited = await checkAuthLimit("signUp", email);
   if (limited) return { ok: false, error: limited };
 
+  // No lookup first: the password is always hashed and the insert skips a taken email,
+  // so a registered email costs the same time and gets the same refusal as any other
+  // failed sign-up. Until the app can send email, the refusal itself still tells the
+  // caller sign-up didn't work; it just doesn't say why.
   const db = getDb();
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
-  if (existing.length) return { ok: false, error: "An account with this email already exists." };
-
   const name = (input.name || "").trim() || nameFromEmail(email);
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db
     .insert(users)
     .values({ email, name, passwordHash })
+    .onConflictDoNothing({ target: users.email })
     .returning({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications, id: users.id, sessionVersion: users.sessionVersion });
+  if (!user) return { ok: false, error: SIGNUP_REFUSED };
   // The account's first workspace has the account's own id (see the workspaces table).
   await db.insert(workspaces).values({ id: user.id, ownerId: user.id, name: user.workspaceName });
 

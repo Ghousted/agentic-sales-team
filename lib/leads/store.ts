@@ -2,7 +2,7 @@ import "server-only";
 // All persistence for the leads/outreach domain. Plain async functions so the
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
-import { and, desc, eq, inArray, asc, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, asc, isNull, ne } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
@@ -270,7 +270,7 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
 }
 
 /** Every outreach draft the user has, across all agents, newest first. Powers
- *  the global drafts inbox in the top bar. */
+ *  the Emails page. */
 export async function listAllDrafts(): Promise<DraftDTO[]> {
   if (!isDbConfigured()) return [];
   const userId = await uid();
@@ -323,7 +323,7 @@ export async function markDraftSent(draftId: string): Promise<void> {
   await db.insert(activity).values({ userId, agentId: d.agentId, type: "email_sent", leadId: d.leadId, text: `Sent "${d.subject}"` });
 }
 
-/** Hide a single draft from the top-bar inbox (soft-hide, not a delete. The row
+/** Hide a single draft from the Emails page (soft-hide, not a delete. The row
  *  stays in the table so analytics counts are unaffected). Used for "Discard". */
 export async function discardDraft(draftId: string): Promise<void> {
   if (!isDbConfigured()) return;
@@ -345,17 +345,14 @@ export async function clearSentDrafts(): Promise<number> {
   return rows.length;
 }
 
-/** Hide every draft (sent or not) from the inbox in one shot ("Clear all").
- *  Soft-hide only, so analytics drafted/sent counts are unaffected. Returns how
- *  many were cleared so the caller can toast a count. */
-export async function clearAllDrafts(): Promise<number> {
+/** How many drafts are waiting to be sent. The badge on the sidebar Emails item. */
+export async function countUnsentDrafts(): Promise<number> {
   if (!isDbConfigured()) return 0;
   const userId = await uid();
   if (!userId) return 0;
-  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
-    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false)))
-    .returning({ id: outreachDrafts.id });
-  return rows.length;
+  const [r] = await getDb().select({ n: count() }).from(outreachDrafts)
+    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false), ne(outreachDrafts.status, "sent")));
+  return r?.n ?? 0;
 }
 
 /** Hide every draft for a single lead ("Clear all" in the lead detail modal).

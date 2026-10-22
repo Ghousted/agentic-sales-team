@@ -66,7 +66,7 @@ describe("GET /api/cron/scrape", () => {
     expect(await res.json()).toEqual({ processed: 1, leadsFound: 3 });
     expect(vi.mocked(addScrapedLeads).mock.calls[0][0]).toBe("u2");
     expect(fake.state.updates.find((u) => u.status === "done")?.result).toEqual({ leadsFound: 3 });
-    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3);
+    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1");
   });
 
   it("marks the job failed with the reason when the scrape throws", async () => {

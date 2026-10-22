@@ -58,8 +58,8 @@ export async function discardDraft(draftId: string): Promise<void> {
 export async function clearSentDrafts(): Promise<number> {
   return store.clearSentDrafts();
 }
-export async function clearAllDrafts(): Promise<number> {
-  return store.clearAllDrafts();
+export async function countUnsentDrafts(): Promise<number> {
+  return store.countUnsentDrafts();
 }
 export async function clearDraftsForLead(leadId: string): Promise<number> {
   return store.clearDraftsForLead(leadId);

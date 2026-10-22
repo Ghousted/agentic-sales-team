@@ -141,8 +141,10 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
 
 /** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
-export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0): Promise<void> {
-  const finisherId = await memberWithCapability(userId, teamId, completedKind);
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string): Promise<void> {
+  // ranBy is the agent that ran the job. It can be an agent from another team (a
+  // cross-team hand-off), so do not look for it among this team's members only.
+  const finisherId = ranBy ?? await memberWithCapability(userId, teamId, completedKind);
   const finisher = finisherId ? await agentInfo(userId, finisherId) : null;
   if (!finisher) return;
   const first = (info: AgentInfo) => info.name.split(" ")[0];

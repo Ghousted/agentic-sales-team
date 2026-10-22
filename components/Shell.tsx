@@ -1,16 +1,16 @@
 "use client";
 // App chrome, styled after the redesign: a 272px light sidebar (collapses to a
 // 64px icon rail) with Search, New chat, the main pages, recent team chats and
-// workspace/account rows; a slim header with the inbox + notification bells.
+// workspace/account rows; a slim header with the notification bell.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
-import InboxBell from "./InboxBell";
 import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type SeenIds } from "./unread";
 import { listChatUnread } from "@/lib/chat/actions";
+import { countUnsentDrafts } from "@/lib/leads/actions";
 import { setFaviconDot } from "./faviconBadge";
 
 // Lucide "calendar" (not in the design's icon-font subset).
@@ -28,6 +28,7 @@ const Ico = ({ name, size = 17 }: { name: string; size?: number }) => name === "
 const NAV: { href: string; icon: string; label: string }[] = [
   { href: "/dashboard", icon: "chart-column", label: "Dashboard" },
   { href: "/leads", icon: "users-round", label: "Leads" },
+  { href: "/emails", icon: "mail", label: "Emails" },
   { href: "/products", icon: "blocks", label: "Products" },
   { href: "/calendar", icon: "calendar", label: "Calendar" },
 ];
@@ -46,6 +47,7 @@ function headerTitle(path: string): string {
   if (path.startsWith("/calendar")) return "Calendar";
   if (path.startsWith("/settings")) return "Settings";
   if (path.startsWith("/leads")) return "Leads";
+  if (path.startsWith("/emails")) return "Emails";
   if (path.startsWith("/products")) return "Products";
   return "";
 }
@@ -103,6 +105,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     await clearChat(id);
     showToast(`Deleted the chat history of ${name}.`);
   };
+  // Drafts waiting to be sent, as a badge on the Emails item. Re-read on every page
+  // change, so a draft sent on the Emails page drops off when you move on.
+  const [toSend, setToSend] = useState(0);
+  useEffect(() => { countUnsentDrafts().then(setToSend).catch(() => {}); }, [path]);
   const anyUnread = teams.some((t) => t.id !== viewing && (unread[t.id] ?? 0) > 0);
   // The browser tab shows new messages too: a red dot on the favicon.
   useEffect(() => { setFaviconDot(anyUnread); }, [anyUnread]);
@@ -140,7 +146,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <GlobalSearch compact autoFocus={focusSearch} />
             <Btn onClick={() => router.push("/")} style={ROW + ";" + bg(path === "/")} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name="square-pen" /></span>New chat</Btn>
             {NAV.map((nv) => (
-              <Btn key={nv.href} onClick={() => router.push(nv.href)} style={ROW + ";" + bg(isActive(nv.href, path))} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name={nv.icon} /></span>{nv.label}</Btn>
+              <Btn key={nv.href} onClick={() => router.push(nv.href)} style={ROW + ";" + bg(isActive(nv.href, path))} styleHover="background:#eceef1"><span style={css("color:#4a5565;display:flex")}><Ico name={nv.icon} /></span>{nv.label}{nv.href === "/emails" && toSend > 0 && <span aria-label={toSend + " to send"} style={css("margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:#006aff;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{toSend}</span>}</Btn>
             ))}
           </div>
 
@@ -211,7 +217,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <Btn onClick={() => router.push("/")} aria-label="New chat" title="New chat" style={RAIL_BTN + ";background:" + (path === "/" ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="square-pen" size={18} /></Btn>
           <Btn onClick={() => { setFocusSearch(true); set({ sidebarOpen: true }); }} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>
           {NAV.map((nv) => (
-            <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} /></Btn>
+            <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={nv.href === "/emails" && toSend > 0 ? `Emails, ${toSend} to send` : nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} />{nv.href === "/emails" && toSend > 0 && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           ))}
           <Btn onClick={() => router.push("/chats")} aria-label={anyUnread ? "Chats, unread messages" : "Chats"} title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} />{anyUnread && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           <div style={{ flex: 1 }} />
@@ -224,7 +230,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <header style={css("height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px 0 24px;" + (title ? "border-bottom:1px solid #eceef1" : ""))}>
           {title && <h1 key={title} style={css("margin:0;font-family:'General Sans',system-ui,sans-serif;font-size:20px;font-weight:500;letter-spacing:-.02em;white-space:nowrap;animation:cSwapA .2s ease-out backwards")}>{title}</h1>}
           <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}>
-            <InboxBell />
             <NotificationsBell />
             <Btn onClick={() => router.push("/create")} style="height:36px;background:#101418;color:#fff;border:none;border-radius:999px;padding:0 16px 0 12px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s" styleHover="background:#2a313b">
               <i className="icon-plus" style={{ fontSize: 16 }} />Add agent

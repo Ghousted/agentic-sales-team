@@ -10,14 +10,19 @@ const SCRAPE_STOPWORDS = new Set([
   "facebook", "fb", "reddit", "linkedin", "twitter", "instagram", "ig", "online", "web", "internet", "social", "media", "posts", "post",
 ]);
 
-/** Does a scrape request name a target (what/who/where), or is it a bare command? */
+// The country, told apart from the pronoun "us" ("find us leads") by its capitals.
+const US_PLACE = /(^|[^A-Za-z])(US|USA|U\.S\.(A\.?)?)(?![A-Za-z])/;
+
+/** Does a scrape request name a target (what/who/where), or is it a bare command?
+ *  A count alone ("find me 50 leads") is not a target. */
 export function scrapeHasTarget(message: string): boolean {
-  const meaningful = (message || "")
-    .replace(/@[\w'-]+/g, " ")
+  const text = (message || "").replace(/@[\w'-]+/g, " ");
+  if (US_PLACE.test(text)) return true;
+  const meaningful = text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((t) => t.length > 1 && !SCRAPE_STOPWORDS.has(t));
+    .filter((t) => t.length > 1 && !/^\d+$/.test(t) && !SCRAPE_STOPWORDS.has(t));
   return meaningful.length > 0;
 }
 

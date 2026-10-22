@@ -25,10 +25,17 @@ describe("scrapeHasTarget", () => {
     expect(scrapeHasTarget("@Dentist-Bot find leads")).toBe(false);
   });
 
-  // "us" is a stopword (as in "find us leads"), so the country is dropped too.
-  it.todo('treats "find leads in the US" as having a target');
-  // A count alone is not a target, but "50" survives the filter.
-  it.todo('treats "find me 50 leads" as a bare command');
+  it.each(["find leads in the US", "find leads in the U.S.", "@Scout scrape USA"])("treats the country as a target: %j", (msg) =>
+    expect(scrapeHasTarget(msg)).toBe(true),
+  );
+
+  it('still treats the pronoun "us" as filler', () => {
+    expect(scrapeHasTarget("find us some leads")).toBe(false);
+  });
+
+  it.each(["find me 50 leads", "get 20 prospects"])("treats a count alone as a bare command: %j", (msg) =>
+    expect(scrapeHasTarget(msg)).toBe(false),
+  );
 });
 
 describe("scrape prompt", () => {

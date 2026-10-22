@@ -12,7 +12,7 @@ const PLACEHOLDER: Record<BriefField, string> = {
   count: "Type a number… (up to 25)",
 };
 
-export default function ScrapeQuestions({ fields, onSend }: { fields: BriefField[]; onSend: (text: string) => void }) {
+export default function ScrapeQuestions({ fields, options = BRIEF_OPTIONS, onSend }: { fields: BriefField[]; options?: Record<BriefField, string[]>; onSend: (text: string) => void }) {
   // Per field: the picked option, or the typed text (typing clears the pick).
   const [picked, setPicked] = useState<Partial<Record<BriefField, string>>>({});
   const [typed, setTyped] = useState<Partial<Record<BriefField, string>>>({});
@@ -29,9 +29,9 @@ export default function ScrapeQuestions({ fields, onSend }: { fields: BriefField
       {fields.map((f) => (
         <div key={f} style={css("display:flex;flex-direction:column;gap:8px")}>
           <div style={css("font-size:13.5px;font-weight:600;color:#101418")}>{BRIEF_LABEL[f]}</div>
-          {BRIEF_OPTIONS[f].length > 0 && (
+          {options[f].length > 0 && (
             <div role="radiogroup" aria-label={BRIEF_LABEL[f]} style={css("display:flex;flex-wrap:wrap;gap:6px")}>
-              {BRIEF_OPTIONS[f].map((o) => {
+              {options[f].map((o) => {
                 const on = !typed[f]?.trim() && picked[f] === o;
                 return (
                   <Box
@@ -39,7 +39,8 @@ export default function ScrapeQuestions({ fields, onSend }: { fields: BriefField
                     role="radio"
                     aria-checked={on}
                     onClick={() => { setPicked((p) => ({ ...p, [f]: o })); setTyped((t) => ({ ...t, [f]: "" })); }}
-                    style={"padding:6px 13px;border-radius:999px;font-size:13px;cursor:pointer;transition:background .12s,border-color .12s;border:1px solid " + (on ? "#006aff;background:#eaf2ff;color:#006aff;font-weight:500" : "#e3e7ed;background:#fff;color:#3f3f46")}
+                    title={o}
+                    style={"max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 13px;border-radius:999px;font-size:13px;cursor:pointer;transition:background .12s,border-color .12s;border:1px solid " + (on ? "#006aff;background:#eaf2ff;color:#006aff;font-weight:500" : "#e3e7ed;background:#fff;color:#3f3f46")}
                     styleHover={on ? undefined : "background:#f6f7f9"}
                   >
                     {f === "count" ? `${o} leads` : o}

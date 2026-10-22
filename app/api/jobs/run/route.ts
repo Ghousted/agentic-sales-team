@@ -16,8 +16,8 @@ import type { AgentSnapshot } from "@/lib/leads/types";
 import { chainNext } from "@/lib/pod/orchestrate";
 import { reapStaleJobs, withDeadline, LEAD_TIMEOUT_MS, RUN_CLAIM_BUDGET_MS, RUN_LEAD_BUDGET_MS } from "@/lib/jobs/runtime";
 
-// Needs the Node runtime (raw fetch to Gemini, no edge constraints) and room to
-// run a small batch of Gemini calls. Keep maxDuration equal to RUN_MAX_DURATION_S.
+// Needs the Node runtime (raw fetch to OpenRouter, no edge constraints) and room to
+// run a small batch of LLM calls. Keep maxDuration equal to RUN_MAX_DURATION_S.
 export const runtime = "nodejs";
 export const maxDuration = 300;
 

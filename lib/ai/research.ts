@@ -1,7 +1,7 @@
 import "server-only";
-// The research engine: one structured Gemini call per lead that produces a
+// The research engine: one structured LLM call per lead that produces a
 // personalization brief. Pure — no DB. Mirrors lib/ai/outreach.ts.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, ResearchBrief } from "@/lib/leads/types";
 
 const SCHEMA = {
@@ -27,9 +27,9 @@ function systemPrompt(a: AgentSnapshot): string {
 }
 
 export async function draftResearch(agent: AgentSnapshot, lead: { name: string; title: string; company: string; platform?: string | null }): Promise<ResearchBrief> {
-  if (!isGeminiConfigured()) {
+  if (!isAIConfigured()) {
     return {
-      summary: `${lead.name}${lead.title ? ", " + lead.title : ""}${lead.company ? " at " + lead.company : ""}. Research brief unavailable (Gemini not configured).`,
+      summary: `${lead.name}${lead.title ? ", " + lead.title : ""}${lead.company ? " at " + lead.company : ""}. Research brief unavailable (AI not configured).`,
       priorities: ["Operational efficiency", "Cost control", "Growth"],
       hooks: [lead.company ? `Reference ${lead.company}'s space` : "Reference their role"],
       angle: "Lead with a specific, relevant value proposition.",
@@ -39,7 +39,7 @@ export async function draftResearch(agent: AgentSnapshot, lead: { name: string; 
     role: "user",
     text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\nPlatform: ${lead.platform || "(unknown)"}`,
   }];
-  const r = await geminiJSON<ResearchBrief>(systemPrompt(agent), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
+  const r = await aiJSON<ResearchBrief>(systemPrompt(agent), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
   return {
     summary: (r.summary || "").trim(),
     priorities: Array.isArray(r.priorities) ? r.priorities : [],

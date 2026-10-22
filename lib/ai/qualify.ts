@@ -1,7 +1,7 @@
 import "server-only";
 // Lead qualification: score a lead's ICP-fit/intent (hot/warm/cold) from its
-// title/company (+ research brief when present). One Gemini JSON call. Pure — no DB.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+// title/company (+ research brief when present). One LLM JSON call. Pure — no DB.
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, QualifyResult, ResearchBrief } from "@/lib/leads/types";
 
 const SCHEMA = {
@@ -20,9 +20,9 @@ export async function qualifyLead(
   agent: AgentSnapshot,
   lead: { name: string; title: string; company: string; email: string; research?: ResearchBrief | null },
 ): Promise<QualifyResult> {
-  if (!isGeminiConfigured()) {
+  if (!isAIConfigured()) {
     const s = lead.email ? 60 : 45;
-    return { score: s, tier: clampTier(s), reason: "Heuristic score (Gemini not configured)." };
+    return { score: s, tier: clampTier(s), reason: "Heuristic score (AI not configured)." };
   }
   const system = [
     `You are ${agent.name}, qualifying B2B sales leads for: ${agent.goal}.`,
@@ -32,7 +32,7 @@ export async function qualifyLead(
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `Name: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}\nHas email: ${lead.email ? "yes" : "no"}${rb}` }];
   try {
-    const r = await geminiJSON<QualifyResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.3 });
+    const r = await aiJSON<QualifyResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.3 });
     const score = Math.max(1, Math.min(100, Math.round(r.score ?? 50)));
     return { score, tier: r.tier ?? clampTier(score), reason: (r.reason ?? "").trim() || "Qualified." };
   } catch {

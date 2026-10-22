@@ -1,8 +1,8 @@
 import "server-only";
 // Proposal drafting, grounded in the real product catalog (RAG): the caller
 // passes the products retrieved via searchProducts; the model must use ONLY
-// those real offerings + prices. One Gemini JSON call. Pure — no DB.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+// those real offerings + prices. One LLM JSON call. Pure — no DB.
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, ProposalResult, ResearchBrief } from "@/lib/leads/types";
 import type { ProductDTO } from "@/lib/products/store";
 
@@ -23,7 +23,7 @@ export async function draftProposal(
 ): Promise<ProposalResult> {
   const attrs = (p: ProductDTO) => Object.entries(p.attributes ?? {}).map(([k, v]) => ` | ${k}: ${v}`).join("");
   const catalog = products.map((p) => `- ${p.name}${p.price ? " (" + p.price + ")" : ""}${p.description ? ": " + p.description : ""}${attrs(p)}`).join("\n");
-  if (!isGeminiConfigured()) {
+  if (!isAIConfigured()) {
     return {
       title: `Proposal for ${lead.company || lead.name}`,
       body: `Hi ${lead.name.split(" ")[0]},\n\nBased on your needs, we recommend:\n${catalog || "(add products to your catalog to tailor this)"}\n\nHappy to walk through details.\n\n— ${agent.name}`,
@@ -40,7 +40,7 @@ export async function draftProposal(
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `Prospect:\nName: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}` }];
   try {
-    const r = await geminiJSON<ProposalResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.5 });
+    const r = await aiJSON<ProposalResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.5 });
     return { title: (r.title ?? "Proposal").trim(), body: (r.body ?? "").trim(), productsUsed: Array.isArray(r.productsUsed) ? r.productsUsed : [] };
   } catch {
     return { title: `Proposal for ${lead.company || lead.name}`, body: `Draft proposal for ${lead.name}.`, productsUsed: products.map((p) => p.name) };

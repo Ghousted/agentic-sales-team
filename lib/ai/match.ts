@@ -1,8 +1,8 @@
 import "server-only";
 // Matchmaking: given a lead's intent and candidate catalog listings (retrieved
 // via searchProducts), pick the listings that genuinely fit — each with a 0-100
-// fit score and a one-line reason. Pure — no DB. One Gemini JSON call.
-import { geminiJSON, isGeminiConfigured, type Turn } from "./gemini";
+// fit score and a one-line reason. Pure — no DB. One LLM JSON call.
+import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, MatchResult, ResearchBrief } from "@/lib/leads/types";
 import type { ProductDTO } from "@/lib/products/store";
 
@@ -22,13 +22,13 @@ const SCHEMA = {
 } as const;
 
 /** Match one lead to the listings that fit. Returns [] on empty catalog, no
- *  Gemini, or error. Only ever returns productIds from the provided listings. */
+ *  LLM, or error. Only ever returns productIds from the provided listings. */
 export async function matchLead(
   agent: AgentSnapshot,
   lead: { name: string; title: string; company: string; research?: ResearchBrief | null },
   listings: ProductDTO[],
 ): Promise<MatchResult[]> {
-  if (!isGeminiConfigured() || listings.length === 0) return [];
+  if (!isAIConfigured() || listings.length === 0) return [];
   const attrs = (p: ProductDTO) => Object.entries(p.attributes ?? {}).map(([k, v]) => ` | ${k}: ${v}`).join("");
   const catalog = listings
     .map((p) => `id=${p.id} | ${p.name}${p.price ? " (" + p.price + ")" : ""}${p.category ? " [" + p.category + "]" : ""}${p.description ? ": " + p.description : ""}${attrs(p)}`)
@@ -43,7 +43,7 @@ export async function matchLead(
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `Prospect:\nName: ${lead.name}\nIntent: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}` }];
   try {
-    const r = await geminiJSON<{ matches: MatchResult[] }>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.3 });
+    const r = await aiJSON<{ matches: MatchResult[] }>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.3 });
     const valid = new Set(listings.map((p) => p.id));
     return (r.matches ?? [])
       .filter((m) => m && valid.has(m.productId))

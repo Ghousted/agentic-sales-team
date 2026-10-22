@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listTeamMessages } from "@/lib/chat/actions";
 import { mergeThread, stripMarkers, threadCursor, type StoredMsg, type ThreadMsg } from "@/lib/chat/thread";
+import { isNearBottom, shouldStick } from "@/lib/chat/scroll";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
@@ -212,6 +213,26 @@ function ChatsInner() {
   };
   const typing: string | true | null = typer ?? ((s.chatAwaiting[activeId] ?? 0) > 0 ? true : null);
 
+  // Keep the newest message, typing dots and Approve buttons in view. Only
+  // follows when the user was already at the bottom (tracked on scroll, before
+  // the new content lands), except on a fresh thread or their own send.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const shownRef = useRef<{ id: string; len: number } | null>(null);
+  const last = messages[messages.length - 1];
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const prev = shownRef.current;
+    const fresh = !prev || prev.id !== activeId || prev.len === 0;
+    const sentByMe = !!prev && messages.length > prev.len && last?.who === "me";
+    shownRef.current = { id: activeId, len: messages.length };
+    if (shouldStick({ fresh, sentByMe, wasNearBottom: nearBottomRef.current })) {
+      el.scrollTop = el.scrollHeight;
+      nearBottomRef.current = true;
+    }
+  }, [activeId, messages.length, last, typing, pendingIds]);
+
   // No teams yet — chatting happens with a team, so prompt the user to make one.
   if (!activeTeam) {
     return (
@@ -242,7 +263,7 @@ function ChatsInner() {
           )}
         </div>
 
-        <div style={css("flex:1;overflow-y:auto;padding:12px 20px 24px")}>
+        <div ref={scrollRef} onScroll={(e) => { nearBottomRef.current = isNearBottom(e.currentTarget); }} style={css("flex:1;overflow-y:auto;padding:12px 20px 24px")}>
         <div style={css("max-width:740px;margin:0 auto;display:flex;flex-direction:column;gap:22px;padding-top:12px")}>
           {messages.map((m, i) => {
             const mine = m.who === "me";

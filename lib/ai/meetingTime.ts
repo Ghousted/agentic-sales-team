@@ -77,22 +77,85 @@ export function inBookingWindow(
   return z.minutes >= w.windowStart * 60 && z.minutes + w.duration <= w.windowEnd * 60;
 }
 
-/** Parse a natural-language meeting time in the user's timezone `tz`.
- *  - `iso: ""`            → no usable date at all, or one outside the booking
- *    window or in the past (→ ask "when?").
- *  - `iso` set, `hasTime` false → a day was given but no clock time (iso is the
- *    day defaulted to the window start; → ask "what time?").
- *  - `iso` set, `hasTime` true  → a full date+time (→ book it).
- *  Honors the booking window (hours + weekdays); the label (start–end, in `tz`) is built here. */
-export async function parseMeetingTime(
-  text: string,
-  opts?: { windowStart?: number; windowEnd?: number; weekdaysOnly?: boolean; duration?: number; timeZone?: string },
-): Promise<{ iso: string; label: string; hasTime: boolean }> {
-  const none = { iso: "", label: "", hasTime: false };
-  if (!isAIConfigured() || !text.trim()) return none;
-  const now = new Date();
-  const tz = safeTimeZone(opts?.timeZone);
-  const ws = opts?.windowStart ?? 9, we = opts?.windowEnd ?? 17, wk = opts?.weekdaysOnly !== false, dur = opts?.duration ?? 30;
+/** The UTC instant of wall-clock `date` (yyyy-mm-dd) at `minutes` past midnight in `tz`. */
+function zonedInstant(date: string, minutes: number, tz: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  const wall = Date.UTC(y, m - 1, d, 0, minutes);
+  const offsetMs = (at: number) => {
+    const o = utcOffset(new Date(at), tz).match(/([+-])(\d\d):(\d\d)/);
+    return o ? (o[1] === "-" ? -1 : 1) * (Number(o[2]) * 60 + Number(o[3])) * 60_000 : 0;
+  };
+  // Look the offset up twice: the first guess can sit on the other side of a DST change.
+  const guess = wall - offsetMs(wall);
+  return new Date(wall - offsetMs(guess));
+}
+
+/** yyyy-mm-dd `n` days after yyyy-mm-dd `date`. */
+function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTH = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
+
+/** Read a meeting phrase without AI: a day ("today", "tomorrow", "friday",
+ *  "next tue", "oct 23", "23 october", "10/23", "2026-10-23") and/or a clock time
+ *  ("2pm", "2:30 pm", "14:00", "at 3", "noon"). Days are wall-clock dates in
+ *  `tz`; a bare hour 1–7 with no am/pm is read as afternoon (business hours).
+ *  Returns null when the phrase names neither. */
+export function parseMeetingPhrase(text: string, now: Date, tz: string): { date: string | null; minutes: number | null } | null {
+  const t = text.toLowerCase();
+  const today = zoned(now, tz);
+
+  let minutes: number | null = null;
+  const clock = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)/) ?? t.match(/\b(\d{1,2}):(\d{2})\b/) ?? t.match(/\bat\s+(\d{1,2})\b(?!\s*[/-])/);
+  if (/\b(noon|midday)\b/.test(t)) minutes = 12 * 60;
+  else if (clock) {
+    let h = Number(clock[1]);
+    const min = Number(clock[2] ?? 0);
+    const half = clock[3]?.[0];
+    if (half === "p" && h < 12) h += 12;
+    else if (half === "a" && h === 12) h = 0;
+    else if (!half && h >= 1 && h <= 7) h += 12;
+    if (h <= 23 && min <= 59) minutes = h * 60 + min;
+  }
+
+  let date: string | null = null;
+  const iso = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  const named = t.match(new RegExp(`\\b${MONTH}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?!:)`)) ?? t.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?${MONTH}`));
+  const slash = t.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+  const weekday = t.match(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day|s|sday|nesday|rs|rsday|urday)?\b/);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // A month/day with no year: this year, or next year once it has passed.
+  const upcoming = (month: number, day: number) => {
+    const y = Number(today.date.slice(0, 4));
+    const d = `${y}-${pad(month)}-${pad(day)}`;
+    return d < today.date ? `${y + 1}-${pad(month)}-${pad(day)}` : d;
+  };
+  if (iso) date = `${iso[1]}-${iso[2]}-${iso[3]}`;
+  else if (/\btoday\b/.test(t)) date = today.date;
+  else if (/\b(tomorrow|tmrw|tmr)\b/.test(t)) date = addDays(today.date, 1);
+  else if (named) {
+    const [mon, day] = isNaN(Number(named[1])) ? [named[1], named[2]] : [named[2], named[1]];
+    date = upcoming(MONTHS.indexOf(mon.slice(0, 3)) + 1, Number(day));
+  } else if (slash) date = upcoming(Number(slash[1]), Number(slash[2]));
+  else if (weekday) {
+    // The coming one; today only if the time (if given) hasn't passed yet.
+    let n = (WEEKDAYS.indexOf(weekday[1]) - WEEKDAYS.indexOf(today.weekday.toLowerCase()) + 7) % 7;
+    if (n === 0 && (/\bnext\b/.test(t) || (minutes !== null && minutes <= today.minutes))) n = 7;
+    date = addDays(today.date, n);
+  } else if (/\bnext week\b/.test(t)) {
+    date = addDays(today.date, ((1 - WEEKDAYS.indexOf(today.weekday.toLowerCase()) + 7) % 7) || 7);
+  }
+  if (date && isNaN(Date.parse(`${date}T00:00:00Z`))) date = null;
+  if (date === null && minutes === null) return null;
+  return { date, minutes };
+}
+
+/** The AI reading of `text`: the model's iso + hasTime, or null when it fails. */
+async function aiMeetingTime(text: string, now: Date, tz: string, ws: number, we: number, wk: boolean, dur: number): Promise<{ iso: string; hasTime: boolean } | null> {
   const local = now.toLocaleString("en-US", {
     timeZone: tz, weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "longOffset",
@@ -117,15 +180,55 @@ export async function parseMeetingTime(
   try {
     const r = await aiJSON<{ iso: string; hasTime: boolean }>(system, [{ role: "user", text }] as Turn[], SCHEMA as unknown as Record<string, unknown>, { maxTokens: 120, temperature: 0 });
     const iso = (r.iso ?? "").trim();
-    const at = new Date(iso);
-    if (!iso || isNaN(at.getTime())) return none;
-    const hasTime = r.hasTime === true;
-    // The model is told the window; check it here too, in the user's timezone,
-    // and never book a time that has already passed.
-    if (!inBookingWindow(iso, tz, hasTime, { windowStart: ws, windowEnd: we, weekdaysOnly: wk, duration: dur })) return none;
-    if (hasTime && at.getTime() <= now.getTime()) return none;
-    return { iso: at.toISOString(), label: meetingLabel(iso, tz, dur), hasTime };
-  } catch {
-    return none;
+    if (iso && isNaN(new Date(iso).getTime())) return null;
+    return { iso, hasTime: r.hasTime === true };
+  } catch (e) {
+    console.error("[meetingTime] AI call failed, using the built-in parser:", e);
+    return null;
   }
+}
+
+/** The built-in reading of `text`, in the same shape as the AI's. A clock time
+ *  with no day is the soonest day it's still ahead on (a weekday if required). */
+function plainMeetingTime(text: string, now: Date, tz: string, ws: number, wk: boolean): { iso: string; hasTime: boolean } {
+  const p = parseMeetingPhrase(text, now, tz);
+  if (!p) return { iso: "", hasTime: false };
+  if (p.minutes === null) return { iso: zonedInstant(p.date!, ws * 60, tz).toISOString(), hasTime: false };
+  let date = p.date;
+  if (date === null) {
+    date = zoned(now, tz).date;
+    const ok = (d: string) => zonedInstant(d, p.minutes!, tz).getTime() > now.getTime()
+      && !(wk && ["Sat", "Sun"].includes(zoned(zonedInstant(d, 12 * 60, tz), tz).weekday));
+    for (let i = 0; i < 7 && !ok(date); i++) date = addDays(date, 1);
+  }
+  return { iso: zonedInstant(date, p.minutes, tz).toISOString(), hasTime: true };
+}
+
+/** Parse a natural-language meeting time in the user's timezone `tz`.
+ *  - `iso: ""`            → no usable date at all, or one outside the booking
+ *    window or in the past (→ ask "when?").
+ *  - `iso` set, `hasTime` false → a day was given but no clock time (iso is the
+ *    day defaulted to the window start; → ask "what time?").
+ *  - `iso` set, `hasTime` true  → a full date+time (→ book it).
+ *  Honors the booking window (hours + weekdays); the label (start–end, in `tz`) is built here. */
+export async function parseMeetingTime(
+  text: string,
+  opts?: { windowStart?: number; windowEnd?: number; weekdaysOnly?: boolean; duration?: number; timeZone?: string },
+): Promise<{ iso: string; label: string; hasTime: boolean }> {
+  const none = { iso: "", label: "", hasTime: false };
+  if (!text.trim()) return none;
+  const now = new Date();
+  const tz = safeTimeZone(opts?.timeZone);
+  const ws = opts?.windowStart ?? 9, we = opts?.windowEnd ?? 17, wk = opts?.weekdaysOnly !== false, dur = opts?.duration ?? 30;
+  // The model when it's configured and answers; the built-in parser otherwise,
+  // so a booking never stalls on "when?" just because AI is off or down.
+  const r = (isAIConfigured() ? await aiMeetingTime(text, now, tz, ws, we, wk, dur) : null) ?? plainMeetingTime(text, now, tz, ws, wk);
+  const at = new Date(r.iso);
+  if (!r.iso) return none;
+  // The model is told the window; check it here too, in the user's timezone,
+  // and never book a time (or a day) that has already passed.
+  if (!inBookingWindow(r.iso, tz, r.hasTime, { windowStart: ws, windowEnd: we, weekdaysOnly: wk, duration: dur })) return none;
+  if (r.hasTime && at.getTime() <= now.getTime()) return none;
+  if (!r.hasTime && zonedDate(r.iso, tz) < zoned(now, tz).date) return none;
+  return { iso: at.toISOString(), label: meetingLabel(r.iso, tz, dur), hasTime: r.hasTime };
 }

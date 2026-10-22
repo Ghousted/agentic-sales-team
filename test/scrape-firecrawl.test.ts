@@ -84,6 +84,17 @@ describe("runFirecrawlScrape", () => {
     expect(leads).toHaveLength(1);
   });
 
+  it("keeps a Firecrawl error body out of the scrape error", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    ai.aiJSON.mockResolvedValueOnce({ queries: ["looking for a realtor"], platform: "web" });
+    fetchMock.mockResolvedValue(new Response("Unauthorized: key fc-secret-abc", { status: 401 }));
+    const err = await runFirecrawlScrape(agent, 10, "home buyers").catch((e: Error) => e);
+    expect(String(err)).toMatch(/Firecrawl 401/);
+    expect(String(err)).not.toMatch(/fc-secret-abc/);
+    expect(log.mock.calls.flat().join(" ")).toMatch(/fc-secret-abc/);
+    log.mockRestore();
+  });
+
   it("searches only the platform the instruction names", async () => {
     ai.aiJSON
       .mockResolvedValueOnce({ mode: "intent", queries: ["looking for a realtor", "need help buying a house"], roles: [], platform: "reddit" })

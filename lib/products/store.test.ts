@@ -31,7 +31,7 @@ vi.mock("@/lib/db", async () => {
 const ai = vi.hoisted(() => ({ aiEmbed: vi.fn(), aiEmbedBatch: vi.fn() }));
 vi.mock("@/lib/ai/openrouter", () => ai);
 
-import { addProduct, importProductsCsv, reembedProducts, searchProducts } from "./store";
+import { addProduct, importProductsCsv, reembedProducts, searchProducts, setProductFolder } from "./store";
 
 const row = (id: string, name: string) => ({ id, name, description: "", price: "", category: "", folderId: null, attributes: {} });
 const has = (c: Chain, name: string, arg?: unknown) => c.calls.some((x) => x.name === name && (arg === undefined || x.args[0] === arg));
@@ -94,5 +94,50 @@ describe("reembedProducts", () => {
     expect(res).toEqual({ embedded: 2, failed: 1, error: "OpenRouter embed 500" });
     const updates = db.queries.filter((q) => q.op === "update");
     expect(updates.map((u) => (u.calls.find((c) => c.name === "set")!.args[0] as { embedding: number[] }).embedding)).toEqual([[1], [2]]);
+  });
+});
+
+describe("folder ownership", () => {
+  const FOLDER = "11111111-2222-4333-8444-555555555555";
+  const folderLookup = (c: Chain) => c.op === "select" && has(c, "limit", 1);
+
+  it("refuses to add a product into a folder from another workspace", async () => {
+    db.respond = () => []; // the folder lookup finds nothing in this workspace
+    expect(await addProduct("u1", { name: "Widget", folderId: FOLDER })).toBeNull();
+    expect(db.queries.some((q) => q.op === "insert")).toBe(false);
+    expect(ai.aiEmbed).not.toHaveBeenCalled();
+  });
+
+  it("adds a product into a folder this workspace owns", async () => {
+    ai.aiEmbed.mockResolvedValue([1]);
+    db.respond = (c) => (folderLookup(c) ? [{ id: FOLDER }] : [row("p1", "Widget")]);
+    expect((await addProduct("u1", { name: "Widget", folderId: FOLDER }))?.id).toBe("p1");
+  });
+
+  it("rejects a folder id that isn't a UUID without querying it", async () => {
+    expect(await addProduct("u1", { name: "Widget", folderId: "x' OR 1=1" })).toBeNull();
+    expect(db.queries).toHaveLength(0);
+  });
+
+  it("won't move a product into a foreign folder, but can clear its folder", async () => {
+    await setProductFolder("u1", "p1", FOLDER);
+    expect(db.queries.some((q) => q.op === "update")).toBe(false);
+    await setProductFolder("u1", "p1", null);
+    expect(db.queries.some((q) => q.op === "update")).toBe(true);
+  });
+
+  it("refuses a CSV import into a foreign folder", async () => {
+    const res = await importProductsCsv("u1", "name\nA\n", FOLDER);
+    expect(res).toEqual({ added: 0, error: "That folder doesn't exist." });
+    expect(ai.aiEmbedBatch).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic error when the import insert fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    ai.aiEmbedBatch.mockResolvedValue({ vectors: [[1]] });
+    db.respond = (c) => { if (c.op === "insert") throw new Error('duplicate key value violates "products_pkey"'); return []; };
+    const res = await importProductsCsv("u1", "name\nA\n");
+    expect(res).toEqual({ added: 0, error: "Import failed. Please try again." });
+    log.mockRestore();
   });
 });

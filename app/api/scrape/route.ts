@@ -42,6 +42,7 @@ export async function POST(req: Request) {
     const { leadsFound } = await runClaimedScrapeJob(job);
     return NextResponse.json({ ok: true, leadsFound });
   } catch (e) {
-    return NextResponse.json({ error: "Scrape failed: " + String(e).slice(0, 200) }, { status: 500 });
+    console.error("[scrape] job failed:", e);
+    return NextResponse.json({ error: "That search failed. Please try again." }, { status: 500 });
   }
 }

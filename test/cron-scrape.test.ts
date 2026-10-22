@@ -65,7 +65,11 @@ describe("GET /api/cron/scrape", () => {
     const res = await GET(cronReq("Bearer s3cret"));
     expect(await res.json()).toEqual({ processed: 1, leadsFound: 3 });
     expect(vi.mocked(addScrapedLeads).mock.calls[0][0]).toBe("u2");
-    expect(fake.state.updates.find((u) => u.status === "done")?.result).toEqual({ leadsFound: 3, leadIds: ["l1", "l2", "l3"] });
+    const done = fake.state.updates.find((u) => u.status === "done")?.result as { leadsFound: number; leadIds: string[]; steps: { id: string; status: string; label: string }[] };
+    expect(done).toMatchObject({ leadsFound: 3, leadIds: ["l1", "l2", "l3"] });
+    expect(done.steps.at(-1)).toMatchObject({ id: "save", status: "done", label: "3 new leads saved" });
+    // The live timeline: the save step was written while the job still ran.
+    expect(fake.state.updates.some((u) => !u.status && (u.result as { steps?: unknown[] })?.steps?.length)).toBe(true);
     expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
   });
 

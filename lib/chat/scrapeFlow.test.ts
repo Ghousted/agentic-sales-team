@@ -18,7 +18,8 @@ vi.mock("./orchestrate", () => ({
   parseMentions: () => [],
   resolve: async () => ({ actor: scout, capability: "scrape", messages: [{ who: "s1", text: "Understood. I'm finding leads now." }] }),
 }));
-vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "job-1" })) }));
+const JOB_ID = "33333333-3333-4333-8333-333333333333";
+vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "33333333-3333-4333-8333-333333333333" })) }));
 vi.mock("./teamMessages", () => ({
   listTeamMessages: async () => state.history,
   insertTeamMessages: vi.fn(async (_u: string, _t: string, msgs: { who: string; text: string }[]) => msgs.map((m, i) => ({ id: 100 + i, ...m }))),
@@ -31,6 +32,8 @@ vi.mock("@/lib/meetings/store", () => ({ bookMeeting: async () => false, meeting
 const { teamChat } = await import("./actions");
 const { detectIntent } = await import("@/lib/ai/intent");
 const { enqueueJob } = await import("@/lib/jobs/actions");
+const { stripMarkers } = await import("./thread");
+const { runIdFrom } = await import("@/lib/scrape/steps");
 
 function intent(capability: string, params: Record<string, unknown> = {}) {
   vi.mocked(detectIntent).mockResolvedValueOnce({ capability, params, summary: "" } as never);
@@ -67,8 +70,9 @@ describe("scrape clarifying questions", () => {
       kind: "scrape", target: 15, pod: true, teamId: "t1",
       instruction: "Look for business in linkedin looking for an ai training provider. Location: Austin.",
     });
-    expect(res.job).toEqual({ id: "job-1", kind: "scrape", agentId: "s1" });
-    expect(res.messages[0].text).toBe([
+    expect(res.job).toEqual({ id: JOB_ID, kind: "scrape", agentId: "s1" });
+    expect(runIdFrom(res.messages[0].text)).toBe(JOB_ID); // the live timeline
+    expect(stripMarkers(res.messages[0].text)).toBe([
       "Understood. I am starting the search:",
       "• Looking for: Look for business in linkedin looking for an ai training provider",
       "• Where: Austin",
@@ -129,7 +133,7 @@ describe("scrape clarifying questions", () => {
     intent("scrape");
     const res = await teamChat("t1", scrapeAnswerText({ where: "Metro Manila Philippines", count: "5" }));
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 5, instruction: "find businesses that need AI training. Location: Metro Manila Philippines." });
-    expect(res.messages[0].text).not.toMatch(/·|⟦/);
+    expect(stripMarkers(res.messages[0].text)).not.toMatch(/·|⟦/);
   });
 
   it("never searches for a card answer's text", async () => {

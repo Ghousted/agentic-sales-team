@@ -166,3 +166,20 @@ describe("runFirecrawlScrape Jev gate", () => {
   });
 });
 
+describe("runFirecrawlScrape live steps", () => {
+  it("reports plan, search, seller check and extraction in order", async () => {
+    const { createStepLog } = await import("@/lib/scrape/steps");
+    ai.aiJSON
+      .mockResolvedValueOnce({ mode: "intent", queries: ["need a realtor"], roles: [], platform: "reddit" })
+      .mockResolvedValueOnce({ prospects: [{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "web", email: "", fit: "Buying now." }] });
+    const log = createStepLog();
+    await runFirecrawlScrape(agent, 10, "home buyers on reddit", log);
+    expect(log.all().map((s) => `${s.id}:${s.status}`)).toEqual(["plan:done", "search:done", "gate:done", "extract:done"]);
+    const [plan, search, gate, extract] = log.all();
+    expect(plan.detail).toBe("Looking for posts by people who want to buy: need a realtor");
+    expect(search.label).toBe("Found 1 source on Reddit");
+    expect(search.items).toEqual([{ title: "LF a 3BR house", meta: "reddit.com", url: searchHit.url, kind: "source" }]);
+    expect(gate.label).toBe("No sellers found");
+    expect(extract.label).toBe("Picked out 1 lead");
+  });
+});

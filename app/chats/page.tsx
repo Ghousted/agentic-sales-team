@@ -9,6 +9,8 @@ import { mergeThread, stripMarkers, threadCursor, leadIdsFrom, type StoredMsg, t
 import { askedBriefFields } from "@/lib/chat/clarify";
 import ScrapeQuestions from "./ScrapeQuestions";
 import ScrapeResults from "./ScrapeResults";
+import ScrapeProgress from "./ScrapeProgress";
+import { runIdFrom } from "@/lib/scrape/steps";
 import { isNearBottom, shouldStick } from "@/lib/chat/scroll";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import { listTeamLeads } from "@/lib/leads/actions";
@@ -277,6 +279,7 @@ function ChatsInner() {
             const clean = asked.length ? stripMarkers(m.text).split("\n")[0] : stripMarkers(m.text);
             const showQuestions = asked.length > 0 && i === messages.length - 1 && !typing;
             const foundIds = mine ? [] : leadIdsFrom(m.text);
+            const runId = mine ? null : runIdFrom(m.text);
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
               <div key={(m as ThreadMsg).id ?? "local-" + i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
@@ -288,6 +291,7 @@ function ChatsInner() {
                   ) : (
                     <div style={css((mine ? "background:#006aff;color:#fff;border-radius:20px 20px 6px 20px;" : "align-self:flex-start;max-width:92%;background:#f1f3f6;color:#101418;border-radius:6px 20px 20px 20px;") + "padding:11px 16px;font-size:15px;line-height:1.6;white-space:pre-wrap")}>{renderRich(clean, mine, router)}</div>
                   )}
+                  {runId && <ScrapeProgress jobId={runId} />}
                   {foundIds.length > 0 && <ScrapeResults ids={foundIds} />}
                   {showQuestions && <ScrapeQuestions key={(m as ThreadMsg).id ?? i} fields={asked} onSend={(text) => sendTeamChat(activeTeam.id, text, [])} />}
                   {showApprove && (

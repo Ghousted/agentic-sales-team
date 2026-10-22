@@ -7,6 +7,7 @@ import "server-only";
 import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
 import { gateResults } from "./jev";
+import { cleanTitle, domainOf, trunc, type StepLog } from "./steps";
 
 export interface Prospect {
   name: string;
@@ -239,14 +240,24 @@ export async function runFirecrawlScrape(
   agent: { id: string; name: string; role: string; goal: string; task: string; capabilities?: string[] },
   target: number,
   instruction?: string,
+  log?: StepLog,
 ): Promise<Prospect[]> {
   // The free-text instruction is the sole targeting (what/who/where). No ICP.
   const targetDesc = instruction?.trim() || agent.goal || "potential customers";
+  log?.put({ id: "plan", status: "active", label: "Planning the search", detail: `"${trunc(targetDesc, 90)}"` });
   const plan: SearchPlan = instruction?.trim()
     ? await planSearch(instruction.trim(), agent.goal)
     : { mode: "intent", queries: [buildQuery(agent.goal)], roles: [], platform: "web" };
   const per = Math.max(4, Math.min(target, 8));
   const searches = buildSearches(plan);
+  log?.put({
+    id: "plan", status: "done", label: `Searching for "${trunc(targetDesc, 60)}"`,
+    detail: plan.mode === "fit"
+      ? `Looking for ${plan.roles.length ? plan.roles.join(", ") : "companies"} at ${plan.queries.join(" · ")}`
+      : `Looking for posts by people who want to buy: ${plan.queries.join(" · ")}`,
+  });
+  const where = plan.mode === "fit" ? "LinkedIn" : ({ facebook: "Facebook", reddit: "Reddit", x: "X" } as Record<string, string>)[plan.platform] ?? "Facebook and Reddit";
+  log?.put({ id: "search", status: "active", label: `Searching ${where}`, detail: `${searches.length} searches` });
   // Run the searches in parallel to stay inside the scrape deadline. One failed
   // search does not stop the others. When all searches fail, report the first error.
   const settled = await Promise.allSettled(searches.map((q) => firecrawlSearch(q, per, plan.mode === "intent")));
@@ -258,11 +269,32 @@ export async function runFirecrawlScrape(
     if (r.status !== "fulfilled") continue;
     for (const hit of r.value) if (hit.url && !seen.has(hit.url)) { seen.add(hit.url); results.push(hit); }
   }
+  const SOURCES_SHOWN = 6;
+  log?.put({
+    id: "search", status: "done", label: `Found ${results.length} source${results.length === 1 ? "" : "s"} on ${where}`,
+    items: results.slice(0, SOURCES_SHOWN).map((r) => ({ title: trunc(cleanTitle(r.title || r.url || ""), 80), meta: domainOf(r.url), url: r.url, kind: "source" as const })),
+    more: Math.max(0, results.length - SOURCES_SHOWN),
+  });
   const sells = [agent.role, agent.goal].filter(Boolean).join(". "); // seller context, to exclude competitors
   // Jev drops sellers and competitors one result at a time, before extraction.
+  const other = plan.mode === "fit" ? "competitor" : "seller";
+  log?.put({ id: "gate", status: "active", label: `Checking each source for ${other}s` });
   const gated = await gateResults(results, { mode: plan.mode, sells, wants: targetDesc });
-  const prospects = await extractProspects(targetDesc, sells, gated, target, plan.mode === "fit" ? "linkedin" : plan.platform, plan.mode);
-  return normalizeProspects(prospects, gated.map((r) => r.url));
+  const dropped = results.filter((r) => !gated.includes(r));
+  const DROPPED_SHOWN = 3;
+  log?.put({
+    id: "gate", status: "done", label: dropped.length ? `Dropped ${dropped.length} ${other}${dropped.length === 1 ? "" : "s"}` : `No ${other}s found`,
+    detail: `Kept ${gated.length} of ${results.length}.`,
+    items: dropped.slice(0, DROPPED_SHOWN).map((r) => ({ title: trunc(cleanTitle(r.title || r.url || ""), 80), meta: domainOf(r.url), url: r.url, kind: "dropped" as const })),
+    more: Math.max(0, dropped.length - DROPPED_SHOWN),
+  });
+  log?.put({ id: "extract", status: "active", label: "Picking out the leads" });
+  const prospects = normalizeProspects(
+    await extractProspects(targetDesc, sells, gated, target, plan.mode === "fit" ? "linkedin" : plan.platform, plan.mode),
+    gated.map((r) => r.url),
+  );
+  log?.put({ id: "extract", status: "done", label: `Picked out ${prospects.length} lead${prospects.length === 1 ? "" : "s"}` });
+  return prospects;
 }
 
 /** The model sometimes turns the subreddit in the URL into a fake handle

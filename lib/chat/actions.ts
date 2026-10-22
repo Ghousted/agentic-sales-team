@@ -14,6 +14,7 @@ import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./out
 import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeStartText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { briefFromRequest, readScrapeAnswer } from "./scrapeBrief";
+import { runMarker } from "@/lib/scrape/steps";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
@@ -46,7 +47,8 @@ async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Pr
     pod: true, teamId,
   });
   if ("error" in enq) return { messages: [{ who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
-  return { messages: [{ who: actor.id, text: scrapeStartText(b, count, MAX_SCRAPE_TARGET) }], job: { id: enq.jobId, kind: "scrape", agentId: actor.id } };
+  // ⟦run:…⟧ puts the live timeline of this scrape under the message.
+  return { messages: [{ who: actor.id, text: scrapeStartText(b, count, MAX_SCRAPE_TARGET) + runMarker(enq.jobId) }], job: { id: enq.jobId, kind: "scrape", agentId: actor.id } };
 }
 
 /** Approve any picked leads, then enqueue an outreach job for the target. Shared

@@ -8,15 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@gsap/react':
-        specifier: ^2.1.2
-        version: 2.1.2(gsap@3.15.0)(react@18.3.1)
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
-      animejs:
-        specifier: ^4.5.0
-        version: 4.5.0
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -557,12 +551,6 @@ packages:
     resolution: {integrity: sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
-  '@gsap/react@2.1.2':
-    resolution: {integrity: sha512-JqliybO1837UcgH2hVOM4VO+38APk3ECNrsuSM4MuXp+rbf+/2IG2K1YJiqfTcXQHH7XlA0m3ykniFYstfq0Iw==}
-    peerDependencies:
-      gsap: ^3.12.5
-      react: '>=17'
-
   '@humanwhocodes/config-array@0.13.0':
     resolution: {integrity: sha512-DZLEEqFWQFiyK6h5YIeynKx7JlvCYWL0cImfSRXZ9l4Sg2efkFGTuFf6vzXjK1cq6IYkU+Eg/JizXw+TD2vRNw==}
     engines: {node: '>=10.10.0'}
@@ -1092,17 +1080,6 @@ packages:
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
-
-  animejs@4.5.0:
-    resolution: {integrity: sha512-NQimYX+lz8WaXonGS9zVVoviCIAjONeJayxacUditaivYLqyXgGjFKjuyl0aUUhFKm5MriX9ty1TGovNzoJQWA==}
-    peerDependencies:
-      '@types/three': '>=0.150.0'
-      three: '>=0.150.0'
-    peerDependenciesMeta:
-      '@types/three':
-        optional: true
-      three:
-        optional: true
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -2821,11 +2798,6 @@ snapshots:
 
   '@eslint/js@8.57.1': {}
 
-  '@gsap/react@2.1.2(gsap@3.15.0)(react@18.3.1)':
-    dependencies:
-      gsap: 3.15.0
-      react: 18.3.1
-
   '@humanwhocodes/config-array@0.13.0':
     dependencies:
       '@humanwhocodes/object-schema': 2.0.3
@@ -3250,8 +3222,6 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
-
-  animejs@4.5.0: {}
 
   ansi-regex@5.0.1: {}
 

@@ -27,8 +27,12 @@ for (const file of files) {
   if (done.has(file)) { console.log("· skip (already applied):", file); continue; }
   const raw = readFileSync(join(dir, file), "utf8");
   const statements = raw.split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
-  for (const stmt of statements) await sql.query(stmt);
-  await sql.query(`INSERT INTO "_migrations" (name) VALUES ($1)`, [file]);
+  // The statements and the _migrations row go in one transaction, so a failed
+  // migration leaves nothing half-applied and is retried whole on the next run.
+  await sql.transaction([
+    ...statements.map((stmt) => sql.query(stmt)),
+    sql.query(`INSERT INTO "_migrations" (name) VALUES ($1)`, [file]),
+  ]);
   console.log("✓ applied:", file, `(${statements.length} statement(s))`);
   applied++;
 }

@@ -1,7 +1,7 @@
 import "server-only";
 // Meetings persistence: book a meeting (+ advance the lead) and list the booked
 // meetings (joined to their lead) for the calendar.
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, meetings, leads, agents, agentConfig } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { parseMeetingTime } from "@/lib/ai/meetingTime";
@@ -53,11 +53,20 @@ export async function findMeetingAgent(userId: string): Promise<{ id: string; na
 export async function bookMeeting(userId: string, agentId: string, leadId: string, whenAtIso: string, whenLabel: string, title = "Meeting"): Promise<boolean> {
   if (!isDbConfigured()) return false;
   const db = getDb();
-  const [owned] = await db.select({ id: leads.id }).from(leads).where(and(eq(leads.id, leadId), eq(leads.userId, userId))).limit(1);
-  if (!owned) return false;
-  await db.insert(meetings).values({ userId, agentId, leadId, title, whenAt: new Date(whenAtIso), whenLabel });
-  await db.update(leads).set({ status: "meeting", updatedAt: new Date() }).where(and(eq(leads.id, leadId), eq(leads.userId, userId)));
-  return true;
+  const owned = and(eq(leads.id, leadId), eq(leads.userId, userId));
+  // One transaction. The meeting is inserted from the user's own lead row, so
+  // the ownership check and both writes can't come apart. Drizzle's INSERT ...
+  // SELECT wants every column, in table order.
+  const [inserted] = await db.batch([
+    db.insert(meetings).select(db.select({
+      id: sql<string>`gen_random_uuid()`.as("id"),
+      userId: leads.userId, agentId: sql<string>`${agentId}`.as("agent_id"), leadId: leads.id,
+      title: sql<string>`${title}`.as("title"), whenAt: sql<Date>`${new Date(whenAtIso).toISOString()}::timestamptz`.as("when_at"),
+      whenLabel: sql<string>`${whenLabel}`.as("when_label"), createdAt: sql<Date>`now()`.as("created_at"),
+    }).from(leads).where(owned)).returning({ id: meetings.id }),
+    db.update(leads).set({ status: "meeting", updatedAt: new Date() }).where(owned),
+  ]);
+  return inserted.length > 0;
 }
 
 /** Book a meeting for a lead directly (from the lead modal): parse the time in

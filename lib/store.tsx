@@ -6,9 +6,9 @@ import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
 import { typeById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
-import { teamChat } from "./chat/actions";
-import { getJob } from "./jobs/actions";
-import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, appendMessages, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
+import { teamChat, reportTeamJob } from "./chat/actions";
+import type { ThreadMsg } from "./chat/thread";
+import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 interface WizardState {
   wStep: number;
@@ -41,7 +41,7 @@ interface State extends WizardState {
   chats: Chats;
   convId: string;
   chatInput: string;
-  chatTyping: string | boolean; // false = hidden · true = generic · agentId = that agent is typing
+  chatAwaiting: Record<string, number>; // teamId → sends still waiting on teamChat (shows typing dots)
   chatLeadPicks: { id: string; name: string }[];
   hubTick: number;
   countT: number;
@@ -80,7 +80,7 @@ const initialWizard: WizardState = {
 const initialState: State = {
   ...initialWizard,
   authed: false, showAuth: false, authMode: "login", sidebarOpen: true,
-  chats: chatsInit(), convId: "sk", chatInput: "", chatTyping: false, chatLeadPicks: [],
+  chats: chatsInit(), convId: "sk", chatInput: "", chatAwaiting: {}, chatLeadPicks: [],
   hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
@@ -109,7 +109,10 @@ interface Ctx {
   updateTeam: (teamId: string, patch: { name?: string; icon?: string; goal?: string }) => void;
   removeTeamMember: (teamId: string, agentId: string) => void;
   sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
-  clearChat: (convId: string) => void;
+  clearChat: (convId: string) => Promise<number>;
+  // The open chat page registers its thread fetch here so a send can pull the
+  // stored replies right away instead of waiting for the next poll tick.
+  registerThreadPoll: (teamId: string, poll: (() => Promise<void>) | null) => void;
   createTeam: () => string;
   createAgent: () => void;
   quickCreateAgent: (typeId: string, name: string) => string;
@@ -312,79 +315,70 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
   }, [agents, set, showToast]);
 
   // Clear one conversation: empty it locally and delete its persisted messages.
-  const clearChat = useCallback((convId: string) => {
+  // Resolves to the highest id deleted, so the chat poll never re-shows them.
+  const clearChat = useCallback(async (convId: string): Promise<number> => {
     set((prev) => ({ chats: { ...prev.chats, [convId]: [] } }));
-    clearMessages(convId).catch((e) => console.error("[clearChat] delete failed:", e));
+    try { return await clearMessages(convId); }
+    catch (e) { console.error("[clearChat] delete failed:", e); return 0; }
   }, [set]);
 
+  const threadPolls = useRef(new Map<string, () => Promise<void>>());
+  const registerThreadPoll = useCallback((teamId: string, poll: (() => Promise<void>) | null) => {
+    if (poll) threadPolls.current.set(teamId, poll); else threadPolls.current.delete(teamId);
+  }, []);
+  const pullThread = useCallback(async (teamId: string) => {
+    try { await threadPolls.current.get(teamId)?.(); } catch { /* the next poll tick retries */ }
+  }, []);
+
+  // Team chat. The server stores the user's message and every agent reply
+  // (teamChat, the pod chain, reportTeamJob); the chat page renders the stored
+  // thread in id order. Here the message shows at once as a local row until its
+  // stored copy arrives, and only a notice the server never saw (a failed
+  // request) stays local-only.
   const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
     const t = (text || "").trim();
     if (!t) return;
-    set((prev) => ({
-      chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([{ who: "me", text: t }]) },
-      chatInput: "", chatTyping: true, chatLeadPicks: [],
-    }));
-    appendMessages(teamId, [{ who: "me", text: t }]).catch((e) => console.error("[sendTeamChat] persist user msg failed:", e));
-
-    const append = (who: string, text: string) => {
-      set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([{ who, text }]) } }));
-      appendMessages(teamId, [{ who, text }]).catch(() => {});
+    const addLocal = (who: string, text: string) => {
+      const m: ThreadMsg = { who, text, local: true };
+      set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
     };
-    // Human-feel pacing: show a per-agent typing indicator, pause briefly (longer
-    // for longer lines), then reveal — so a hand-off between agents reads like a
-    // real back-and-forth instead of a wall of text appearing all at once.
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    const replyDelay = (text: string) => Math.min(2000, Math.max(650, Math.round((text || "").length * 18))) + Math.floor(Math.random() * 250);
-    const typeThenAppend = async (who: string, text: string) => {
-      if (who === "system") { set({ chatTyping: false }); append(who, text); return; }
-      set({ chatTyping: who });
-      await sleep(replyDelay(text));
-      set({ chatTyping: false });
-      append(who, text);
-    };
+    const awaiting = (d: number) => set((prev) => ({ chatAwaiting: { ...prev.chatAwaiting, [teamId]: Math.max(0, (prev.chatAwaiting[teamId] ?? 0) + d) } }));
+    addLocal("me", t);
+    set({ chatInput: "", chatLeadPicks: [] });
+    awaiting(1);
 
     teamChat(teamId, t, leadIds).then(async (res) => {
-      for (const m of res.messages) await typeThenAppend(m.who, m.text);
-      set({ chatTyping: false });
-      if (!res.messages.length && !res.job) append("system", "No one picked that up. Try @mentioning an agent on this team.");
+      // Fetch the stored replies before dropping the dots, so the typing
+      // indicator hands straight over to the reveal.
+      await pullThread(teamId);
+      awaiting(-1);
+      // A reply with no id wasn't stored (e.g. "Not signed in.") — show it locally.
+      for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocal(m.who, m.text);
       if (!res.job) return;
       const job = res.job;
       if (job.kind === "scrape") {
-        try {
-          const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
-          const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
-          if (!r.ok || data.error) append(job.agentId, "I wasn't able to run that search: " + (data.error ?? "unknown error"));
-          else if (data.note === "already running") await typeThenAppend(job.agentId, "That search is already in progress. I'll post the results here shortly.");
-          else {
-            await typeThenAppend(job.agentId, `I found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}.`);
-            // The scrape hands off down the chain (assess → match → outreach → you).
-            // Kick the runner so the auto stages run; their messages arrive via the thread poll.
-            try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
-          }
-        } catch { append(job.agentId, "That search didn't complete. Please try again."); }
+        // The scrape route runs it now (the cron runs it if this tab closes); a
+        // finished pod scrape is narrated by the chain, a failed one by reportTeamJob.
+        try { await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) }); } catch { /* the cron picks it up */ }
+        try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
+        try { await reportTeamJob(teamId, job.id); } catch { /* best-effort */ }
+        await pullThread(teamId);
         return;
       }
-      // research / outreach: the per-minute cron (/api/cron/jobs) runs the job even if
-      // this tab closes; kicking the runner here only starts it sooner. Then poll getJob.
+      // research / outreach / …: the per-minute cron (/api/cron/jobs) runs the job
+      // even if this tab closes; kicking the runner here only starts it sooner.
+      // reportTeamJob posts the outcome once the job ends, then the thread shows it.
       try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
       let waited = 0;
       let slow = 0; // polls after "still working": the cron may take a few minutes
       const poll = async (): Promise<void> => {
-        let job;
-        try { job = await getJob(res.job!.id); }
-        catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { append(res.job!.agentId, "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
-        if (!job) return;
-        const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number; steps?: number };
-        if (job.status === "done") {
-          const done = res.job!.kind === "research" ? `I've researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}.`
-            : res.job!.kind === "match" ? `I matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to your catalog.`
-            : `I've drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, ready for you to review and send.`;
-          await typeThenAppend(res.job!.agentId, done);
-          return;
-        }
-        if (job.status === "failed") { append(res.job!.agentId, "That run didn't complete. Please check the agent's page."); return; }
+        let status: string | null;
+        try { status = await reportTeamJob(teamId, job.id); }
+        catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { addLocal("system", "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
+        if (!status) return;
+        if (status === "done" || status === "failed") { await pullThread(teamId); return; }
         if (waited >= 40) {
-          if (slow === 0) append(res.job!.agentId, "I'm still working on it in the background. I'll post here when it's done.");
+          if (slow === 0) addLocal("system", "Still working on it in the background. The result will appear here when it's done.");
           if (++slow > 40) return; // ~10 more minutes; the agent's page shows the result after that
           setTimeout(poll, 15_000);
           return;
@@ -393,8 +387,13 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         setTimeout(poll, 2500);
       };
       poll();
-    }).catch(() => { set({ chatTyping: false }); append("system", "I'm sorry — I wasn't able to process that just now."); });
-  }, [set]);
+    }).catch(async () => {
+      // The message may or may not have been stored; the thread fetch shows what was.
+      await pullThread(teamId);
+      awaiting(-1);
+      addLocal("system", "I'm sorry — I wasn't able to process that just now.");
+    });
+  }, [set, pullThread]);
 
   const createTeam = useCallback((): string => {
     const cur = sRef.current;
@@ -466,7 +465,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, clearChat, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

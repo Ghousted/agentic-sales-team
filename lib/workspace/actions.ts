@@ -6,6 +6,7 @@ import { and, eq, asc } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig, teamMembers } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import type { Agent, Team, StatusKey, ChatMsg, Chats } from "@/lib/types";
+import type { ThreadMsg } from "@/lib/chat/thread";
 
 export interface AgentConfig {
   role?: string;
@@ -45,16 +46,18 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       db.select().from(agents).where(eq(agents.userId, userId)),
       db.select().from(teams).where(eq(teams.userId, userId)),
       db.select().from(agentStates).where(eq(agentStates.userId, userId)),
-      db.select({ agentId: messages.agentId, who: messages.who, text: messages.text })
+      db.select({ id: messages.id, agentId: messages.agentId, who: messages.who, text: messages.text })
         .from(messages).where(eq(messages.userId, userId)).orderBy(asc(messages.id)),
       db.select().from(agentConfig).where(eq(agentConfig.userId, userId)),
       db.select().from(teamMembers).where(eq(teamMembers.userId, userId)),
     ]);
 
-    // Group persisted messages by agent, preserving insertion order.
+    // Group persisted messages by agent, preserving insertion order. The id is
+    // the team chat's poll cursor (lib/chat/thread).
     const chats: Chats = {};
     for (const m of msgRows) {
-      (chats[m.agentId] ??= []).push({ who: m.who as ChatMsg["who"], text: m.text });
+      const msg: ThreadMsg = { id: m.id, who: m.who as ChatMsg["who"], text: m.text };
+      (chats[m.agentId] ??= []).push(msg);
     }
 
     const config: Record<string, AgentConfig> = {};
@@ -200,19 +203,26 @@ export async function saveAgentConfig(agentId: string, cfg: AgentConfig): Promis
     .onConflictDoUpdate({ target: [agentConfig.userId, agentConfig.agentId], set });
 }
 
-/** Append chat turns (user and/or AI) for a conversation, in order. */
+/** Append the user's own chat turns for a conversation, in order. Only "me"
+ *  rows are accepted: agent and system rows are written by the server (teamChat,
+ *  the pod chain), so a client can't put words — or ⟦…⟧ markers — in an agent's
+ *  mouth. */
 export async function appendMessages(agentId: string, msgs: ChatMsg[]): Promise<void> {
-  if (!isDbConfigured() || msgs.length === 0) return;
+  const mine = msgs.filter((m) => m.who === "me");
+  if (!isDbConfigured() || mine.length === 0) return;
   const userId = await uid();
   if (!userId) return;
-  await getDb().insert(messages).values(msgs.map((m) => ({ userId, agentId, who: m.who, text: m.text })));
+  await getDb().insert(messages).values(mine.map((m) => ({ userId, agentId, who: "me", text: m.text })));
 }
 
 /** Permanently delete one conversation's messages (a team thread or an agent
- *  chat, keyed by convId). Session-scoped, so it only touches the user's own. */
-export async function clearMessages(convId: string): Promise<void> {
-  if (!isDbConfigured()) return;
+ *  chat, keyed by convId). Session-scoped, so it only touches the user's own.
+ *  Returns the highest id deleted (0 if none) so the chat poll can move its
+ *  cursor past them and never show them again. */
+export async function clearMessages(convId: string): Promise<number> {
+  if (!isDbConfigured()) return 0;
   const userId = await uid();
-  if (!userId) return;
-  await getDb().delete(messages).where(and(eq(messages.userId, userId), eq(messages.agentId, convId)));
+  if (!userId) return 0;
+  const gone = await getDb().delete(messages).where(and(eq(messages.userId, userId), eq(messages.agentId, convId))).returning({ id: messages.id });
+  return gone.reduce((max, r) => Math.max(max, r.id), 0);
 }

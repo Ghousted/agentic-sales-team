@@ -83,7 +83,7 @@ export default function ChatHome() {
     setText("");
     router.push("/chats");
   };
-  const useStarter = (st: (typeof STARTERS)[number]) => {
+  const applyStarter = (st: (typeof STARTERS)[number]) => {
     const a = agents.find((x) => x.capabilities.includes(st.cap));
     if (a) setAgentId(a.id);
     setText(st.text);
@@ -151,7 +151,7 @@ export default function ChatHome() {
           {STARTERS.map((st, i) => {
             const a = agents.find((x) => x.capabilities.includes(st.cap));
             return (
-              <Btn key={st.text} onClick={() => useStarter(st)} style={{ ...css("min-width:0;min-height:112px;padding:14px 14px 12px;border:1px solid #e3e7ed;border-radius:18px;background:#ffffff;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:10px;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;animation:cUp .3s ease-out backwards"), animationDelay: 0.05 + i * 0.04 + "s" }} styleHover="background:#fafbfc;border-color:#d0d6de;box-shadow:0 8px 20px -14px rgba(16,20,24,.25);transform:translateY(-1px)">
+              <Btn key={st.text} onClick={() => applyStarter(st)} style={{ ...css("min-width:0;min-height:112px;padding:14px 14px 12px;border:1px solid #e3e7ed;border-radius:18px;background:#ffffff;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:10px;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;animation:cUp .3s ease-out backwards"), animationDelay: 0.05 + i * 0.04 + "s" }} styleHover="background:#fafbfc;border-color:#d0d6de;box-shadow:0 8px 20px -14px rgba(16,20,24,.25);transform:translateY(-1px)">
                 <span style={css("width:30px;height:30px;flex:none;border-radius:9px;background:#f3f4f6;color:#4a5565;display:flex;align-items:center;justify-content:center")}><i className={st.icon} style={{ fontSize: 16 }} /></span>
                 <span style={css("flex:1;font-size:14px;font-weight:500;line-height:1.35;color:#1f252d")}>{st.text}</span>
                 {a && <span style={css("display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7686")}><span style={css(av(a, 16))}>{a.initials}</span>{first(a)}</span>}

@@ -96,11 +96,12 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   }
 }
 
-/** Persist a newly created agent. */
+/** Persist a newly created agent. Throws when it can't be stored (signed out,
+ *  DB error), so the client never shows an agent the server doesn't have. */
 export async function saveAgent(agent: Agent): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
-  if (!userId) return;
+  if (!userId) throw new Error("Not signed in.");
   await getDb().insert(agents).values({
     userId, id: agent.id, name: agent.name, initials: agent.initials, role: agent.role,
     color: agent.color, status: agent.status, task: agent.task, score: agent.score,
@@ -109,11 +110,11 @@ export async function saveAgent(agent: Agent): Promise<void> {
   });
 }
 
-/** Persist a newly created team. */
+/** Persist a newly created team. Throws when it can't be stored, like saveAgent. */
 export async function saveTeam(team: Team): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
-  if (!userId) return;
+  if (!userId) throw new Error("Not signed in.");
   await getDb().insert(teams).values({
     userId, id: team.id, name: team.name, icon: team.icon, iconBg: team.iconBg,
     description: team.desc, goal: team.goal, members: team.members, activity: team.activity,

@@ -162,7 +162,7 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   body: text("body").notNull(),
   rationale: text("rationale").notNull().default(""),
   status: text("status").notNull().default("draft"), // draft|sent
-  // Hidden from the top-bar Email-drafts inbox (Discard / Clear sent). Soft-hide
+  // Hidden from the Emails page (Discard / Clear sent). Soft-hide
   // only. Analytics counts still read every row, so this never rewinds a total.
   dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

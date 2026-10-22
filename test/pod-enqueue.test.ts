@@ -78,4 +78,20 @@ describe("chainNext", () => {
     await chainNext("u1", "t1", "scrape", 3);
     expect(fake.state.inserts).toHaveLength(1);
   });
+
+  it("hands on a scrape run by an agent from another team", async () => {
+    // Leo is not on team t1. The chat sent the scrape to him across teams.
+    vi.mocked(membersOfTeam).mockResolvedValue(["as1"]);
+    fake.state.selects = [
+      [scout], [], [],            // finisher (the agent that ran the job)
+      [assessor], [], [],         // memberWithCapability(assess)
+      [assessor], [], [],         // assessor info for the hand-off line
+      [],                         // enqueuePodStage: no active jobs
+      [assessor], [], [],         // enqueuePodStage: agentInfo
+      [],                         // approvalMode
+    ];
+    await chainNext("u1", "t1", "scrape", 7, "s1");
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "s1", "I found the new leads. @Ava, please review them."]);
+    expect(fake.state.inserts).toHaveLength(1);
+  });
 });

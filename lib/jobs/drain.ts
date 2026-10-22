@@ -143,7 +143,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
     // (or @mention the user at the end). `created` is the stage's forward count.
     // Its own try: a failed hand-off must not turn the finished stage into 'failed'.
     if (finished && params.pod && params.teamId) {
-      try { await chainNext(userId, params.teamId, candidate.kind, created); }
+      try { await chainNext(userId, params.teamId, candidate.kind, created, candidate.agentId); }
       catch (e) { console.error("[jobs] chainNext failed:", e); }
     }
   }

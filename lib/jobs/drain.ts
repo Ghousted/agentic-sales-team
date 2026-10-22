@@ -1,7 +1,7 @@
 // Runs queued AI-stage jobs (outreach, research, qualify, proposal, match, assess).
 // Shared by POST /api/jobs/run (one user's jobs, kicked by the browser as a fast
 // path) and GET /api/cron/jobs (every user's jobs, every minute from Vercel Cron),
-// so jobs finish even when no tab is open. Scrape jobs run in /api/scrape instead.
+// so jobs finish even when no tab is open. Scrape jobs run in lib/jobs/scrape instead.
 import "server-only";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, jobs } from "@/lib/db";

@@ -10,6 +10,12 @@ import { teamChat, reportTeamJob } from "./chat/actions";
 import type { ThreadMsg } from "./chat/thread";
 import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
+// Ticked ids in the create-team modal that are still real agents. A stale id
+// (a deleted agent, or a leftover default) is neither counted nor saved.
+export function selectedMembers(tSel: Record<string, boolean>, agents: Pick<Agent, "id">[]): string[] {
+  return agents.filter((a) => tSel[a.id]).map((a) => a.id);
+}
+
 interface WizardState {
   wStep: number;
   wName: string;
@@ -85,7 +91,7 @@ const initialState: State = {
   hubTick: 0, countT: 1, hubTeam: "all",
   toast: "", toastError: false, paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
-  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: { sk: true, mt: true }, tTemplate: "custom", tGapName: {},
+  showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {},
   toggles: { t0: true, t1: true, t2: false },
   workspaceName: "Acme Sales", userName: "Jordan Diaz", userEmail: "",
 };
@@ -307,8 +313,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
   }, [agents, set, showToast, persist]);
 
   const saveConfig = useCallback((id: string, cfg: AgentConfig) => {
-    // Merge (don't overwrite) so saving one facet — role/goal/permissions from the
-    // Config tab, or settings — never drops the others from the in-memory store,
+    // Merge (don't overwrite) so saving one facet (role/goal/permissions from the
+    // Config tab, or settings) never drops the others from the in-memory store,
     // mirroring saveAgentConfig's partial upsert on the DB side.
     const before = sRef.current.agentConfig[id];
     set((prev) => ({ agentConfig: { ...prev.agentConfig, [id]: { ...prev.agentConfig[id], ...cfg } } }));
@@ -417,7 +423,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       // indicator hands straight over to the reveal.
       await pullThread(teamId);
       awaiting(-1);
-      // A reply with no id wasn't stored (e.g. "Not signed in.") — show it locally.
+      // A reply with no id wasn't stored (for example, "Not signed in."). Show it locally.
       for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocal(m.who, m.text);
       if (!res.job) return;
       const job = res.job;
@@ -456,7 +462,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       // The message may or may not have been stored; the thread fetch shows what was.
       await pullThread(teamId);
       awaiting(-1);
-      addLocal("system", "I'm sorry — I wasn't able to process that just now.");
+      addLocal("system", "I'm sorry. I could not process that now.");
     });
   }, [set, pullThread]);
 
@@ -470,13 +476,13 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     if (creating.current) return null;
     const cur = sRef.current;
     const name = cur.tName.trim() || "New Team";
-    const members = Object.keys(cur.tSel).filter((k) => cur.tSel[k]);
+    const members = selectedMembers(cur.tSel, agents);
     const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
       id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#EAF2FF",
-      desc: members.length + " agents · just created", members, meetings: 0, pipeline: "—", leads: 0,
+      desc: members.length + " agents · just created", members, meetings: 0, pipeline: "-", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
-      activity: ["Team created — agents onboarding", "Shared goal set"],
+      activity: ["Team created. Agents are onboarding.", "Shared goal set"],
       template: cur.tTemplate || "custom",
     };
     creating.current = true;
@@ -490,7 +496,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set((prev) => ({ extraTeams: prev.extraTeams.concat([team]), showTeamModal: false, tName: "", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {} }));
     showToast(name + " created");
     return id;
-  }, [set, showToast, showError]);
+  }, [agents, set, showToast, showError]);
 
   const createAgent = useCallback(async () => {
     if (creating.current) return;
@@ -502,7 +508,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const capabilities = at?.custom ? cur.wCapabilities : (at?.capabilities ?? []);
     const agent: Agent = {
       id, name, initials, role: at?.label ?? "Custom", color: cur.wColor, status: "working",
-      task: "Onboarding — configuring capabilities", score: 75,
+      task: "Onboarding: configuring capabilities", score: 75,
       goal: cur.wGoals.split(".")[0] || "Ramp up in week 1",
       char: cur.wCharacter,
       type: cur.wType, capabilities,

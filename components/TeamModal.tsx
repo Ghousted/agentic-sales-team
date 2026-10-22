@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useApp } from "@/lib/store";
+import { useApp, selectedMembers } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "./primitives";
 import { TEAM_TEMPLATES, templateById, AGENT_TYPES, type Capability } from "@/lib/agentTypes";
@@ -10,7 +10,8 @@ const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 export default function TeamModal() {
   const { s, set, agents, createTeam, quickCreateAgent } = useApp();
   const router = useRouter();
-  const selCount = Object.keys(s.tSel).filter((k) => s.tSel[k]).length;
+  const selectedIds = selectedMembers(s.tSel, agents);
+  const selCount = selectedIds.length;
   const close = () => set({ showTeamModal: false });
 
   return (
@@ -90,7 +91,6 @@ export default function TeamModal() {
           {(() => {
             const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
             if (!req.length) return null;
-            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
             const covered = new Set<string>();
             for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
             return (
@@ -108,7 +108,6 @@ export default function TeamModal() {
 
           {(() => {
             const req = (templateById(s.tTemplate)?.requiredCapabilities ?? []) as Capability[];
-            const selectedIds = Object.keys(s.tSel).filter((k) => s.tSel[k]);
             const covered = new Set<string>();
             for (const a of agents) if (selectedIds.includes(a.id)) for (const c of a.capabilities) covered.add(c);
             const gaps = req.filter((c) => !covered.has(c));
@@ -117,7 +116,7 @@ export default function TeamModal() {
             const typeForCap = (c: string) => (AGENT_TYPES.find((t) => !t.custom && t.capabilities.length === 1 && t.capabilities[0] === c) || AGENT_TYPES.find((t) => t.capabilities.includes(c as Capability)));
             return (
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
-                <div style={css("font-size:11.5px;color:#71717A")}>Missing capabilities — create a fitting agent:</div>
+                <div style={css("font-size:11.5px;color:#71717A")}>Missing capabilities. Create an agent that has them:</div>
                 {gaps.map((c) => {
                   const t = typeForCap(c);
                   if (!t) return null;

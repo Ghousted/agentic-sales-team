@@ -22,7 +22,7 @@ vi.mock("./workspace/actions", () => ({
 vi.mock("./auth/actions", () => ({ signOut: vi.fn() }));
 vi.mock("./chat/actions", () => ({ teamChat: vi.fn(), reportTeamJob: vi.fn() }));
 
-import { AppProvider, persistOrRollback, useApp } from "./store";
+import { AppProvider, persistOrRollback, selectedMembers, useApp } from "./store";
 
 // No DOM in this repo's test setup, so render the provider once on the server
 // and keep the context it hands out. The create actions read the initial state.
@@ -116,5 +116,28 @@ describe("create actions wait for the server save", () => {
     finish();
     await p;
     expect(done).toBe(true);
+  });
+});
+
+describe("team modal member selection", () => {
+  const agents = [{ id: "a1" }, { id: "a2" }];
+
+  it("selectedMembers is empty when nothing is ticked", () => {
+    expect(selectedMembers({}, agents)).toEqual([]);
+  });
+
+  it("selectedMembers drops ticked ids that aren't real agents", () => {
+    expect(selectedMembers({ sk: true, mt: true, a2: true }, agents)).toEqual(["a2"]);
+  });
+
+  it("selectedMembers drops unticked agents", () => {
+    expect(selectedMembers({ a1: false, a2: true }, agents)).toEqual(["a2"]);
+  });
+
+  it("a team created with the defaults has no members", async () => {
+    const ctx = grabCtx();
+    expect(ctx.s.tSel).toEqual({});
+    await ctx.createTeam();
+    expect(h.saveTeam.mock.calls[0][0]).toMatchObject({ members: [], desc: "0 agents · just created" });
   });
 });

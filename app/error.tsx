@@ -1,7 +1,7 @@
 "use client";
 // Segment error boundary: catches runtime errors in a routed page (e.g. the
 // dashboard or a detail page) and shows a graceful retry inside the app shell
-// instead of a raw crash. Does NOT catch root-layout errors — see global-error.tsx.
+// instead of a raw crash. Does NOT catch root-layout errors. See global-error.tsx.
 import { useEffect } from "react";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -20,7 +20,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         </div>
         <h2 style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "-.01em", margin: "0 0 8px" }}>This page didn’t load</h2>
         <p style={{ fontSize: "14px", color: "#71717A", lineHeight: 1.55, margin: "0 0 22px" }}>
-          A temporary hiccup — nothing was lost. Try again, and if it keeps happening, reload the page.
+          A temporary error occurred. No data was lost. Try again. If the error continues, reload the page.
         </p>
         <button
           onClick={() => reset()}

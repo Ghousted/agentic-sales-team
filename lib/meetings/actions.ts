@@ -1,5 +1,5 @@
 "use server";
-// Client-facing meetings action — a thin wrapper over the server-only store.
+// Client-facing meetings action. A thin wrapper over the server-only store.
 import * as store from "./store";
 import type { MeetingDTO } from "./store";
 

@@ -2,9 +2,10 @@
 // Auth server actions called from the client login form.
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq, sql } from "drizzle-orm";
-import { getDb, isDbConfigured, users, passwordResetTokens } from "@/lib/db";
-import { createSession, destroySession, getSession, revokeSessions } from "./session";
+import { and, eq, sql } from "drizzle-orm";
+import { getDb, isDbConfigured, users, workspaces, passwordResetTokens } from "@/lib/db";
+import { createSession, destroySession, getSession, revokeSessions, WORKSPACE_COOKIE } from "./session";
+import { cookies } from "next/headers";
 import { checkAuthLimit, clearAuthLimit } from "./rateLimit";
 
 // Reset tokens are stored as a SHA-256 hash, never in plain text. A row holding a
@@ -46,6 +47,8 @@ export async function signUp(input: { email: string; password: string; name?: st
     .insert(users)
     .values({ email, name, passwordHash })
     .returning({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications, id: users.id, sessionVersion: users.sessionVersion });
+  // The account's first workspace has the account's own id (see the workspaces table).
+  await db.insert(workspaces).values({ id: user.id, ownerId: user.id, name: user.workspaceName });
 
   await createSession({ userId: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion });
   return { ok: true, user: { name: user.name, email: user.email, workspaceName: user.workspaceName, notifications: user.notifications } };
@@ -68,14 +71,17 @@ export async function signIn(input: { email: string; password: string }): Promis
 
   await clearAuthLimit("signIn", email);
   await createSession({ userId: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion });
-  return { ok: true, user: { name: user.name, email: user.email, workspaceName: user.workspaceName, notifications: user.notifications } };
+  // A sign-in starts in the account's first workspace.
+  cookies().delete(WORKSPACE_COOKIE);
+  const [ws] = await db.select({ name: workspaces.name }).from(workspaces).where(eq(workspaces.id, user.id)).limit(1);
+  return { ok: true, user: { name: user.name, email: user.email, workspaceName: ws?.name ?? user.workspaceName, notifications: user.notifications } };
 }
 
 /** Sign out everywhere: the session version is bumped, so a copied or stolen
  *  token stops working too, not just this browser's cookie. */
 export async function signOut(): Promise<void> {
   const session = isDbConfigured() ? await getSession() : null;
-  if (session) await revokeSessions(session.userId);
+  if (session) await revokeSessions(session.accountId);
   await destroySession();
 }
 
@@ -145,18 +151,27 @@ export interface AccountInfo {
 /** Server helper: current user for hydrating the client on load. Runs during the
  *  root layout's SSR, so it must never throw: on a session/DB failure it logs and
  *  returns null (treated as logged-out) rather than crashing the app. */
+function isDynamicUsage(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE";
+}
+
 export async function currentUser(): Promise<AccountInfo | null> {
   if (!isDbConfigured()) return null;
   try {
     const session = await getSession();
     if (!session) return null;
+    // The account's own details, and the name of the ACTIVE workspace.
     const [user] = await getDb()
-      .select({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications })
+      .select({ name: users.name, email: users.email, workspaceName: workspaces.name, notifications: users.notifications })
       .from(users)
-      .where(eq(users.id, session.userId))
+      .innerJoin(workspaces, and(eq(workspaces.id, session.userId), eq(workspaces.ownerId, users.id)))
+      .where(eq(users.id, session.accountId))
       .limit(1);
     return user ?? null;
   } catch (e) {
+    // During a static render Next throws DYNAMIC_SERVER_USAGE from cookies() to mark the
+    // route dynamic. It must reach Next, not be logged and swallowed as a failed read.
+    if (isDynamicUsage(e)) throw e;
     console.error("[currentUser] session/db read failed; treating as logged-out:", e);
     return null;
   }
@@ -167,10 +182,14 @@ export async function updateSettings(input: { name?: string; workspaceName?: str
   if (!isDbConfigured()) return;
   const session = await getSession();
   if (!session) return;
+  // The workspace name belongs to the active workspace; the rest to the account.
+  if (typeof input.workspaceName === "string" && input.workspaceName.trim()) {
+    await getDb().update(workspaces).set({ name: input.workspaceName.trim().slice(0, 80) })
+      .where(and(eq(workspaces.id, session.userId), eq(workspaces.ownerId, session.accountId)));
+  }
   const patch: Record<string, unknown> = {};
   if (typeof input.name === "string" && input.name.trim()) patch.name = input.name.trim();
-  if (typeof input.workspaceName === "string" && input.workspaceName.trim()) patch.workspaceName = input.workspaceName.trim();
   if (input.notifications) patch.notifications = input.notifications;
   if (Object.keys(patch).length === 0) return;
-  await getDb().update(users).set(patch).where(eq(users.id, session.userId));
+  await getDb().update(users).set(patch).where(eq(users.id, session.accountId));
 }

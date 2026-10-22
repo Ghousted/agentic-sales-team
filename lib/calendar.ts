@@ -4,7 +4,7 @@ import type { Agent } from "./types";
 import { av } from "./visuals";
 
 export interface CalEvent {
-  createdAt: string;           // ISO — the real event time
+  createdAt: string;           // ISO. The real event time.
   dayIdx: number;              // 0-6 (Mon-Sun) of createdAt
   hourIdx: number;              // 0-9 (8 AM-5 PM), clamped
   title: string;
@@ -49,7 +49,7 @@ export function weekRangeLabel(start: Date, now: Date): string {
   return from + " – " + to;
 }
 
-/** Build the calendar from booked meetings only — each placed at its real time,
+/** Build the calendar from booked meetings only. Each meeting goes at its real time,
  *  labelled with the lead ("with whom"). This is the sole calendar source.
  *  The week grid only holds meetings inside the Mon–Sun week chosen by `view`. */
 export function buildCalendarFromMeetings(meetings: MeetingLike[], agents: Agent[], view?: WeekView): CalendarModel {

@@ -6,7 +6,7 @@ import { getDb, isDbConfigured, proposals, leads } from "@/lib/db";
 import { teammatesOf } from "@/lib/teams/membership";
 import type { ProposalResult } from "@/lib/leads/types";
 
-// Mirrors the unexported LeadRow idiom in lib/leads/store.ts — the queries
+// Mirrors the unexported LeadRow idiom in lib/leads/store.ts. The queries
 // below return raw lead rows, not LeadDTOs.
 type LeadRow = typeof leads.$inferSelect;
 
@@ -22,9 +22,14 @@ export async function listProposalsForAgent(userId: string, agentId: string): Pr
   return rows.map(toDTO);
 }
 
-export async function addProposal(userId: string, agentId: string, leadId: string, result: ProposalResult): Promise<void> {
-  if (!isDbConfigured()) return;
-  await getDb().insert(proposals).values({ userId, agentId, leadId, title: result.title, body: result.body, products: result.productsUsed ?? [] });
+// Returns false when the lead already has a proposal (a concurrent run wrote
+// it first; proposals_lead_id_idx allows one per lead).
+export async function addProposal(userId: string, agentId: string, leadId: string, result: ProposalResult): Promise<boolean> {
+  if (!isDbConfigured()) return false;
+  const inserted = await getDb().insert(proposals)
+    .values({ userId, agentId, leadId, title: result.title, body: result.body, products: result.productsUsed ?? [] })
+    .onConflictDoNothing().returning({ id: proposals.id });
+  return inserted.length > 0;
 }
 
 export async function markProposalSent(userId: string, id: string): Promise<void> {

@@ -63,7 +63,7 @@ describe("teamChat", () => {
     db.rows = [
       { id: 1, who: "me", text: "write to my leads" },
       { id: 2, who: "out", text: askWhoText("Ollie") },
-      { id: 3, who: "asr", text: "I've accepted 2 leads. @Sam — they're in your book now." },
+      { id: 3, who: "asr", text: "I've accepted 2 leads. @Sam, they're in your book now." },
     ];
     const res = await teamChat("t1", "Jane");
     expect(enqueueJob).toHaveBeenCalledWith(expect.objectContaining({ kind: "outreach", leadIds: ["l1"] }));
@@ -112,14 +112,14 @@ describe("teamChat", () => {
     it("says Booked when the meeting was booked", async () => {
       vi.mocked(bookMeeting).mockResolvedValue(true);
       const res = await teamChat("t1", "tomorrow 2pm", undefined, "America/New_York");
-      expect(res.messages.map((m) => m.text)).toEqual(["Booked — a Intro call with Jane Doe on Fri, Oct 23 · 2:00–2:30 PM. It's on your calendar."]);
+      expect(res.messages.map((m) => m.text)).toEqual(["Booked a Intro call with Jane Doe on Fri, Oct 23 · 2:00–2:30 PM. It is on your calendar."]);
     });
 
     it("doesn't say Booked when bookMeeting refused the lead", async () => {
       vi.mocked(bookMeeting).mockResolvedValue(false);
       const res = await teamChat("t1", "tomorrow 2pm", undefined, "America/New_York");
       expect(res.messages[0].text).not.toMatch(/Booked/);
-      expect(res.messages[0].text).toMatch(/couldn't book/);
+      expect(res.messages[0].text).toMatch(/could not book/);
     });
   });
 });

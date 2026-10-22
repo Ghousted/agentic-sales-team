@@ -1,7 +1,7 @@
 // Pure helpers for a team chat thread. The DB (messages.id) is the only source
 // of order: the client keeps the persisted rows sorted by id, fetches only rows
 // past its cursor, and holds local-only rows (a sent message not yet back from
-// the server, an error notice) after them. No I/O — unit-checkable.
+// the server, an error notice) after them. No I/O, so unit tests can check it.
 import type { ChatMsg } from "@/lib/types";
 
 /** A thread row. Persisted rows carry their messages.id; `local` rows exist
@@ -11,7 +11,7 @@ export interface StoredMsg { id: number; who: string; text: string }
 
 const idOf = (m: ChatMsg): number | undefined => (m as ThreadMsg).id;
 
-/** The highest persisted id in a thread (0 when none) — the poll cursor. */
+/** The highest persisted id in a thread (0 when none). This is the poll cursor. */
 export function threadCursor(msgs: ChatMsg[] | undefined): number {
   let max = 0;
   for (const m of msgs ?? []) { const id = idOf(m); if (id !== undefined && id > max) max = id; }
@@ -59,17 +59,28 @@ export function jobMarker(jobId: string): string {
   return `⟦job:${jobId}⟧`;
 }
 
+/** The marker that puts a scrape results card under a message. */
+export function leadsMarker(ids: string[] | undefined): string {
+  return ids && ids.length ? ` ⟦leads:${ids.join(",")}⟧` : "";
+}
+
+/** The lead ids in a ⟦leads:…⟧ marker, or []. */
+export function leadIdsFrom(text: string): string[] {
+  const m = text.match(/⟦leads:([^⟧]*)⟧/);
+  return m ? m[1].split(",").filter((id) => /^[0-9a-f-]{36}$/i.test(id)) : [];
+}
+
 /** What the agent says in the thread when a job it started from chat ends.
  *  Null when there is nothing to say: a pod scrape that finished is narrated by
  *  the chain (chainNext), so a second "found N leads" would duplicate it. */
 export function jobOutcomeText(kind: string, status: string, result: unknown, pod: boolean): string | null {
   if (status === "failed") return kind === "scrape" ? "That search didn't complete. Please try again." : "That run didn't complete. Please check the agent's page.";
   if (status !== "done") return null;
-  const r = (result ?? {}) as Record<string, number | undefined>;
+  const r = (result ?? {}) as Record<string, number | undefined> & { leadIds?: string[] };
   const n = (k: string) => r[k] ?? 0;
   const s = (k: string) => (n(k) === 1 ? "" : "s");
   switch (kind) {
-    case "scrape": return pod ? null : `I found ${n("leadsFound")} lead${s("leadsFound")}.`;
+    case "scrape": return pod ? null : `I found ${n("leadsFound")} lead${s("leadsFound")}.${leadsMarker(r.leadIds)}`;
     case "research": return `I've researched ${n("briefed")} lead${s("briefed")}.`;
     case "match": return `I matched ${n("matched")} lead${s("matched")} to your catalog.`;
     case "qualify": return `I've qualified ${n("qualified")} lead${s("qualified")}.`;

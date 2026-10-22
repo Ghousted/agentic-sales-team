@@ -162,6 +162,34 @@
       "when": 1792644377803,
       "tag": "0022_auth_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792646470169,
+      "tag": "0023_team_pipeline_dash",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792654234791,
+      "tag": "0024_leads_fit_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792657992186,
+      "tag": "0025_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792662251938,
+      "tag": "0026_unique_drafts_proposals",
+      "breakpoints": true
     }
   ]
 }

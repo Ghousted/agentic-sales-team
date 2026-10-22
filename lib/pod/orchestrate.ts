@@ -1,6 +1,6 @@
 import "server-only";
 // Pod orchestration: resolve a team's members/capabilities/approval-modes and
-// enqueue or chain pod-stage jobs. Server-only. No engine work here — it wires
+// enqueue or chain pod-stage jobs. Server-only. No engine work here. It wires
 // the existing capability jobs into an auto-handed-off pipeline.
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
@@ -11,6 +11,7 @@ import { pickLeadsForMatch } from "@/lib/matches/store";
 import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
+import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
@@ -19,6 +20,16 @@ interface AgentInfo { id: string; name: string; role: string; goal: string; task
 const DOING: Record<string, string> = { scrape: "finding leads", assess: "reviewing the new leads", research: "researching the book", qualify: "qualifying the leads", match: "matching leads to listings", outreach: "drafting outreach", proposal: "drafting proposals" };
 const VERB: Record<string, string> = { assess: "review these leads", research: "research these leads", qualify: "qualify the leads", match: "match these leads", outreach: "draft outreach", proposal: "draft proposals" };
 const NOUN: Record<string, string> = { assess: "the review", research: "research", qualify: "qualification", match: "matching", outreach: "outreach", proposal: "proposals" };
+// What the finisher says when its stage moved no leads forward.
+const NOTHING: Record<string, string> = {
+  scrape: "I found no new leads for that search. Try again with more detail, for example the industry, the company size or the location.",
+  assess: "I reviewed the new leads, but none of them were a good fit.",
+  research: "I had no leads to research.",
+  qualify: "I had no leads to qualify.",
+  match: "I found no listings that match these leads.",
+  outreach: "I had no leads to write to.",
+  proposal: "I had no leads that need a proposal.",
+};
 function donePhrase(cap: string, n: number): string {
   const s = n === 1 ? "" : "s";
   switch (cap) {
@@ -68,6 +79,16 @@ export async function memberWithCapability(userId: string, teamId: string, capab
   return null;
 }
 
+/** Who owns the leads a pod scrape finds. When no teammate can scrape, chat
+ *  routes the scrape to an agent from another team. Its leads would then belong
+ *  to that agent, where this team's assessor and book can't see them, so they go
+ *  to the team's assessor, else its first member. A member keeps its own leads. */
+export async function leadOwnerForTeam(userId: string, teamId: string, actorId: string): Promise<string> {
+  const members = await membersOfTeam(userId, teamId);
+  if (members.length === 0 || members.includes(actorId)) return actorId;
+  return (await memberWithCapability(userId, teamId, "assess")) ?? members[0];
+}
+
 export async function approvalMode(userId: string, agentId: string, capability: string): Promise<"auto" | "ask"> {
   if (!isDbConfigured()) return "auto";
   const [row] = await getDb().select().from(agentConfig).where(and(eq(agentConfig.userId, userId), eq(agentConfig.agentId, agentId))).limit(1);
@@ -109,7 +130,7 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
 
   if (mode === "ask") {
     const first = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, info.id, `@${first} — ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
+    await postTeamMessage(userId, teamId, info.id, `@${first}, ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
   } else {
     await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${DOING[capability] ?? capability} now.`);
   }
@@ -129,13 +150,23 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
   return null;
 }
 
-/** After a pod stage completes, narrate the hand-off and enqueue the next stage —
+/** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
-export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0): Promise<void> {
-  const finisherId = await memberWithCapability(userId, teamId, completedKind);
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[]): Promise<void> {
+  // ranBy is the agent that ran the job. It can be an agent from another team (a
+  // cross-team hand-off), so do not look for it among this team's members only.
+  const finisherId = ranBy ?? await memberWithCapability(userId, teamId, completedKind);
   const finisher = finisherId ? await agentInfo(userId, finisherId) : null;
   if (!finisher) return;
   const first = (info: AgentInfo) => info.name.split(" ")[0];
+
+  // A stage that moved no leads forward ends the chain. The next stage has no
+  // new work, so tell the user instead of running each later stage on 0 leads.
+  if (count <= 0) {
+    const userName = await userFirstName(userId);
+    await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."} I stopped the chain here.`);
+    return;
+  }
 
   // Scrape → the assessor gate (the only stage that turns pending into accepted).
   if (completedKind === "scrape") {
@@ -143,12 +174,12 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
     if (assessorId) {
       const info = await agentInfo(userId, assessorId);
       if (info) {
-        await postTeamMessage(userId, teamId, finisher.id, `Found the new leads. @${first(info)} — over to you to review them.`);
+        await postTeamMessage(userId, teamId, finisher.id, `I found ${count} new lead${count === 1 ? "" : "s"}. @${first(info)}, please review them.${leadsMarker(leadIds)}`);
         await enqueuePodStage(userId, teamId, "assess", assessorId);
       }
     } else {
       const userName = await userFirstName(userId);
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName} — they're waiting for you to review and accept.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName}, they are ready for you to review and accept.${leadsMarker(leadIds)}`);
     }
     return;
   }
@@ -157,11 +188,11 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   if (next) {
     const info = await agentInfo(userId, next.agentId);
     if (info) {
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)} — over to you for ${NOUN[next.capability] ?? next.capability}.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)}, please do the ${NOUN[next.capability] ?? next.capability}.`);
       await enqueuePodStage(userId, teamId, next.capability, next.agentId);
     }
   } else {
     const userName = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName} — ${finalAction(completedKind)}.`);
+    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName}, ${finalAction(completedKind)}.`);
   }
 }

@@ -72,7 +72,7 @@ export async function bookMeetingForLead(leadId: string, whenText: string, timeZ
   const agentId = meetingAgent?.id ?? lead.agentId;
   const settings = await meetingSettings(userId, agentId);
   const { iso, label } = await parseMeetingTime(whenText, { ...settings, timeZone });
-  if (!iso) return { ok: false, error: "I couldn't read that time — try “tomorrow 2pm”." };
+  if (!iso) return { ok: false, error: "I could not read that time. Try “tomorrow 2pm”." };
   if (!(await bookMeeting(userId, agentId, leadId, iso, label, settings.type))) return { ok: false, error: "Lead not found." };
   return { ok: true, label };
 }

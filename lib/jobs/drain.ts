@@ -80,7 +80,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         await eachLead(batch, "lead", async (lead) => {
           const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 3);
           const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, platform: lead.platform, research: lead.research }, products);
-          await applyOutreachResult(userId, params.agent.id, lead, result);
+          if (!(await applyOutreachResult(userId, params.agent.id, lead, result))) return; // another run drafted it first
           created++;
           drafts++;
         });
@@ -107,7 +107,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         await eachLead(batch, "proposal", async (lead) => {
           const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 5);
           const p = await draftProposal(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, products);
-          await addProposal(userId, params.agent.id, lead.id, p);
+          if (!(await addProposal(userId, params.agent.id, lead.id, p))) return; // another run wrote it first
           created++;
         });
         await done({ proposals: created, failed });
@@ -143,7 +143,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
     // (or @mention the user at the end). `created` is the stage's forward count.
     // Its own try: a failed hand-off must not turn the finished stage into 'failed'.
     if (finished && params.pod && params.teamId) {
-      try { await chainNext(userId, params.teamId, candidate.kind, created); }
+      try { await chainNext(userId, params.teamId, candidate.kind, created, candidate.agentId); }
       catch (e) { console.error("[jobs] chainNext failed:", e); }
     }
   }

@@ -5,7 +5,12 @@ import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listTeamMessages } from "@/lib/chat/actions";
-import { mergeThread, stripMarkers, threadCursor, type StoredMsg, type ThreadMsg } from "@/lib/chat/thread";
+import { mergeThread, stripMarkers, threadCursor, leadIdsFrom, type StoredMsg, type ThreadMsg } from "@/lib/chat/thread";
+import { askedBriefFields, briefOptions } from "@/lib/chat/clarify";
+import ScrapeQuestions from "./ScrapeQuestions";
+import ScrapeResults from "./ScrapeResults";
+import ScrapeProgress from "./ScrapeProgress";
+import { runIdFrom } from "@/lib/scrape/steps";
 import { isNearBottom, shouldStick } from "@/lib/chat/scroll";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import { listTeamLeads } from "@/lib/leads/actions";
@@ -31,7 +36,7 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
     if (tok.startsWith("@")) {
       out.push(<span key={k++} style={css(mine ? "font-weight:700;text-decoration:underline" : "background:#E6F0FF;color:#006AFF;border-radius:4px;padding:0 3px;font-weight:600")}>{tok}</span>);
     } else if (tok.startsWith("«")) {
-      // Inline lead reference — show the name (drop the « » delimiters) as a pill.
+      // Inline lead reference. Show the name as a pill (remove the « » delimiters).
       out.push(<span key={k++} style={css((mine ? "background:rgba(255,255,255,.22);color:#fff" : "background:#E6F0FF;color:#006AFF") + ";border-radius:4px;padding:0 4px;font-weight:600")}>{tok.slice(1, -1)}</span>);
     } else {
       const route = NAV_ROUTES[tok.toLowerCase()];
@@ -183,7 +188,7 @@ function ChatsInner() {
         if (first) { first = false; show(fresh); return; } // history: no typing
         queueRef.current.push(...fresh);
         reveal();
-      } catch { /* transient — try again next tick */ }
+      } catch { /* temporary error. Try again on the next tick. */ }
       finally { busy = false; }
     };
     // Fetches run one at a time, so a send's fetch always starts after the one
@@ -233,7 +238,7 @@ function ChatsInner() {
     }
   }, [activeId, messages.length, last, typing, pendingIds]);
 
-  // No teams yet — chatting happens with a team, so prompt the user to make one.
+  // No teams yet. A chat needs a team, so tell the user to make one.
   if (!activeTeam) {
     return (
       <div style={css("display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;text-align:center;animation:cFade .2s backwards")}>
@@ -269,7 +274,12 @@ function ChatsInner() {
             const mine = m.who === "me";
             const speaker = !mine ? byId(m.who) : null;
             const am = m.text.match(APPROVE_RE);
-            const clean = stripMarkers(m.text);
+            // A scrape question shows its first line; the card below asks the details.
+            const asked = mine ? [] : askedBriefFields(m.text);
+            const clean = asked.length ? stripMarkers(m.text).split("\n")[0] : stripMarkers(m.text);
+            const showQuestions = asked.length > 0 && i === messages.length - 1 && !typing;
+            const foundIds = mine ? [] : leadIdsFrom(m.text);
+            const runId = mine ? null : runIdFrom(m.text);
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
             return (
               <div key={(m as ThreadMsg).id ?? "local-" + i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
@@ -281,6 +291,9 @@ function ChatsInner() {
                   ) : (
                     <div style={css((mine ? "background:#006aff;color:#fff;border-radius:20px 20px 6px 20px;" : "align-self:flex-start;max-width:92%;background:#f1f3f6;color:#101418;border-radius:6px 20px 20px 20px;") + "padding:11px 16px;font-size:15px;line-height:1.6;white-space:pre-wrap")}>{renderRich(clean, mine, router)}</div>
                   )}
+                  {runId && <ScrapeProgress jobId={runId} />}
+                  {foundIds.length > 0 && <ScrapeResults ids={foundIds} />}
+                  {showQuestions && <ScrapeQuestions key={(m as ThreadMsg).id ?? i} fields={asked} options={briefOptions(m.text)} onSend={(text) => sendTeamChat(activeTeam.id, text, [])} />}
                   {showApprove && (
                     <div style={css("display:flex;gap:6px;flex-wrap:wrap;animation:cUp .25s ease-out backwards")}>
                       <Btn onClick={() => onApprove(am![1])} style="height:34px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="background:#2a313b"><i className="icon-check" style={{ fontSize: 15 }} />Approve</Btn>
@@ -335,7 +348,7 @@ function ChatsInner() {
             const hits = teamLeads.filter((l) => (l.name + " " + l.title + " " + l.company).toLowerCase().includes(q)).slice(0, 6);
             if (hits.length === 0) return (
               <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);padding:11px 14px;z-index:20;font-size:12px;color:#A1A1AA")}>
-                {leadsLoaded ? "No leads yet — scrape some first." : "Loading leads…"}
+                {leadsLoaded ? "No leads yet. Scrape some leads first." : "Loading leads…"}
               </div>
             );
             return (
@@ -375,12 +388,12 @@ function ChatsInner() {
                     const mm = s.chatInput.match(/@([\w'-]*)$/);
                     const hit = mm ? teamMembers.find((a) => a!.name.toLowerCase().includes(mm[1].toLowerCase())) : undefined;
                     if (hit && (e.key === "Tab" || mm![1])) { e.preventDefault(); set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + hit!.name.split(" ")[0] + " ") }); return; }
-                    if (e.key === "Tab") return; // nothing to complete — let Tab move focus
+                    if (e.key === "Tab") return; // nothing to complete. Let Tab move the focus.
                   }
                   if (e.key !== "Enter") return;
                   sendTeamChat(activeTeam.id, s.chatInput, activeLeadIds());
                 }}
-                placeholder="Message the team — @mention an agent, /lead to pick leads…"
+                placeholder="Message the team. Use @mention for an agent and /lead to pick leads…"
                 style={css("flex:1;min-width:0;border:none;outline:none;font-size:15px;line-height:22px;background:transparent;position:relative;z-index:1;caret-color:#18181B;color:" + (s.chatInput ? "transparent" : "#18181B"))}
               />
             </div>

@@ -35,18 +35,21 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
     "- outreach: draft/write emails or messages to leads.",
     "- follow-up: re-engage cold/non-replying leads.",
     "- book-meeting: propose times / book meetings.",
-    "- qualify: score/prioritize EXISTING leads (hot/warm/cold) — not new leads.",
+    "- qualify: score/prioritize EXISTING leads (hot/warm/cold). Do not use it for new leads.",
     "- proposal: draft a proposal or quote for a lead using our products/pricing.",
     "- enrich: fill in a lead's missing contact info (email, title, company).",
     "- match: match existing leads to the products/listings in our catalog that fit them.",
     "- assess: review new/pending leads and accept the ones that fit our goal (drop the misses).",
-    "- status: the user asks for an update/progress on what an agent is doing or recently did — e.g. 'any updates?', 'how's it going?', 'what are you working on?', 'done yet?', 'where are you at?'.",
-    "- chat: small talk, or a QUESTION about how the team/an agent works or how something is done (e.g. 'how do you assess leads?', 'how do you guys find prospects?', 'what can you do?'). The user is asking, not commanding — no action.",
+    "- status: the user asks for an update/progress on what an agent does now or did recently. Examples: 'any updates?', 'how's it going?', 'what are you working on?', 'done yet?', 'where are you at?'.",
+    "- chat: small talk, or a QUESTION about how the team/an agent works or how something is done (e.g. 'how do you assess leads?', 'how do you guys find prospects?', 'what can you do?'). The user asks a question and does not give a command. Take no action.",
     "- unknown: a task request that fits none of the above.",
     "Distinguish commands from questions: 'assess these leads' is `assess`, but 'how do you assess leads?' is `chat`. A message asking HOW/WHAT/WHY/WHETHER you do something is `chat`, not the capability it mentions.",
+    "'Look for more', 'find more', 'search again' and 'another batch' are scrape requests: the user wants more leads like the last ones.",
+    "The user's message can be a short reply ('yes', 'sure', 'go ahead', 'do it') to the agent's last message. Then decide from what that message offered: an offer to find or search for leads makes the reply a scrape.",
     "For a scrape request, extract params from the message: industry, titles (job titles), geo (geography), target (how many, integer).",
+    "geo is a real place (city, region or country). A website or platform (LinkedIn, Facebook, Reddit, X, online) is NOT a geo. Leave geo out when the message names no place.",
     "Return a short `summary` restating the ask in a few words.",
-    "The team's agents and their capabilities (for context only — you pick the capability, not the agent):",
+    "The team's agents and their capabilities (for context only. You pick the capability, not the agent):",
     roster,
     "Return ONLY JSON matching the schema.",
   ].join("\n");
@@ -55,7 +58,7 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
 type Capability = Intent["capability"];
 
 // A status ask, then a question about how things work, then each command's
-// keywords, most specific first — "find a time to meet" is a meeting, not a scrape.
+// keywords, most specific first. "find a time to meet" is a meeting, not a scrape.
 const STATUS = /\b(any (updates?|news)|status|progress|how('?s| is) it going|done yet|working on|where are (you|we) at)\b/i;
 const QUESTION = /^(how|what|why|who|where|which|is|are|do|does|did)\b/i;
 const RULES: [Capability, RegExp][] = [
@@ -68,10 +71,10 @@ const RULES: [Capability, RegExp][] = [
   ["assess", /\b(assess|vet|screen)\b|\breview\b.*\bleads?\b/i],
   ["research", /\bresearch\b/i],
   ["outreach", /\b(outreach|emails?|draft|write|reach out|message|dm)\b/i],
-  ["scrape", /\b(find|search|scrape|source|prospect|look for|import|get me|pull)\b/i],
+  ["scrape", /\b(find|search|scrape|source|prospect|look for|import|get me|pull)\b|\b(more|again)\b.*\bleads?\b/i],
 ];
 
-/** The intent read from keywords alone — the fallback when the model can't be asked. */
+/** The intent from keywords only. This is the fallback when the model is not available. */
 export function keywordIntent(message: string): Intent {
   const text = message.replace(/@[\w'-]+/g, " ").trim();
   const summary = message.slice(0, 60);
@@ -83,9 +86,12 @@ export function keywordIntent(message: string): Intent {
   return { capability: hit[0], params: n > 0 ? { target: n } : {}, summary };
 }
 
-export async function detectIntent(message: string, agents: { name: string; capabilities: string[] }[]): Promise<Intent> {
+/** `lastAgentText` is the agent's last message in the thread, so a short reply
+ *  ("yes") can be read as an answer to it. */
+export async function detectIntent(message: string, agents: { name: string; capabilities: string[] }[], lastAgentText?: string): Promise<Intent> {
   if (!isAIConfigured()) return keywordIntent(message);
-  const turns: Turn[] = [{ role: "user", text: message }];
+  const context = lastAgentText?.trim() ? `The agent's last message: ${lastAgentText.trim().slice(0, 500)}\n\nThe user's message: ` : "";
+  const turns: Turn[] = [{ role: "user", text: context + message }];
   try {
     const r = await aiJSON<Intent>(systemPrompt(agents), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 400, temperature: 0.2 });
     return {

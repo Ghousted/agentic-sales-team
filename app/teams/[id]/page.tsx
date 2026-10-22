@@ -68,7 +68,7 @@ export default function TeamDetail() {
   const reject = async (id: string) => { await rejectJob(id); refetchPod(); };
 
   const kpis: [string, string][] = [
-    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", String(teamLeads.length)], ["Avg score", avgScore ? String(avgScore) : "—"],
+    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", String(teamLeads.length)], ["Avg score", avgScore ? String(avgScore) : "-"],
   ];
 
   return (
@@ -112,7 +112,7 @@ export default function TeamDetail() {
             <span style={css("font-size:12px;font-weight:700;color:#1B7A3D")}>Working now</span>
             {active.map((w) => {
               const verb = w.capability === "research" ? "researching" : w.capability === "outreach" ? "drafting" : w.capability;
-              return <span key={w.agentId + w.capability} style={css("display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3F3F46")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 1.4s ease-in-out infinite")} />{w.agentName.split(" ")[0]} — {verb} {w.leadIds.length}</span>;
+              return <span key={w.agentId + w.capability} style={css("display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3F3F46")}><span style={css("width:6px;height:6px;border-radius:50%;background:#2FA45C;animation:pulse 1.4s ease-in-out infinite")} />{w.agentName.split(" ")[0]}: {verb} {w.leadIds.length}</span>;
             })}
           </div>
         );

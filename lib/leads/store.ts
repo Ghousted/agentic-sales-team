@@ -2,7 +2,7 @@ import "server-only";
 // All persistence for the leads/outreach domain. Plain async functions so the
 // job runner (a route handler) can call them directly; the `use server`
 // wrappers in ./actions.ts expose the client-facing subset.
-import { and, desc, eq, inArray, asc, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, asc, isNull, ne } from "drizzle-orm";
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
@@ -20,7 +20,7 @@ async function uid(): Promise<string | null> {
 function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
-    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: safeHttpUrl(r.profileUrl), platform: r.platform, research: r.research ?? null,
+    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: safeHttpUrl(r.profileUrl), platform: r.platform, research: r.research ?? null, fitReason: r.fitReason ?? "",
     workedBy: [],
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
@@ -63,14 +63,16 @@ export async function addLead(input: { agentId: string; name: string; title?: st
 
 /** Insert scraped prospects as PENDING leads (the approval gate), deduped against
  *  the agent's existing leads by profileUrl or email. Returns how many were added. */
-export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<number> {
-  if (!isDbConfigured() || prospects.length === 0) return 0;
+/** Save new scraped prospects as pending leads, skipping ones already in the book.
+ *  Returns the new lead ids, so the chat can show the results. */
+export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<string[]> {
+  if (!isDbConfigured() || prospects.length === 0) return [];
   const db = getDb();
   const existing = await db.select({ profileUrl: leads.profileUrl, email: leads.email })
     .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
   const seenUrl = new Set(existing.map((e) => safeHttpUrl(e.profileUrl)).filter(Boolean));
   const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
-  let added = 0;
+  const added: string[] = [];
   for (const p of prospects) {
     const url = safeHttpUrl(p.profileUrl) ?? "";
     const email = (p.email ?? "").trim();
@@ -79,7 +81,7 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
     const [row] = await db.insert(leads).values({
       userId, agentId, name: p.name, title: p.title ?? "", company: p.company ?? "",
       email, status: "new", score: 0, source: "scrape", review: "pending",
-      profileUrl: url || null, platform: p.platform || null,
+      profileUrl: url || null, platform: p.platform || null, fitReason: (p.fit ?? "").trim().slice(0, 300),
     }).returning({ id: leads.id });
     await db.insert(activity).values({
       userId, agentId, type: "lead_added", leadId: row.id,
@@ -87,9 +89,22 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
     });
     if (url) seenUrl.add(url);
     if (email) seenEmail.add(email.toLowerCase());
-    added++;
+    added.push(row.id);
   }
   return added;
+}
+
+/** The user's leads with these ids, in the order given. For the scrape results
+ *  card in the chat. Ids that are not the user's are left out. */
+export async function listLeadsByIds(ids: string[]): Promise<LeadDTO[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const clean = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 50);
+  if (!clean.length) return [];
+  const rows = await getDb().select().from(leads).where(and(eq(leads.userId, userId), inArray(leads.id, clean)));
+  const dtos = await toLeadDTOs(userId, rows);
+  return clean.map((id) => dtos.find((d) => d.id === id)).filter((d): d is LeadDTO => !!d);
 }
 
 // Minimal RFC-4180-ish CSV parser → array of rows keyed by lowercased header.
@@ -269,8 +284,8 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   }));
 }
 
-/** Every outreach draft the user has, across all agents — newest first. Powers
- *  the global drafts inbox in the top bar. */
+/** Every outreach draft the user has, across all agents, newest first. Powers
+ *  the Emails page. */
 export async function listAllDrafts(): Promise<DraftDTO[]> {
   if (!isDbConfigured()) return [];
   const userId = await uid();
@@ -289,7 +304,7 @@ export async function listAllDrafts(): Promise<DraftDTO[]> {
   }));
 }
 
-/** All outreach drafts for a single lead (newest first) — for the lead detail modal. */
+/** All outreach drafts for a single lead (newest first). For the lead detail modal. */
 export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
   if (!isDbConfigured()) return [];
   const userId = await uid();
@@ -323,7 +338,7 @@ export async function markDraftSent(draftId: string): Promise<void> {
   await db.insert(activity).values({ userId, agentId: d.agentId, type: "email_sent", leadId: d.leadId, text: `Sent "${d.subject}"` });
 }
 
-/** Hide a single draft from the top-bar inbox (soft-hide, not a delete — the row
+/** Hide a single draft from the Emails page (soft-hide, not a delete. The row
  *  stays in the table so analytics counts are unaffected). Used for "Discard". */
 export async function discardDraft(draftId: string): Promise<void> {
   if (!isDbConfigured()) return;
@@ -345,17 +360,19 @@ export async function clearSentDrafts(): Promise<number> {
   return rows.length;
 }
 
-/** Hide every draft (sent or not) from the inbox in one shot ("Clear all").
- *  Soft-hide only, so analytics drafted/sent counts are unaffected. Returns how
- *  many were cleared so the caller can toast a count. */
-export async function clearAllDrafts(): Promise<number> {
-  if (!isDbConfigured()) return 0;
+/** Counts for the sidebar badges: leads waiting for review (Leads) and drafts
+ *  waiting to be sent (Emails). */
+export async function navCounts(): Promise<{ leads: number; emails: number }> {
+  if (!isDbConfigured()) return { leads: 0, emails: 0 };
   const userId = await uid();
-  if (!userId) return 0;
-  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
-    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false)))
-    .returning({ id: outreachDrafts.id });
-  return rows.length;
+  if (!userId) return { leads: 0, emails: 0 };
+  const db = getDb();
+  const [[l], [e]] = await Promise.all([
+    db.select({ n: count() }).from(leads).where(and(eq(leads.userId, userId), eq(leads.review, "pending"))),
+    db.select({ n: count() }).from(outreachDrafts)
+      .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false), ne(outreachDrafts.status, "sent"))),
+  ]);
+  return { leads: l?.n ?? 0, emails: e?.n ?? 0 };
 }
 
 /** Hide every draft for a single lead ("Clear all" in the lead detail modal).
@@ -393,17 +410,21 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
   return pool.filter((l) => !draftedIds.has(l.id)).slice(0, batchSize);
 }
 
-/** Persist one engine result: the draft, the lead's new score/stage, and activity. */
-export async function applyOutreachResult(userId: string, agentId: string, lead: LeadRow, result: OutreachResult): Promise<void> {
+/** Persist one engine result: the draft, the lead's new score/stage, and activity.
+ *  Returns false, writing nothing, when the lead already has a live draft (a
+ *  concurrent run got there first; see outreach_drafts_live_lead_idx). */
+export async function applyOutreachResult(userId: string, agentId: string, lead: LeadRow, result: OutreachResult): Promise<boolean> {
   const db = getDb();
-  await db.insert(outreachDrafts).values({
+  const inserted = await db.insert(outreachDrafts).values({
     userId, agentId, leadId: lead.id, subject: result.subject, body: result.body, rationale: result.rationale,
-  });
+  }).onConflictDoNothing().returning({ id: outreachDrafts.id });
+  if (!inserted.length) return false;
   const stage = LEAD_STAGES.includes(result.stage as (typeof LEAD_STAGES)[number]) ? result.stage : lead.status;
   await db.update(leads).set({
     score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
   }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "email_drafted", leadId: lead.id, text: `Drafted "${result.subject}" for ${lead.name}` });
+  return true;
 }
 
 /** Pick the agent's leads that don't have a research brief yet (or the given
@@ -454,7 +475,7 @@ export async function applyQualifyResult(userId: string, agentId: string, lead: 
   const now = new Date();
   await db.update(leads).set({ score, qualifiedAt: now, updatedAt: now })
     .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name} — ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
+  await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name}: ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
 }
 
 /** Pick PENDING (freshly-scraped) teammate-book leads for the Assessor to review,
@@ -477,10 +498,13 @@ export async function pickLeadsForAssess(userId: string, agentId: string, leadId
 export async function applyAssessResult(userId: string, agentId: string, lead: LeadRow, result: AssessResult): Promise<void> {
   const db = getDb();
   const review = result.accept ? "accepted" : "dismissed";
-  const set: { review: string; updatedAt: Date; score?: number } = { review, updatedAt: new Date() };
+  const set: { review: string; updatedAt: Date; score?: number; fitReason?: string } = { review, updatedAt: new Date() };
   if (result.accept) set.score = Math.max(1, Math.min(100, Math.round(result.score || 0)));
+  // The Assessor's reason replaces the scraper's line. Its fail-open notes say nothing about fit.
+  const reason = (result.reason ?? "").trim();
+  if (reason && !/^Auto-accepted\b/.test(reason)) set.fitReason = reason.slice(0, 300);
   await db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name} — ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
+  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name}: ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
 }
 
 /** Running research/outreach jobs → who is actively working which leads now

@@ -20,7 +20,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           </div>
           <h1 style={{ fontSize: "22px", fontWeight: 700, letterSpacing: "-.01em", margin: "0 0 10px" }}>Something went wrong</h1>
           <p style={{ fontSize: "15px", color: "#71717A", lineHeight: 1.55, margin: "0 0 26px" }}>
-            The app hit an unexpected error while loading. This is usually temporary — please try again.
+            The app had an unexpected error while it loaded. Usually this error is temporary. Please try again.
           </p>
           <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
             <button

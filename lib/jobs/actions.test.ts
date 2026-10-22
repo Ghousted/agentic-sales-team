@@ -19,7 +19,8 @@ vi.mock("@/lib/db", async (importActual) => ({
   isDbConfigured: () => true,
   getDb: () => db,
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
+// Active workspace ...0b of account ...0a.
+vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000b", accountId: "00000000-0000-4000-8000-00000000000a" }) }));
 vi.mock("@/lib/pod/orchestrate", () => ({
   agentInfo: async (_u: string, id: string) => ({ id, name: "Scout", role: "r", goal: "g", task: "t", capabilities: ["scrape", "outreach"] }),
 }));
@@ -73,10 +74,12 @@ describe("enqueueJob daily quota", () => {
     expect(await enqueueJob({ agent, kind: "outreach" })).toEqual({ jobId: "job-1" });
   });
 
-  it("counts only this user's jobs from the last 24 hours", async () => {
+  it("counts the jobs of all the account's workspaces from the last 24 hours", async () => {
     await enqueueJob({ agent, kind: "outreach" });
     const count = sent.find((s) => /^select count/.test(s.sql))!;
-    expect(count.sql).toMatch(/"user_id" = \$1 and "jobs"."created_at" >= \$2/);
+    // Every workspace the account owns, so more workspaces never give more room.
+    expect(count.sql).toMatch(/"jobs"."user_id" in \(select "id" from "workspaces" where "workspaces"."owner_id" = \$1\) and "jobs"."created_at" >= \$2/);
+    expect(count.params[0]).toBe("00000000-0000-4000-8000-00000000000a");
     const since = new Date(count.params[1] as string).getTime();
     expect(Math.abs(Date.now() - 24 * 60 * 60 * 1000 - since)).toBeLessThan(60_000);
   });

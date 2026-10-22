@@ -10,7 +10,7 @@ import { LEAD_STAGES, type LeadDTO, type DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { useLiveWork } from "@/lib/useLiveWork";
-import { WorkedBy, LivePulse } from "@/components/LeadBits";
+import { LivePulse, FitReason } from "@/components/LeadBits";
 import { safeHttpUrl, openExternal } from "@/lib/url/safeUrl";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
@@ -43,14 +43,21 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   const [booking, setBooking] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // lead id armed for delete
   const delTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState<"accept" | "dismiss" | null>(null); // bulk review armed
+  const bulkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bookMeetingNow = async () => {
     if (!openLead || !bookingWhen.trim() || booking) return;
     setBooking(true);
-    const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
-    setBooking(false);
-    if (res.error) { showToast(res.error); return; }
-    showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
-    setBookingWhen("");
+    try {
+      const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
+      if (res.error || !res.ok) { showToast(res.error || "Couldn't book the meeting"); return; }
+      showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
+      setBookingWhen("");
+    } catch {
+      showToast("Couldn't book the meeting");
+    } finally {
+      setBooking(false);
+    }
   };
   const openLeadDetail = useCallback(async (l: LeadDTO) => {
     setOpenLead(l); setLeadMatches([]); setLeadDrafts([]); setBookingWhen(""); setDetailLoading(true);
@@ -62,17 +69,27 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
 
   const clearLeadDrafts = useCallback(async (leadId: string) => {
     setLeadDrafts([]);
-    const n = await clearDraftsForLead(leadId);
-    if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+    try {
+      const n = await clearDraftsForLead(leadId);
+      if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+    } catch {
+      showToast("Couldn't clear drafts");
+      setLeadDrafts(await listDraftsForLead(leadId).catch(() => []));
+    }
   }, [showToast]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const [rows, cands] = await Promise.all([listLeadsAction(), listCandidates()]);
-    setLeads(rows);
-    setCandidates(cands);
-    setLoading(false);
-  }, []);
+    try {
+      const [rows, cands] = await Promise.all([listLeadsAction(), listCandidates()]);
+      setLeads(rows);
+      setCandidates(cands);
+    } catch {
+      showToast("Couldn't refresh leads");
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   const filtered = useMemo(
     () => leads.filter((l) => (!fAgent || l.agentId === fAgent) && (!fStage || l.status === fStage)),
@@ -86,7 +103,12 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const a = agentId ? byId(agentId) : undefined;
     if (!agentId) { showToast("Create an agent first, then import."); return; }
     showToast("Importing…");
-    const res = await importLeadsCsv(await file.text(), agentId);
+    let res: Awaited<ReturnType<typeof importLeadsCsv>>;
+    try {
+      res = await importLeadsCsv(await file.text(), agentId);
+    } catch {
+      res = { added: 0, error: "Import failed" };
+    }
     if (fileRef.current) fileRef.current.value = "";
     if (res.error) { showToast(res.error); return; }
     showToast(`Imported ${res.added} lead${res.added === 1 ? "" : "s"}${a ? " for " + a.name.split(" ")[0] : ""}`);
@@ -96,7 +118,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   const submitAdd = async () => {
     const agentId = form.agentId || agents[0]?.id;
     if (!form.name.trim() || !form.email.trim() || !agentId) { showToast("Name, email, and agent are required"); return; }
-    await addLeadAction({ agentId, name: form.name, title: form.title, company: form.company, email: form.email });
+    const added = await addLeadAction({ agentId, name: form.name, title: form.title, company: form.company, email: form.email }).catch(() => null);
+    if (!added) { showToast("Couldn't add the lead"); return; }
     setForm({ name: "", title: "", company: "", email: "", agentId: "" });
     setShowAdd(false);
     showToast("Lead added");
@@ -105,9 +128,27 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
 
   const review = async (ids: string[], accept: boolean) => {
     if (!ids.length) return;
-    if (accept) await acceptLeads(ids); else await dismissLeads(ids);
-    showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
+    try {
+      if (accept) await acceptLeads(ids); else await dismissLeads(ids);
+      showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
+    } catch {
+      showToast(accept ? "Couldn't accept leads" : "Couldn't dismiss leads");
+    }
     refetch();
+  };
+
+  // Two-click bulk review, same pattern as delete: first click arms
+  // ("Accept 12?"), second click within 3s applies it to every candidate.
+  const reviewAll = (accept: boolean) => {
+    const kind = accept ? "accept" : "dismiss";
+    if (bulkTimer.current) clearTimeout(bulkTimer.current);
+    if (confirmBulk !== kind) {
+      setConfirmBulk(kind);
+      bulkTimer.current = setTimeout(() => setConfirmBulk(null), 3000);
+      return;
+    }
+    setConfirmBulk(null);
+    review(candidates.map((c) => c.id), accept);
   };
 
   // Enqueue an outreach run, kick the runner (cookies flow with the browser
@@ -116,17 +157,21 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const a = byId(agentId);
     if (!a) return;
     setRunning(leadIds ? leadIds[0] : agentId);
-    const res = await enqueueOutreachJob({
-      agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
-      leadIds,
-    });
-    if ("error" in res) { showToast(res.error); setRunning(null); return; }
     try {
+      const res = await enqueueOutreachJob({
+        agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
+        leadIds,
+      });
+      if ("error" in res) { showToast(res.error); return; }
       const r = await fetch("/api/jobs/run", { method: "POST" });
+      if (!r.ok) throw new Error("run " + r.status);
       const j = await r.json();
       showToast(j.drafts ? j.drafts + " draft" + (j.drafts === 1 ? "" : "s") + " created" : "No new drafts");
-    } catch { showToast("Run failed"); }
-    setRunning(null);
+    } catch {
+      showToast("Run failed");
+    } finally {
+      setRunning(null);
+    }
     refetch();
   };
 
@@ -134,7 +179,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const idx = LEAD_STAGES.indexOf(l.status as (typeof LEAD_STAGES)[number]);
     const next = LEAD_STAGES[Math.min(LEAD_STAGES.length - 1, idx + 1)];
     if (next === l.status) return;
-    await setStageAction(l.id, next);
+    try {
+      await setStageAction(l.id, next);
+    } catch {
+      showToast("Couldn't change the stage");
+    }
     refetch();
   };
 
@@ -148,7 +197,12 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       return;
     }
     setConfirmDel(null);
-    await deleteLeads([l.id]);
+    try {
+      await deleteLeads([l.id]);
+    } catch {
+      showToast("Couldn't delete the lead");
+      return;
+    }
     if (openLead?.id === l.id) setOpenLead(null);
     showToast("Lead deleted");
     refetch();
@@ -239,17 +293,17 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                 <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
                   {safeHttpUrl(l.profileUrl) && <Box onClick={() => openExternal(l.profileUrl)} style="font-size:11px;font-weight:600;color:#006AFF;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
-                  {(byLead[l.id] || l.workedBy.length > 0) && (
+                  {/* The Agent column already shows who owns the lead; only show live work here. */}
+                  {byLead[l.id] && (
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
                       <LivePulse info={byLead[l.id]} />
-                      <WorkedBy ids={l.workedBy} byId={byId} />
                     </div>
                   )}
                 </div>
-                <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
+                <div style={css("color:#3F3F46")}>{l.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 22))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : l.agentId}</span></div>
                 <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
-                <div style={css("font-weight:700;color:#006AFF")}>{l.score || "—"}</div>
+                <div style={css("font-weight:700;color:#006AFF")}>{l.score || "-"}</div>
                 <div style={css("display:flex;gap:6px")}>
                   <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E6F0FF;color:#006AFF;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#D6E6FF">{running === l.id ? "Running…" : "Run outreach"}</Btn>
                   <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
@@ -262,10 +316,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       ) : (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
           <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
-            <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates — accept the good ones</div>
+            <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates. Accept the good ones.</div>
             {candidates.length > 0 && (<>
-              <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Accept all</Btn>
-              <Btn onClick={() => review(candidates.map((c) => c.id), false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Dismiss all</Btn>
+              <Btn onClick={() => reviewAll(true)} style={"margin-left:auto;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (confirmBulk === "accept" ? "background:#0052CC" : "background:#006AFF")} styleHover="background:#0052CC">{confirmBulk === "accept" ? `Accept ${candidates.length}?` : "Accept all"}</Btn>
+              <Btn onClick={() => reviewAll(false)} style={"border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (confirmBulk === "dismiss" ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#3F3F46")} styleHover={confirmBulk === "dismiss" ? "background:#F9D4D4" : "background:#E4E4E7"}>{confirmBulk === "dismiss" ? `Dismiss ${candidates.length}?` : "Dismiss all"}</Btn>
             </>)}
           </div>
           {loading ? (
@@ -276,8 +330,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             const a = byId(c.agentId);
             return (
               <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "—")}</div></div>
-                <div style={css("color:#3F3F46")}>{c.company || "—"}</div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "-")}</div></div>
+                <div style={css("color:#3F3F46")}>{c.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
                   {safeHttpUrl(c.profileUrl) && <Box onClick={() => openExternal(c.profileUrl)} style="font-size:11.5px;font-weight:600;color:#006AFF;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
@@ -327,6 +381,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                     <Btn onClick={bookMeetingNow} style={"background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#0052CC">{booking ? "Booking…" : "Book"}</Btn>
                   </div>
                 </div>
+                <FitReason lead={l} />
                 {l.title && <div><div style={css(SEC)}>Intent</div><div style={css("font-size:13px;color:#3F3F46;line-height:1.55")}>{l.title}</div></div>}
                 {rb && (
                   <div>
@@ -340,7 +395,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div>
                   <div style={css(SEC)}>Matches</div>
                   {detailLoading ? <div style={css(MUTED)}>Loading…</div>
-                    : leadMatches.length === 0 ? <div style={css(MUTED)}>No matches yet — ask a Matchmaker to match this lead to your listings.</div>
+                    : leadMatches.length === 0 ? <div style={css(MUTED)}>No matches yet. Ask a Matchmaker to match this lead to your listings.</div>
                     : <div style={css("display:flex;flex-direction:column;gap:8px")}>{leadMatches.map((m) => (
                         <div key={m.id} style={css("border:1px solid #ECECF1;border-radius:12px;padding:11px 13px")}>
                           <div style={css("display:flex;align-items:center;gap:8px")}>

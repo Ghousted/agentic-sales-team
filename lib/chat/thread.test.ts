@@ -22,9 +22,9 @@ describe("mergeThread", () => {
   it("keeps local notices after the stored rows and still takes new rows", () => {
     // The old count-based poll froze here: a local row the server never got made
     // the local count run ahead of the DB, so new rows never showed.
-    const cur: ThreadMsg[] = [{ id: 1, who: "me", text: "hi" }, { who: "system", text: "I'm sorry — …", local: true }];
+    const cur: ThreadMsg[] = [{ id: 1, who: "me", text: "hi" }, { who: "system", text: "I'm sorry. …", local: true }];
     const out = mergeThread(cur, [{ id: 2, who: "a", text: "Hello!" }]);
-    expect(out.map((m) => m.text)).toEqual(["hi", "Hello!", "I'm sorry — …"]);
+    expect(out.map((m) => m.text)).toEqual(["hi", "Hello!", "I'm sorry. …"]);
   });
 });
 
@@ -59,5 +59,29 @@ describe("jobOutcomeText", () => {
   });
   it("says nothing while the job is still going", () => {
     expect(jobOutcomeText("research", "running", null, false)).toBeNull();
+  });
+});
+
+describe("scrape results marker", () => {
+  const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+
+  it("round-trips lead ids and hides from the reader", async () => {
+    const { leadsMarker, leadIdsFrom, stripMarkers } = await import("./thread");
+    const text = `I found 2 new leads. @Ava, please review them.${leadsMarker(ids)}`;
+    expect(leadIdsFrom(text)).toEqual(ids);
+    expect(stripMarkers(text)).toBe("I found 2 new leads. @Ava, please review them.");
+  });
+
+  it("adds nothing for no leads, and ignores bad ids", async () => {
+    const { leadsMarker, leadIdsFrom } = await import("./thread");
+    expect(leadsMarker([])).toBe("");
+    expect(leadsMarker(undefined)).toBe("");
+    expect(leadIdsFrom("⟦leads:not-an-id,11111111-1111-4111-8111-111111111111⟧")).toEqual([ids[0]]);
+  });
+
+  it("puts the results card on a scrape outcome outside the pod chain", async () => {
+    const { jobOutcomeText, leadIdsFrom } = await import("./thread");
+    expect(leadIdsFrom(jobOutcomeText("scrape", "done", { leadsFound: 2, leadIds: ids }, false) ?? "")).toEqual(ids);
+    expect(jobOutcomeText("scrape", "done", { leadsFound: 0 }, false)).toBe("I found 0 leads.");
   });
 });

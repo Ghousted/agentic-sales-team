@@ -33,9 +33,9 @@ export async function approveJob(id: string): Promise<void> {
   const [row] = await getDb().update(jobs).set({ status: "queued" })
     .where(and(eq(jobs.id, id), eq(jobs.userId, userId), eq(jobs.status, "needs_approval")))
     .returning({ agentId: jobs.agentId, params: jobs.params });
-  if (!row) return; // wasn't pending (already handled) — no ack
+  if (!row) return; // was not pending (already handled). No ack.
   const teamId = (row.params as { teamId?: string } | null)?.teamId;
-  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "Thanks — starting now.");
+  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "Thanks. I am starting now.");
 }
 
 export async function rejectJob(id: string): Promise<void> {
@@ -47,5 +47,5 @@ export async function rejectJob(id: string): Promise<void> {
     .returning({ agentId: jobs.agentId, params: jobs.params });
   if (!row) return;
   const teamId = (row.params as { teamId?: string } | null)?.teamId;
-  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "No problem — holding off for now.");
+  if (teamId) await postTeamMessage(userId, teamId, row.agentId, "No problem. I will wait for now.");
 }

@@ -12,17 +12,21 @@ import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import type { ApprovalDTO } from "@/lib/pod/types";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
+import { agentNow, liveAgentCount, teamKpis, teamSubtitle, teamActivity } from "@/lib/agents/derive";
+import { listActivity } from "@/lib/workspace/statsActions";
+import type { ActivityItem } from "@/lib/workspace/stats";
 
 const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 
 export default function TeamDetail() {
-  const { agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast } = useApp();
+  const { s, agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
   const [pick, setPick] = useState<Record<string, boolean>>({});
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
+  const [acts, setActs] = useState<ActivityItem[]>([]);
   const [confirmDel, setConfirmDel] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [eName, setEName] = useState("");
@@ -39,14 +43,16 @@ export default function TeamDetail() {
     if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
     else setTeamLeads([]);
     if (team) listPendingApprovals(team.id).then(setApprovals);
+    listActivity(100).then(setActs, () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberIds.join(","), team?.id]);
 
   if (!team) return null;
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
-  const avgScore = members.length ? Math.round(members.reduce((n, a) => n + a!.score, 0) / members.length) : 0;
-  const workingCount = members.filter((a) => a!.status === "working").length;
+  const workingCount = liveAgentCount(live, team.members);
+  const k = teamKpis(teamLeads);
+  const recent = teamActivity(acts, team.members);
 
   // Agents not already on this team, for the add picker.
   const candidates = agents.filter((a) => !team.members.includes(a.id));
@@ -68,7 +74,7 @@ export default function TeamDetail() {
   const reject = async (id: string) => { await rejectJob(id); refetchPod(); };
 
   const kpis: [string, string][] = [
-    ["Meetings", String(team.meetings)], ["Pipeline", team.pipeline], ["Leads", String(teamLeads.length)], ["Avg score", avgScore ? String(avgScore) : "-"],
+    ["Meetings", k.meetings], ["In pipeline", k.pipeline], ["Leads", k.leads], ["Avg lead score", k.avgScore],
   ];
 
   return (
@@ -79,7 +85,7 @@ export default function TeamDetail() {
         <div style={css("width:52px;height:52px;border-radius:14px;background:" + team.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:24px;flex:none")}>{team.icon}</div>
         <div style={css("min-width:0")}>
           <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
-          <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{team.desc}</div>
+          <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{teamSubtitle(team)}</div>
           <div style={css("font-size:12px;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
         <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
@@ -142,13 +148,13 @@ export default function TeamDetail() {
               {members.length === 0 ? (
                 <div style={css("font-size:12.5px;color:#A1A1AA;padding:8px 10px")}>No agents on this team yet. Use “Add agents” to build it out.</div>
               ) : members.map((a) => {
-                const m = statusMeta(a!.status);
+                const m = statusMeta(agentNow(a!.id, live, !!s.paused[a!.id]).status);
                 return (
                   <Box key={a!.id} noButton onClick={() => router.push("/agents/" + a!.id)} style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer" styleHover="background:#FAFAFB">
                     <div style={css(av(a!, 34))}>{a!.initials}</div>
                     <div><div style={css("font-size:13px;font-weight:600")}>{a!.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a!.role}</div></div>
                     <span style={css("display:inline-flex;align-items:center;gap:5px;margin-left:10px;" + chip(m.bg, m.color))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + m.dot)} />{m.label}</span>
-                    <div style={css("margin-left:auto;font-size:12px;font-weight:700;color:#006AFF")}>{a!.score}</div>
+                    <div style={css("margin-left:auto;font-size:12px;color:#71717A")}>{teamLeads.filter((l) => l.agentId === a!.id).length} leads</div>
                     <Btn onClick={(e) => { e.stopPropagation(); removeTeamMember(team.id, a!.id); }} aria-label={"Remove " + a!.name} title="Remove from team" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#A1A1AA;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none" styleHover="background:#FEECEC;color:#B91C1C">✕</Btn>
                   </Box>
                 );
@@ -205,7 +211,9 @@ export default function TeamDetail() {
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Recent activity</div>
             <div style={css("display:flex;flex-direction:column;gap:9px")}>
-              {team.activity.map((tac) => <div key={tac} style={css("font-size:12px;color:#3F3F46;display:flex;gap:8px")}><span style={css("color:#006AFF")}>•</span>{tac}</div>)}
+              {recent.length === 0 ? (
+                <div style={css("font-size:12px;color:#A1A1AA")}>No activity yet.</div>
+              ) : recent.map((f, i) => <div key={f.createdAt + i} style={css("font-size:12px;color:#3F3F46;display:flex;gap:8px")}><span style={css("color:#006AFF")}>•</span><span><b>{byId(f.agentId)?.name ?? "Agent"}</b> {f.text}</span></div>)}
             </div>
           </div>
         </div>

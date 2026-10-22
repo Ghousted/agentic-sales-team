@@ -1,6 +1,11 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
+import { useLiveWork } from "@/lib/useLiveWork";
+import { agentNow } from "@/lib/agents/derive";
+import { getWorkspaceStats } from "@/lib/workspace/statsActions";
+import type { WorkspaceStats } from "@/lib/workspace/stats";
 import { statusMeta } from "@/lib/data";
 import { av, statusPill } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
@@ -8,6 +13,9 @@ import { css, Box, Btn } from "@/components/primitives";
 export default function AgentsPage() {
   const { s, agents, deleteAgent } = useApp();
   const router = useRouter();
+  const { live } = useLiveWork();
+  const [perAgent, setPerAgent] = useState<WorkspaceStats["perAgent"]>([]);
+  useEffect(() => { getWorkspaceStats().then((w) => setPerAgent(w.perAgent), () => {}); }, []);
 
   return (
     <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
@@ -20,8 +28,9 @@ export default function AgentsPage() {
       )}
       <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
         {agents.map((a) => {
-          const m = statusMeta(s.paused[a.id] ? "waiting" : a.status);
-          const pct = a.score;
+          const now = agentNow(a.id, live, !!s.paused[a.id]);
+          const m = statusMeta(now.status);
+          const out = perAgent.find((p) => p.agentId === a.id);
           return (
             <Box
               key={a.id}
@@ -36,19 +45,18 @@ export default function AgentsPage() {
                   <div style={css("font-size:14px;font-weight:700")}>{a.name}</div>
                   <div style={css("font-size:12px;color:#71717A")}>{a.role}</div>
                 </div>
-                <span style={css(statusPill(statusMeta(a.status)))}>
+                <span style={css(statusPill(m))}>
                   <span style={css("width:6px;height:6px;border-radius:50%;background:" + m.dot)} />
                   {m.label}
                 </span>
               </div>
               <div style={css("margin-top:14px;background:#FAFAFB;border:1px solid #F0F0F3;border-radius:10px;padding:9px 12px;font-size:12px;color:#52525B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>
-                {a.task}
+                {now.task}
               </div>
               <div style={css("display:flex;align-items:center;gap:12px;margin-top:14px")}>
-                <div style={css("width:40px;height:40px;border-radius:50%;background:conic-gradient(" + a.color + " 0 " + pct + "%,#F0F0F3 " + pct + "% 100%);display:flex;align-items:center;justify-content:center;flex:none")}>
-                  <div style={css("width:32px;height:32px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#18181B")}>{a.score}</div>
+                <div style={css("font-size:11px;color:#A1A1AA;line-height:1.5")}>
+                  {out ? <><b style={css("color:#18181B")}>{out.leadsWorked}</b> leads · <b style={css("color:#18181B")}>{out.sent}</b> sent</> : "No work yet"}
                 </div>
-                <div style={css("font-size:11px;color:#A1A1AA")}>Performance<br />score</div>
                 <div style={css("margin-left:auto;display:flex;gap:6px")}>
                   <Btn
                     onClick={(e) => { e.stopPropagation(); deleteAgent(a.id); }}

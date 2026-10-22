@@ -1,6 +1,6 @@
 // Shared domain types for the Agentic Sales Team app.
 
-export type StatusKey = "working" | "waiting" | "offline" | "error";
+export type StatusKey = "working" | "waiting" | "idle" | "offline" | "error";
 
 export interface Agent {
   id: string;

@@ -364,13 +364,15 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
         } catch { append(job.agentId, "That search didn't complete. Please try again."); }
         return;
       }
-      // research / outreach: run in the Node runner, then poll getJob (unchanged below)
+      // research / outreach: the per-minute cron (/api/cron/jobs) runs the job even if
+      // this tab closes; kicking the runner here only starts it sooner. Then poll getJob.
       try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
       let waited = 0;
+      let slow = 0; // polls after "still working": the cron may take a few minutes
       const poll = async (): Promise<void> => {
         let job;
         try { job = await getJob(res.job!.id); }
-        catch { if (waited >= 40) { append(res.job!.agentId, "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
+        catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { append(res.job!.agentId, "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
         if (!job) return;
         const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number; steps?: number };
         if (job.status === "done") {
@@ -381,7 +383,12 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
           return;
         }
         if (job.status === "failed") { append(res.job!.agentId, "That run didn't complete. Please check the agent's page."); return; }
-        if (waited >= 40) { append(res.job!.agentId, "I'm still working on it in the background. Please check back shortly."); return; }
+        if (waited >= 40) {
+          if (slow === 0) append(res.job!.agentId, "I'm still working on it in the background. I'll post here when it's done.");
+          if (++slow > 40) return; // ~10 more minutes; the agent's page shows the result after that
+          setTimeout(poll, 15_000);
+          return;
+        }
         waited++;
         setTimeout(poll, 2500);
       };

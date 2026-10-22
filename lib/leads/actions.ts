@@ -1,5 +1,5 @@
 "use server";
-// Client-facing server actions for the leads domain — thin wrappers over the
+// Client-facing server actions for the leads domain. Thin wrappers over the
 // server-only store so client components never import server-only code.
 import * as store from "./store";
 import type { LeadDTO, DraftDTO, LiveWorkDTO, TeamLeadPick } from "./types";

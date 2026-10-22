@@ -1,6 +1,6 @@
 // Neon serverless Postgres client wired to Drizzle.
 // Lazily initialized so importing this module never throws when DATABASE_URL is
-// absent — callers guard on isDbConfigured() and only touch getDb() when set.
+// absent. Callers guard on isDbConfigured() and only touch getDb() when set.
 import { neon } from "@neondatabase/serverless";
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import * as schema from "./schema";

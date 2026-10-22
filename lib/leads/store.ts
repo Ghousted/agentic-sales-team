@@ -269,7 +269,7 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   }));
 }
 
-/** Every outreach draft the user has, across all agents — newest first. Powers
+/** Every outreach draft the user has, across all agents, newest first. Powers
  *  the global drafts inbox in the top bar. */
 export async function listAllDrafts(): Promise<DraftDTO[]> {
   if (!isDbConfigured()) return [];
@@ -289,7 +289,7 @@ export async function listAllDrafts(): Promise<DraftDTO[]> {
   }));
 }
 
-/** All outreach drafts for a single lead (newest first) — for the lead detail modal. */
+/** All outreach drafts for a single lead (newest first). For the lead detail modal. */
 export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
   if (!isDbConfigured()) return [];
   const userId = await uid();
@@ -323,7 +323,7 @@ export async function markDraftSent(draftId: string): Promise<void> {
   await db.insert(activity).values({ userId, agentId: d.agentId, type: "email_sent", leadId: d.leadId, text: `Sent "${d.subject}"` });
 }
 
-/** Hide a single draft from the top-bar inbox (soft-hide, not a delete — the row
+/** Hide a single draft from the top-bar inbox (soft-hide, not a delete. The row
  *  stays in the table so analytics counts are unaffected). Used for "Discard". */
 export async function discardDraft(draftId: string): Promise<void> {
   if (!isDbConfigured()) return;
@@ -454,7 +454,7 @@ export async function applyQualifyResult(userId: string, agentId: string, lead: 
   const now = new Date();
   await db.update(leads).set({ score, qualifiedAt: now, updatedAt: now })
     .where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name} — ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
+  await db.insert(activity).values({ userId, agentId, type: "lead_qualified", leadId: lead.id, text: `Qualified ${lead.name}: ${result.tier} (${score}): ${result.reason}`.slice(0, 400) });
 }
 
 /** Pick PENDING (freshly-scraped) teammate-book leads for the Assessor to review,
@@ -480,7 +480,7 @@ export async function applyAssessResult(userId: string, agentId: string, lead: L
   const set: { review: string; updatedAt: Date; score?: number } = { review, updatedAt: new Date() };
   if (result.accept) set.score = Math.max(1, Math.min(100, Math.round(result.score || 0)));
   await db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
-  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name} — ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
+  await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name}: ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
 }
 
 /** Running research/outreach jobs → who is actively working which leads now

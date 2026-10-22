@@ -117,7 +117,7 @@ export default function TeamModal() {
             const typeForCap = (c: string) => (AGENT_TYPES.find((t) => !t.custom && t.capabilities.length === 1 && t.capabilities[0] === c) || AGENT_TYPES.find((t) => t.capabilities.includes(c as Capability)));
             return (
               <div style={css("display:flex;flex-direction:column;gap:8px")}>
-                <div style={css("font-size:11.5px;color:#71717A")}>Missing capabilities — create a fitting agent:</div>
+                <div style={css("font-size:11.5px;color:#71717A")}>Missing capabilities. Create an agent that has them:</div>
                 {gaps.map((c) => {
                   const t = typeForCap(c);
                   if (!t) return null;

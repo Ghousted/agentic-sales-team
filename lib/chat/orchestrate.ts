@@ -13,8 +13,8 @@ import type { Intent } from "@/lib/ai/intent";
 export interface ChatOutMsg { who: string; text: string } // who = speaker agentId
 export interface Resolution {
   messages: ChatOutMsg[];
-  // Routing line(s) the mentioned/coordinating agent says BEFORE the actor replies
-  // — e.g. the Assessor assessing "@Assessor setup a meeting" and rerouting to the
+  // Routing line(s) the mentioned/coordinating agent says BEFORE the actor replies.
+  // For example, the Assessor assessing "@Assessor setup a meeting" and rerouting to the
   // Meeting agent. Kept separate from `messages` (the actor's own reply) so a
   // clarifying question still gets the hand-off prefixed instead of dropping it.
   handoff?: ChatOutMsg[];
@@ -59,7 +59,7 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
   const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number };
   const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind === "match" ? "matching leads to listings" : job.kind;
   if (job.status === "running" || job.status === "queued") {
-    const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? ` — ${r.leadsFound} found so far` : "";
+    const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? `. ${r.leadsFound} found so far` : "";
     return `I'm currently ${doing}${prog}. I'll post the results here once it's complete.`;
   }
   if (job.status === "needs_approval") return `A ${doing} run is queued and awaiting your approval.`;
@@ -112,16 +112,16 @@ export async function resolve(userId: string, teamId: string, message: string, i
   const teammate = members.find((m) => m.capabilities.includes(cap));
   if (mentioned && teammate) {
     // The mentioned agent can't do this, but a teammate can. The mentioned agent
-    // assesses the request and reroutes — it speaks first (res.handoff), then the
+    // assesses the request and reroutes. It speaks first (res.handoff), then the
     // capable teammate replies (res.messages).
     const res = actWith(teammate, cap, intent);
-    res.handoff = [{ who: mentioned.id, text: `This needs ${capLabel.toLowerCase()} — that's @${first(teammate.name)}'s area, not mine. Routing this over to them.` }];
+    res.handoff = [{ who: mentioned.id, text: `This needs ${capLabel.toLowerCase()}. That is the area of @${first(teammate.name)}, not mine. I am sending this to them.` }];
     return res;
   }
   if (teammate) {
     return actWith(teammate, cap, intent);
   }
-  // nobody on this team — look across the user's other teams
+  // nobody on this team. Look at the user's other teams.
   const roster = await allAgents(userId);
   const outsider = roster.find((a) => a.capabilities.includes(cap) && !members.some((m) => m.id === a.id));
   if (outsider) {
@@ -129,12 +129,12 @@ export async function resolve(userId: string, teamId: string, message: string, i
     if (info) {
       const res = actWith(info, cap, intent);
       const speaker = mentioned ?? members[0];
-      res.handoff = [{ who: speaker?.id ?? outsider.id, text: `No one on this team handles ${capLabel.toLowerCase()} — @${first(info.name)} does. Routing this over to them.` }];
+      res.handoff = [{ who: speaker?.id ?? outsider.id, text: `No one on this team does ${capLabel.toLowerCase()}. @${first(info.name)} does. I am sending this to them.` }];
       return res;
     }
   }
   const speaker = mentioned ?? members[0];
-  return { messages: [{ who: speaker?.id ?? "system", text: `No agent can ${capLabel.toLowerCase()} yet — create one with that capability and I'll route to them.` }] };
+  return { messages: [{ who: speaker?.id ?? "system", text: `No agent can ${capLabel.toLowerCase()} yet. Create an agent with that capability, and I will send requests to it.` }] };
 }
 
 function actWith(actor: { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }, cap: string, intent: Intent): Resolution {

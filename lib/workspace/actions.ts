@@ -143,7 +143,7 @@ export async function saveTeamMeta(
 }
 
 /** Delete a user-created team (and its member override). Seed teams have no row,
- * so this is a no-op for them — the UI only offers delete on created teams. */
+ * so this is a no-op for them. The UI only offers delete on created teams. */
 export async function deleteTeam(teamId: string): Promise<void> {
   if (!isDbConfigured()) return;
   const userId = await uid();
@@ -206,7 +206,7 @@ export async function saveAgentConfig(agentId: string, cfg: AgentConfig): Promis
 
 /** Append the user's own chat turns for a conversation, in order. Only "me"
  *  rows are accepted: agent and system rows are written by the server (teamChat,
- *  the pod chain), so a client can't put words — or ⟦…⟧ markers — in an agent's
+ *  the pod chain), so a client cannot put words (or ⟦…⟧ markers) in an agent's
  *  mouth. */
 export async function appendMessages(agentId: string, msgs: ChatMsg[]): Promise<void> {
   const mine = msgs.filter((m) => m.who === "me");

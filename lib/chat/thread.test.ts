@@ -22,9 +22,9 @@ describe("mergeThread", () => {
   it("keeps local notices after the stored rows and still takes new rows", () => {
     // The old count-based poll froze here: a local row the server never got made
     // the local count run ahead of the DB, so new rows never showed.
-    const cur: ThreadMsg[] = [{ id: 1, who: "me", text: "hi" }, { who: "system", text: "I'm sorry — …", local: true }];
+    const cur: ThreadMsg[] = [{ id: 1, who: "me", text: "hi" }, { who: "system", text: "I'm sorry. …", local: true }];
     const out = mergeThread(cur, [{ id: 2, who: "a", text: "Hello!" }]);
-    expect(out.map((m) => m.text)).toEqual(["hi", "Hello!", "I'm sorry — …"]);
+    expect(out.map((m) => m.text)).toEqual(["hi", "Hello!", "I'm sorry. …"]);
   });
 });
 

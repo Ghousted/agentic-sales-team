@@ -1,6 +1,6 @@
 import "server-only";
 // Lead qualification: score a lead's ICP-fit/intent (hot/warm/cold) from its
-// title/company (+ research brief when present). One LLM JSON call. Pure — no DB.
+// title/company (+ research brief when present). One LLM JSON call. Pure (no DB).
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, QualifyResult, ResearchBrief } from "@/lib/leads/types";
 

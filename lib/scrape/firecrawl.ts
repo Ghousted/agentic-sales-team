@@ -41,7 +41,7 @@ function platformFromUrl(url: string): string {
   return "web";
 }
 
-/** Firecrawl /v2/search — returns public SERP results (title + description snippet
+/** Firecrawl /v2/search. Returns public SERP results (title + description snippet
  * + url). We do NOT scrape page bodies: walled sites (Facebook/Reddit/LinkedIn)
  * return empty content, and the snippet already carries the buying-intent text. */
 async function firecrawlSearch(query: string, limit: number): Promise<SearchResult[]> {
@@ -50,7 +50,7 @@ async function firecrawlSearch(query: string, limit: number): Promise<SearchResu
   const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    // tbs: only recent results (past month) — stale buying-intent posts are dead leads.
+    // tbs: only recent results (past month). Old buying-intent posts are dead leads.
     body: JSON.stringify({ query, limit, tbs: "qdr:m" }),
     cache: "no-store",
     signal: AbortSignal.timeout(FIRECRAWL_TIMEOUT_MS),
@@ -76,9 +76,9 @@ async function planSearch(instruction: string, agentGoal: string): Promise<{ que
   const fallback = { query: buildQuery(agentGoal), platform: "web" };
   if (!isAIConfigured()) return fallback;
   const system = [
-    "You write ONE simple web search in the BUYER'S OWN VOICE to surface PUBLIC POSTS where a potential buyer expresses intent — the phrases people actually post: 'looking to buy', 'LF' (looking for), 'want to buy', 'anyone selling', 'recommend a', 'need a'.",
+    "You write ONE simple web search in the BUYER'S OWN VOICE to surface PUBLIC POSTS where a potential buyer shows intent. Use the phrases people actually post: 'looking to buy', 'LF' (looking for), 'want to buy', 'anyone selling', 'recommend a', 'need a'.",
     "Compose it from the specifics in the instruction (what they want, and any location).",
-    "Do NOT use seller jargon like 'buyers', 'leads', or 'prospects' — buyers never write that (it matches broker ads). Do NOT add a site: filter (that's added separately). Do NOT use negative operators ('-word').",
+    "Do NOT use seller jargon like 'buyers', 'leads', or 'prospects'. Buyers never write that (it matches broker ads). Do NOT add a site: filter (that's added separately). Do NOT use negative operators ('-word').",
     agentGoal ? `Salesperson focus (context only): ${agentGoal}.` : "",
     "platform: return a specific site ONLY if the instruction explicitly names one ('facebook'|'reddit'|'linkedin'|'x'); otherwise 'web'.",
     "Return JSON { query, platform }.",
@@ -110,7 +110,7 @@ const PROSPECTS_SCHEMA = {
 } as const;
 
 /** Extract BUYER prospects (people showing intent / companies to sell to) from
- * public post/page content — not vendors, competitors, directories, or articles. */
+ * public post/page content. Not vendors, competitors, directories, or articles. */
 async function extractProspects(targetDesc: string, sells: string, results: SearchResult[], target: number, platformHint: string): Promise<Prospect[]> {
   if (!isAIConfigured() || results.length === 0) return [];
   const corpus = results
@@ -118,24 +118,24 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     .join("\n\n---\n\n")
     .slice(0, 22000);
   const system = [
-    "You turn PUBLIC posts/listings into SALES LEADS — people the salesperson can reach out to.",
+    "You turn PUBLIC posts/listings into SALES LEADS. A lead is a person the salesperson can contact.",
     `The salesperson is looking for: ${targetDesc}.`,
     sells ? `The salesperson's focus: ${sells}. NEVER return anyone who SELLS the same product/service (competitors, agents, vendors advertising themselves).` : "",
-    "CRITICAL — MATCH THE DIRECTION of intent to what the salesperson wants:",
-    "• If they want BUYERS, include ONLY people who want to BUY / purchase / are shopping for it. EXCLUDE anyone trying to SELL, list, rent out, or asking for advice on selling their own property/item — a seller is the OPPOSITE side and is NOT a lead.",
+    "CRITICAL: MATCH THE DIRECTION of intent to what the salesperson wants:",
+    "• If they want BUYERS, include ONLY people who want to BUY / purchase / are shopping for it. EXCLUDE anyone trying to SELL, list, rent out, or asking for advice on selling their own property/item. A seller is the OPPOSITE side and is NOT a lead.",
     "• If they want SELLERS/owners, do the reverse (exclude buyers).",
-    "Read each post's actual intent, not just keywords. 'Looking for advice on selling my house' is a SELLER — exclude it when buyers are wanted, even though it says 'looking for'.",
-    "Each source whose intent is on the SAME side the salesperson wants is ONE lead — e.g. (for buyers) a person asking for recommendations, saying they're 'looking to buy' / 'want to buy' / 'need a', or a company that would be a customer.",
+    "Read each post's actual intent, not just keywords. 'Looking for advice on selling my house' is a SELLER. Exclude it when buyers are wanted, even though it says 'looking for'.",
+    "Each source whose intent is on the SAME side the salesperson wants is ONE lead. For example (for buyers): a person asking for recommendations, saying they're 'looking to buy' / 'want to buy' / 'need a', or a company that would be a customer.",
     `Return up to ${target} distinct leads.`,
     "For each lead:",
-    "- name: WHO to reach out to — the poster's real name or username. Use a 'u/<username>' handle ONLY if an actual Reddit username is written in the snippet; NEVER invent one, and NEVER turn a subreddit (the 'r/...' part of the URL) into a 'u/...' handle — a subreddit is not a person. If no real poster name/username is visible, use a source label: 'Reddit user · r/<subreddit>' (take the subreddit from the SOURCE_URL) or 'Facebook group member'. NEVER use the post's title or a paraphrase of the post as the name, and NEVER fabricate a specific personal name.",
+    "- name: WHO to contact. Use the poster's real name or username. Use a 'u/<username>' handle ONLY if an actual Reddit username is written in the snippet; NEVER invent one, and NEVER turn a subreddit (the 'r/...' part of the URL) into a 'u/...' handle. A subreddit is not a person. If no real poster name/username is visible, use a source label: 'Reddit user · r/<subreddit>' (take the subreddit from the SOURCE_URL) or 'Facebook group member'. NEVER use the post's title or a paraphrase of the post as the name, and NEVER fabricate a specific personal name.",
     "- title: a one-line summary of what they're looking for (their intent).",
     "- company: '' unless clearly stated.",
-    `- profileUrl: the SOURCE_URL (the post/page link — this is how the salesperson reaches them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
+    `- profileUrl: the SOURCE_URL (the post/page link. The salesperson uses it to contact them). platform: '${platformHint || "web"}' unless the URL clearly indicates another.`,
     "- email: ONLY if VISIBLY present, otherwise ''. Never invent emails.",
-    "INCLUDE a lead even when the name isn't shown — the post link is the contact path.",
-    "RECENCY: only include posts from the PAST MONTH. If a post visibly shows its age and it is older than ~1 month (e.g. '2mo', '3 months ago', '1y', or a date more than ~30 days back), SKIP it — a stale buying-intent post is a dead lead.",
-    "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to — never a seller or an article about the topic.",
+    "INCLUDE a lead even when the name is not shown. The post link is the contact path.",
+    "RECENCY: only include posts from the PAST MONTH. If a post visibly shows its age and it is older than ~1 month (e.g. '2mo', '3 months ago', '1y', or a date more than ~30 days back), SKIP it. An old buying-intent post is a dead lead.",
+    "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to. A lead is never a seller or an article about the topic.",
     "Return ONLY JSON.",
   ].filter(Boolean).join("\n");
   const turns: Turn[] = [{ role: "user", text: corpus }];
@@ -159,7 +159,7 @@ export async function runFirecrawlScrape(
   const plan = instruction?.trim()
     ? await planSearch(instruction.trim(), agent.goal)
     : { query: buildQuery(agent.goal), platform: "web" };
-  // Buyer-intent posts live on social/community sites — plain web returns seller
+  // Buyer-intent posts are on social/community sites. Plain web returns seller
   // listings/ads. Always search Facebook first, then Reddit after.
   const sites = ["facebook.com", "reddit.com"];
   const per = Math.max(4, Math.min(target, 8));
@@ -169,7 +169,7 @@ export async function runFirecrawlScrape(
     const rs = await firecrawlSearch(`site:${site} ${plan.query}`, per);
     for (const r of rs) if (r.url && !seen.has(r.url)) { seen.add(r.url); results.push(r); }
   }
-  const sells = [agent.role, agent.goal].filter(Boolean).join(" — "); // seller context, to exclude competitors
+  const sells = [agent.role, agent.goal].filter(Boolean).join(". "); // seller context, to exclude competitors
   const prospects = await extractProspects(targetDesc, sells, results, target, plan.platform);
   return normalizeProspects(prospects, results.map((r) => r.url));
 }

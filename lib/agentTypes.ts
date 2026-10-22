@@ -20,22 +20,22 @@ export const CAPABILITIES: { id: Capability; label: string; desc: string; jobKin
 export interface AgentType { id: string; label: string; desc: string; capabilities: Capability[]; custom?: boolean }
 
 export const AGENT_TYPES: AgentType[] = [
-  { id: "sdr", label: "SDR", desc: "Full-funnel prospector — finds, writes, and follows up.", capabilities: ["research", "scrape", "outreach", "follow-up", "qualify"] },
+  { id: "sdr", label: "SDR", desc: "Full-funnel prospector. Finds leads, writes to them, and follows up.", capabilities: ["research", "scrape", "outreach", "follow-up", "qualify"] },
   { id: "bdr", label: "BDR", desc: "High-volume outbound on a given list.", capabilities: ["outreach", "follow-up"] },
   { id: "ae", label: "Account Executive", desc: "Works warm leads to booked meetings.", capabilities: ["outreach", "book-meeting", "proposal"] },
   { id: "csm", label: "Customer Success", desc: "Check-ins and re-engagement for accounts.", capabilities: ["follow-up"] },
   { id: "recruiter", label: "Recruiter", desc: "Sources and contacts candidates.", capabilities: ["scrape", "outreach"] },
-  { id: "manager", label: "Sales Manager", desc: "Coordinates the team and reports — no direct outreach.", capabilities: [] },
-  { id: "scout", label: "Lead Scout", desc: "Pure lead-gen — finds and imports prospects.", capabilities: ["scrape"] },
+  { id: "manager", label: "Sales Manager", desc: "Coordinates the team and reports. Does no direct outreach.", capabilities: [] },
+  { id: "scout", label: "Lead Scout", desc: "Lead generation only. Finds and imports prospects.", capabilities: ["scrape"] },
   { id: "researcher", label: "Research Agent", desc: "Enriches prospects with research briefs.", capabilities: ["research"] },
   { id: "writer", label: "Outreach Writer", desc: "Pure email drafter.", capabilities: ["outreach"] },
   { id: "followup", label: "Follow-up Agent", desc: "Pure re-engagement for cold leads.", capabilities: ["follow-up"] },
   { id: "qualifier", label: "Lead Qualifier", desc: "Scores & triages the book so the team works the best leads first.", capabilities: ["qualify"] },
   { id: "closer", label: "Closer", desc: "Researches, qualifies, and sends proposals grounded in your catalog.", capabilities: ["research", "qualify", "proposal", "match"] },
   { id: "matchmaker", label: "Matchmaker", desc: "Matches leads to the catalog listings that fit them.", capabilities: ["match"] },
-  { id: "assessor", label: "Assessor", desc: "Reviews new leads and auto-accepts the good fits — the quality gate.", capabilities: ["assess"] },
+  { id: "assessor", label: "Assessor", desc: "The quality gate. Reviews new leads and accepts the good fits automatically.", capabilities: ["assess"] },
   { id: "meeting", label: "Meeting Booker", desc: "Books meetings with your leads onto the calendar.", capabilities: ["book-meeting"] },
-  { id: "custom", label: "Custom", desc: "Build your own — pick the capabilities you want.", capabilities: [], custom: true },
+  { id: "custom", label: "Custom", desc: "Build your own agent. Pick the capabilities you want.", capabilities: [], custom: true },
 ];
 
 export function typeById(id: string): AgentType | undefined {
@@ -65,7 +65,7 @@ export const TEAM_TEMPLATES: TeamTemplate[] = [
   template("recruitment", "Recruitment", "Source & contact candidates.", ["scrape", "outreach"]),
   template("success", "Customer Success", "Retention, check-ins, renewals.", ["follow-up"]),
   template("revenue", "Qualify → Propose", "Prioritize the book and send proposals.", ["qualify", "proposal"]),
-  template("custom", "Custom", "Freeform — pick any agents.", []),
+  template("custom", "Custom", "Freeform. Pick any agents.", []),
 ];
 
 /** Parse the wizard's free-text meeting length ("30", "30 min", "1 hour", "1.5h")

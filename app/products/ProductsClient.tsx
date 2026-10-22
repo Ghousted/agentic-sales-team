@@ -47,7 +47,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
     try {
       const res = await importProductsCsv(await file.text(), targetFolder);
       showToast(res.error ? res.error : `Imported ${res.added} product${res.added === 1 ? "" : "s"}`);
-    } catch { showToast("Import failed — please try again"); }
+    } catch { showToast("The import failed. Please try again."); }
     if (fileRef.current) fileRef.current.value = "";
     refresh();
   };
@@ -67,7 +67,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
   };
 
   const removeFolder = async () => {
-    if (!folder || folder === UNFILED) return; // Unfiled is virtual — not deletable
+    if (!folder || folder === UNFILED) return; // Unfiled is virtual. You cannot delete it.
     await deleteFolder(folder);
     showToast("Folder deleted"); setFolder(null);
   };
@@ -158,8 +158,8 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
                   </div>
                 )}
               </div>
-              <div>{p.category ? <span style={css(chip("#EAF2FF", "#006AFF"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>—</span>}</div>
-              <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "—"}</div>
+              <div>{p.category ? <span style={css(chip("#EAF2FF", "#006AFF"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>-</span>}</div>
+              <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "-"}</div>
               <div style={css("display:flex;gap:8px;align-items:center")}>
                 <select aria-label="Move to folder" value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} title="Move to folder" style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:150px")}>
                   <option value="">Move… (no folder)</option>

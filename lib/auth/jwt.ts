@@ -1,4 +1,4 @@
-// Edge-safe JWT helpers (pure jose — no next/headers, no server-only).
+// Edge-safe JWT helpers (pure jose, no next/headers, no server-only).
 // Usable from both middleware (Edge) and server actions (Node).
 import { SignJWT, jwtVerify } from "jose";
 

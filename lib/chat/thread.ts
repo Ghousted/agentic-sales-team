@@ -1,7 +1,7 @@
 // Pure helpers for a team chat thread. The DB (messages.id) is the only source
 // of order: the client keeps the persisted rows sorted by id, fetches only rows
 // past its cursor, and holds local-only rows (a sent message not yet back from
-// the server, an error notice) after them. No I/O — unit-checkable.
+// the server, an error notice) after them. No I/O, so unit tests can check it.
 import type { ChatMsg } from "@/lib/types";
 
 /** A thread row. Persisted rows carry their messages.id; `local` rows exist
@@ -11,7 +11,7 @@ export interface StoredMsg { id: number; who: string; text: string }
 
 const idOf = (m: ChatMsg): number | undefined => (m as ThreadMsg).id;
 
-/** The highest persisted id in a thread (0 when none) — the poll cursor. */
+/** The highest persisted id in a thread (0 when none). This is the poll cursor. */
 export function threadCursor(msgs: ChatMsg[] | undefined): number {
   let max = 0;
   for (const m of msgs ?? []) { const id = idOf(m); if (id !== undefined && id > max) max = id; }

@@ -1,7 +1,7 @@
 import "server-only";
 // Lead assessment: judge whether a freshly-scraped lead genuinely fits the
 // agent's goal (a real prospect to sell to), so the good ones can be
-// auto-accepted and clear misses dropped. Pure — no DB. One LLM JSON call.
+// auto-accepted and clear misses dropped. Pure (no DB). One LLM JSON call.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 import type { AgentSnapshot, AssessResult, ResearchBrief } from "@/lib/leads/types";
 
@@ -16,7 +16,7 @@ const SCHEMA = {
 } as const;
 
 /** Assess one lead against the agent's goal. On no AI key / error, accept it
- *  (fail-open — the scraper already filtered) with a neutral note. */
+ *  (fail-open, because the scraper already filtered it) with a neutral note. */
 export async function assessLead(
   agent: AgentSnapshot,
   lead: { name: string; title: string; company: string; research?: ResearchBrief | null },
@@ -25,7 +25,7 @@ export async function assessLead(
   const system = [
     `You are ${agent.name}, screening a newly-found lead before your team works it.`,
     `Your goal / who you sell to: ${agent.goal || agent.role || "(general prospects)"}.`,
-    "Decide whether this lead is a GENUINE, relevant prospect for that goal — a real person/company showing the right intent (e.g. a buyer when you sell to buyers), not a competitor, vendor, seller of the same thing, spam, or an off-topic post.",
+    "Decide if this lead is a GENUINE, relevant prospect for that goal. A genuine prospect is a real person or company that shows the right intent (for example, a buyer when you sell to buyers). It is not a competitor, a vendor, a seller of the same thing, spam, or an off-topic post.",
     "Return JSON { accept, score, reason }: accept=true if they fit and are worth reaching out to; score 0-100 for fit; reason ONE short line explaining the call. Be reasonably inclusive, but reject clear misses.",
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}` : "";

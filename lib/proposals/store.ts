@@ -6,7 +6,7 @@ import { getDb, isDbConfigured, proposals, leads } from "@/lib/db";
 import { teammatesOf } from "@/lib/teams/membership";
 import type { ProposalResult } from "@/lib/leads/types";
 
-// Mirrors the unexported LeadRow idiom in lib/leads/store.ts — the queries
+// Mirrors the unexported LeadRow idiom in lib/leads/store.ts. The queries
 // below return raw lead rows, not LeadDTOs.
 type LeadRow = typeof leads.$inferSelect;
 

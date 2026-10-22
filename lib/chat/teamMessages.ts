@@ -20,7 +20,7 @@ export async function insertTeamMessages(userId: string, teamId: string, msgs: {
   return rows.sort((a, b) => a.id - b.id);
 }
 
-/** The team thread, oldest first — only the rows after `afterId` when given. */
+/** The team thread, oldest first. When `afterId` is given, only the rows after it. */
 export async function listTeamMessages(userId: string, teamId: string, afterId = 0): Promise<StoredMsg[]> {
   if (!isDbConfigured()) return [];
   const scope = and(eq(messages.userId, userId), eq(messages.agentId, teamId));
@@ -30,7 +30,7 @@ export async function listTeamMessages(userId: string, teamId: string, afterId =
 }
 
 /** Once a job the user started from this thread has ended, post its outcome
- *  as the agent — once: the ⟦job:id⟧ marker in the text makes a repeat call a
+ *  as the agent, one time only. The ⟦job:id⟧ marker in the text makes a repeat call a
  *  no-op. The text comes from the job row, never from the client. Returns the
  *  job's status, or null when the job isn't this user's. */
 export async function postJobOutcome(userId: string, teamId: string, jobId: string): Promise<string | null> {

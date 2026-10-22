@@ -1,28 +1,28 @@
 # Agentic Sales Team
 
-The command center for an **AI sales workforce**. Instead of a CRM you operate by hand, you create autonomous **agents** that find leads on the public web, research and qualify them, match them to your product catalog, write personalized outreach and proposals, and book meetings — individually, as **teams** that hand work off to each other, or by chatting with a team in plain English.
+The command center for an **AI sales workforce**. Instead of a CRM you operate by hand, you create autonomous **agents** that find leads on the public web, research and qualify them, match them to your product catalog, write personalized outreach and proposals, and book meetings. Agents work alone, as **teams** that hand work to each other, or through a chat with a team in plain English.
 
-A single **Next.js** app: web UI, server actions, and the job/scrape runners all deploy as one piece. No seed data — every agent, team, lead, and product is real data you (or your agents) create.
+A single **Next.js** app: web UI, server actions, and the job/scrape runners all deploy as one piece. There is no seed data. You (or your agents) create every agent, team, lead, and product.
 
 ---
 
 ## Features
 
-- **Typed agents & teams** — create agents from presets (SDR, Closer, Matchmaker, Assessor, Meeting Booker, …); each has a set of **capabilities**. Group them into **teams** with a shared lead book.
-- **Leads with a review gate** — add by hand, import a CSV, or scrape from the web. Scraped leads land in a **Pending** queue until you (or an Assessor agent) accept them.
-- **Products catalog + RAG** — load what you sell (manually or CSV). Products are embedded so agents ground their outreach, matches, and proposals in your real catalog (semantic search over pgvector).
-- **The engines** — `scrape`, `research`, `qualify`, `assess`, `match`, `outreach`, `proposal`, and `book-meeting`, each backed by an LLM through OpenRouter.
-- **Pods (work-the-book)** — a team auto-runs the full funnel (`scrape → assess → research → qualify → match → outreach → proposal`), chaining stage to stage with per-capability Auto/Ask approval gates.
-- **Team group chat** — `@mention` an agent in plain language; intent is detected, routed to a capable teammate if needed, and the acting agent runs the real job and reports back in-thread.
-- **Meetings & calendar** — book from a lead or via chat (natural-language time parsing); the calendar shows only real booked meetings.
-- **Live activity & notifications** — a real event log with live "who's working which lead right now" indicators.
+- **Typed agents & teams**: Create agents from presets (SDR, Closer, Matchmaker, Assessor, Meeting Booker, …). Each agent has a set of **capabilities**. Put agents into **teams** with a shared lead book.
+- **Leads with a review gate**: Add leads by hand, import a CSV, or scrape them from the web. Scraped leads go into a **Pending** queue. They stay there until you (or an Assessor agent) accept them.
+- **Products catalog + RAG**: Load what you sell (by hand or from a CSV). The app embeds each product. Agents then use your real catalog for outreach, matches, and proposals (semantic search over pgvector).
+- **The engines**: `scrape`, `research`, `qualify`, `assess`, `match`, `outreach`, `proposal`, and `book-meeting`, each backed by an LLM through OpenRouter.
+- **Pods (work-the-book)**: A team runs the full funnel automatically (`scrape → assess → research → qualify → match → outreach → proposal`). Each stage starts the next stage. Each capability has an Auto/Ask approval gate.
+- **Team group chat**: `@mention` an agent in plain language. The app finds the intent and sends the request to a teammate that can do it. That agent runs the real job and reports in the thread.
+- **Meetings & calendar**: Book a meeting from a lead or through chat (the app reads natural-language times). The calendar shows only real booked meetings.
+- **Live activity & notifications**: A real event log. Live indicators show which agent works on which lead now.
 
 ## Tech stack
 
 - **Next.js `14.2.35`** (App Router) · **React `18.3.1`** · **TypeScript `5.5.3`**
 - **Neon Postgres** (`@neondatabase/serverless`) via **Drizzle ORM**, with the **pgvector** extension for catalog embeddings
 - **Auth**: `jose` (HS256 JWT session cookie) + `bcryptjs`
-- **AI**: **OpenRouter** (`google/gemini-2.5-flash` for text/JSON, `google/gemini-embedding-001` at 768 dims for embeddings) via raw `fetch` — no SDK
+- **AI**: **OpenRouter** (`google/gemini-2.5-flash` for text/JSON, `google/gemini-embedding-001` at 768 dims for embeddings) via raw `fetch` (no SDK)
 - **Lead scraping**: **Firecrawl** (`/v2/search`) + LLM extraction, inside a Node route
 - **Landing hero**: **GSAP**
 - Package manager **`pnpm@11.3.0`**
@@ -31,10 +31,10 @@ A single **Next.js** app: web UI, server actions, and the job/scrape runners all
 
 **Prerequisites**
 - Node 18.17+ (or 20+)
-- pnpm `11.3.0` — `corepack enable && corepack prepare pnpm@11.3.0 --activate`
+- pnpm `11.3.0`: `corepack enable && corepack prepare pnpm@11.3.0 --activate`
 - A [Neon](https://neon.tech) Postgres database (free tier is fine; pgvector is available)
-- *(Optional)* an OpenRouter API key — for real AI (the app runs with canned fallbacks without it)
-- *(Optional)* a Firecrawl API key — only for the lead-scraping capability
+- *(Optional)* an OpenRouter API key for real AI. Without it, the app uses canned fallbacks.
+- *(Optional)* a Firecrawl API key. Only the lead-scraping capability uses it.
 
 **Setup**
 ```bash
@@ -70,7 +70,7 @@ The app **degrades gracefully**: it boots and is usable with no database, no Ope
 | `pnpm lint` | ESLint (`next lint`) |
 | `pnpm test` | Unit tests (`vitest run`) |
 | `pnpm db:generate` | Generate a migration from a `lib/db/schema.ts` diff |
-| `pnpm db:migrate` | Apply migrations (**custom runner** — see below) |
+| `pnpm db:migrate` | Apply migrations (**custom runner**, see below) |
 | `pnpm db:studio` | Drizzle Studio |
 
 ## Project structure
@@ -102,12 +102,12 @@ The backend uses a **`server-only` / `"use server"` split**: real logic lives in
 
 ## Database & migrations
 
-Migrations use a **custom runner** — apply with `pnpm db:migrate` (`node scripts/migrate.mjs`), **not** `drizzle-kit migrate`. Neon's HTTP driver runs one statement per call, so the runner splits each `.sql` file on the `--> statement-breakpoint` marker and executes statements individually (tracked in a `_migrations` table; idempotent).
+Migrations use a **custom runner**. Apply them with `pnpm db:migrate` (`node scripts/migrate.mjs`), **not** `drizzle-kit migrate`. Neon's HTTP driver runs one statement per call. Thus the runner splits each `.sql` file on the `--> statement-breakpoint` marker and executes statements individually (tracked in a `_migrations` table; idempotent).
 
-Migration `0012` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates the products HNSW cosine index — **pgvector must be enabled** on your database (it is on Neon).
+Migration `0012` runs `CREATE EXTENSION IF NOT EXISTS vector` and creates the products HNSW cosine index. You **must enable pgvector** on your database (Neon has it).
 
 Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`.
 
 ## Deployment
 
-**Single deploy** to Vercel (or any Node host) — including scraping. Set `DATABASE_URL`, `AUTH_SECRET`, `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY` and `CRON_SECRET` in the project environment. The scrape route caps at `maxDuration = 60`; the job runner at `300`. No persistent process, no browser: Vercel Cron (`vercel.json`, every minute, needs the Pro plan) calls `/api/cron/jobs` and `/api/cron/scrape` with `CRON_SECRET` to run queued jobs and scrapes for every user, so they finish with no tab open. Ensure pgvector is enabled on your Neon database.
+**Single deploy** to Vercel (or any Node host). This includes scraping. Set `DATABASE_URL`, `AUTH_SECRET`, `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY` and `CRON_SECRET` in the project environment. The scrape route caps at `maxDuration = 60`; the job runner at `300`. No persistent process, no browser: Vercel Cron (`vercel.json`, every minute, needs the Pro plan) calls `/api/cron/jobs` and `/api/cron/scrape` with `CRON_SECRET` to run queued jobs and scrapes for every user, so they finish with no tab open. Ensure pgvector is enabled on your Neon database.

@@ -17,7 +17,7 @@ import type { AgentStats } from "@/lib/agents/stats";
 import { listProposalsForAgent, markProposalSent } from "@/lib/proposals/actions";
 import type { ProposalDTO } from "@/lib/proposals/store";
 
-// [key, label, requiredCapability?] — no capability ⇒ always shown.
+// [key, label, requiredCapability?]. A tab with no capability always shows.
 const SECTIONS: [string, string, string?][] = [
   ["overview", "Overview"],
   ["leads", "Leads"],
@@ -38,7 +38,7 @@ const MSEL = "border:1px solid #E4E4E7;border-radius:8px;padding:6px 9px;font-si
 
 // Role choices mirror the current agent-type catalog so the dropdown reflects
 // every kind of agent the app can build (Assessor, Meeting Booker, …), not a
-// stale hand-picked subset. "Custom" is excluded — it isn't a role.
+// stale hand-picked subset. "Custom" is not in the list because it is not a role.
 const ROLE_OPTIONS = AGENT_TYPES.filter((t) => !t.custom).map((t) => t.label);
 const LEAD_STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
@@ -54,7 +54,7 @@ const ACT_META: Record<string, { label: string; c: [string, string] }> = {
 function actMeta(type: string) { return ACT_META[type] ?? { label: type, c: ["#F4F4F5", "#71717A"] as [string, string] }; }
 function relTime(iso: string): string { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
 // Lead-qualification tier chip from the persisted score: [bg, fg, label].
-const tierChip = (score: number): [string, string, string] => score >= 75 ? ["#FEECEC", "#B91C1C", "Hot"] : score >= 50 ? ["#FEF6E8", "#B45309", "Warm"] : score > 0 ? ["#E9F5FE", "#0369A1", "Cold"] : ["#F4F4F5", "#A1A1AA", "—"];
+const tierChip = (score: number): [string, string, string] => score >= 75 ? ["#FEECEC", "#B91C1C", "Hot"] : score >= 50 ? ["#FEF6E8", "#B45309", "Warm"] : score > 0 ? ["#E9F5FE", "#0369A1", "Cold"] : ["#F4F4F5", "#A1A1AA", "-"];
 
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
   return <div id={id} style={css("font-family:'General Sans',Inter,sans-serif;font-size:15px;font-weight:700;margin-top:4px")}>{children}</div>;
@@ -127,7 +127,7 @@ export default function AgentDetail() {
 
   const runScrape = useCallback(async () => {
     if (!sel) return;
-    // Scraping is instruction-driven — ask what to look for (no stored ICP).
+    // The user's instruction drives the scrape. Ask what to look for (there is no stored ICP).
     const instruction = window.prompt("What leads should " + sel.name.split(" ")[0] + " look for?\n(e.g. \"property buyers near Makati\", \"startups hiring SDRs in the US\")");
     if (!instruction || !instruction.trim()) return;
     setRunningScrape(true);
@@ -141,9 +141,9 @@ export default function AgentDetail() {
       const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: res.jobId }) });
       const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
       if (!r.ok || data.error) setScrapeNote(data.error ?? "Scrape failed.");
-      else if (data.note === "already running") setScrapeNote("That scrape is already running — hang tight.");
-      else setScrapeNote(`Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"} to review — open the Leads module’s Pending tab.`);
-    } catch { setScrapeNote("Scrape failed — please try again."); }
+      else if (data.note === "already running") setScrapeNote("That scrape is already running. Please wait.");
+      else setScrapeNote(`Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}  to review. Open the Pending tab in the Leads module.`);
+    } catch { setScrapeNote("The scrape failed. Please try again."); }
     setRunningScrape(false);
     listWorkbook(sel.id).then(setAgentLeads);
   }, [sel]);
@@ -339,7 +339,7 @@ export default function AgentDetail() {
                       </div>
                     )}
                   </div>
-                  <div style={css("color:#3F3F46")}>{l.company || "—"}</div>
+                  <div style={css("color:#3F3F46")}>{l.company || "-"}</div>
                   <div><span style={css(chip(sc[0], sc[1]))}>{l.status}</span></div>
                   <div>{(() => { const [bg, fg, label] = tierChip(l.score || 0); return <span style={css(chip(bg, fg))}>{label}{l.score ? " · " + l.score : ""}</span>; })()}</div>
                   <div style={css("color:#71717A")}>{new Date(l.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
@@ -528,7 +528,7 @@ export default function AgentDetail() {
         <div>
           <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Capabilities</div>
           {caps.length === 0 ? (
-            <div style={css("font-size:12px;color:#A1A1AA")}>No capabilities — this agent coordinates the team only.</div>
+            <div style={css("font-size:12px;color:#A1A1AA")}>No capabilities. This agent only coordinates the team.</div>
           ) : (
             <div style={css("display:flex;gap:6px;flex-wrap:wrap")}>
               {caps.map((c) => <span key={c} style={css("font-size:11.5px;font-weight:600;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:4px 12px")}>{CAPABILITIES.find((x) => x.id === c)?.label ?? c}</span>)}

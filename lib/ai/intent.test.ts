@@ -19,10 +19,10 @@ afterEach(() => vi.unstubAllGlobals());
 const body = () => JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
 
 describe("detectIntent", () => {
-  it("falls back to chat without calling out when no key is set", async () => {
+  it("routes by keywords without calling out when no key is set", async () => {
     delete process.env.OPENROUTER_API_KEY;
-    const msg = "x".repeat(100);
-    expect(await detectIntent(msg, agents)).toEqual({ capability: "chat", params: {}, summary: "x".repeat(60) });
+    expect(await detectIntent("find 20 dentists in Texas", agents)).toEqual({ capability: "scrape", params: { target: 20 }, summary: "find 20 dentists in Texas" });
+    expect((await detectIntent("x".repeat(100), agents))).toEqual({ capability: "chat", params: {}, summary: "x".repeat(60) });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -59,14 +59,43 @@ describe("detectIntent", () => {
     expect(await detectIntent(msg, agents)).toEqual({ capability: "unknown", params: {}, summary: "y".repeat(60) });
   });
 
-  it("falls back to chat on an HTTP error or unparseable JSON", async () => {
+  it("falls back to keywords on an HTTP error or unparseable JSON", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockResolvedValueOnce(new Response("down", { status: 500 }));
-    expect(await detectIntent("find leads", agents)).toEqual({ capability: "chat", params: {}, summary: "find leads" });
+    expect(await detectIntent("find leads", agents)).toEqual({ capability: "scrape", params: {}, summary: "find leads" });
     fetchMock.mockResolvedValueOnce(reply("not json"));
-    expect(await detectIntent("find leads", agents)).toEqual({ capability: "chat", params: {}, summary: "find leads" });
+    expect(await detectIntent("hi there", agents)).toEqual({ capability: "chat", params: {}, summary: "hi there" });
   });
 
-  // The schema enum is only a hint (strict: false), and detectIntent passes the
-  // value through unchecked, so an out-of-enum capability reaches the caller.
-  it.todo("maps a capability outside the enum to unknown");
+  it.each([
+    ["@Scout find 50 plumbers in Ohio", "scrape"],
+    ["book a meeting with Maria", "book-meeting"],
+    ["find a time to meet Maria", "book-meeting"],
+    ["schedule a demo for Friday", "book-meeting"],
+    ["follow up with the cold leads", "follow-up"],
+    ["draft a proposal for Acme", "proposal"],
+    ["qualify my leads", "qualify"],
+    ["enrich these leads", "enrich"],
+    ["match leads to our listings", "match"],
+    ["assess the new leads", "assess"],
+    ["review the pending leads", "assess"],
+    ["research Acme's buyers", "research"],
+    ["write emails to my leads", "outreach"],
+    ["any updates?", "status"],
+    ["how's it going @Scout", "status"],
+    ["how do you assess leads?", "chat"],
+    ["what can you do?", "chat"],
+    ["thanks!", "chat"],
+    ["tomorrow 2pm", "chat"],
+  ])("without a key, reads %j as %s", async (msg, cap) => {
+    delete process.env.OPENROUTER_API_KEY;
+    expect((await detectIntent(msg, agents)).capability).toBe(cap);
+  });
+
+  it("maps a capability outside the enum, or a missing one, to unknown", async () => {
+    fetchMock.mockResolvedValueOnce(reply({ capability: "delete-everything", params: {}, summary: "x" }));
+    expect((await detectIntent("wipe the leads", agents)).capability).toBe("unknown");
+    fetchMock.mockResolvedValueOnce(reply({ params: {}, summary: "x" }));
+    expect((await detectIntent("wipe the leads", agents)).capability).toBe("unknown");
+  });
 });

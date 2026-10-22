@@ -125,7 +125,7 @@ export default function TeamModal() {
                     <div key={c} style={css("display:flex;gap:8px;align-items:center;background:#FAFAFB;border:1px solid #ECECF1;border-radius:12px;padding:8px 10px")}>
                       <div style={css("font-size:12px;font-weight:600;color:#3F3F46;flex:1")}>{t.label} <span style={css("color:#A1A1AA;font-weight:400")}>· {c}</span></div>
                       <input value={s.tGapName[c] || ""} onChange={(e) => set((p) => ({ tGapName: { ...p.tGapName, [c]: e.target.value } }))} placeholder="Name" style={css("border:1px solid #E4E4E7;border-radius:8px;padding:6px 10px;font-size:12px;width:120px;outline:none")} />
-                      <Btn onClick={() => { const id = quickCreateAgent(t.id, s.tGapName[c] || t.label); set((p) => ({ tSel: { ...p.tSel, [id]: true } })); }} style="background:#006AFF;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Create</Btn>
+                      <Btn onClick={async () => { const id = await quickCreateAgent(t.id, s.tGapName[c] || t.label); if (id) set((p) => ({ tSel: { ...p.tSel, [id]: true } })); }} style="background:#006AFF;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Create</Btn>
                     </div>
                   );
                 })}
@@ -141,7 +141,7 @@ export default function TeamModal() {
 
         <div style={css("display:flex;gap:10px;margin-top:20px")}>
           <Btn onClick={close} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
-          <Btn onClick={() => { const id = createTeam(); router.push("/teams/" + id); }} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 24px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Create team</Btn>
+          <Btn onClick={async () => { const id = await createTeam(); if (id) router.push("/teams/" + id); }} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 24px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Create team</Btn>
         </div>
       </div>
     </div>

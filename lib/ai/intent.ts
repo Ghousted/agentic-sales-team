@@ -1,10 +1,14 @@
 import "server-only";
 // Natural-language intent detection for the team group chat: a message → the
-// capability the user wants + any scrape params. One LLM JSON call.
+// capability the user wants + any scrape params. One LLM JSON call, with a
+// keyword fallback when AI isn't configured or the call fails, so commands
+// still route instead of all reading as small talk.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 
+const CAPABILITIES = ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "assess", "status", "chat", "unknown"] as const;
+
 export interface Intent {
-  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "qualify" | "proposal" | "enrich" | "match" | "assess" | "status" | "chat" | "unknown";
+  capability: (typeof CAPABILITIES)[number];
   params: { industry?: string; titles?: string; geo?: string; target?: number };
   summary: string;
 }
@@ -12,7 +16,7 @@ export interface Intent {
 const SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "assess", "status", "chat", "unknown"] },
+    capability: { type: "string", enum: CAPABILITIES },
     params: {
       type: "object",
       properties: { industry: { type: "string" }, titles: { type: "string" }, geo: { type: "string" }, target: { type: "integer" } },
@@ -48,17 +52,50 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
   ].join("\n");
 }
 
+type Capability = Intent["capability"];
+
+// A status ask, then a question about how things work, then each command's
+// keywords, most specific first — "find a time to meet" is a meeting, not a scrape.
+const STATUS = /\b(any (updates?|news)|status|progress|how('?s| is) it going|done yet|working on|where are (you|we) at)\b/i;
+const QUESTION = /^(how|what|why|who|where|which|is|are|do|does|did)\b/i;
+const RULES: [Capability, RegExp][] = [
+  ["book-meeting", /\b(meeting|meet|call|demo|calendar|book|schedule)\b/i],
+  ["follow-up", /\bfollow[- ]?ups?\b|\bre-?engage\b|\bnudge\b/i],
+  ["proposal", /\b(proposals?|quotes?)\b/i],
+  ["qualify", /\b(qualify|score|prioriti[sz]e|rank)\b/i],
+  ["enrich", /\b(enrich|contact (info|details)|missing (emails?|info))\b/i],
+  ["match", /\bmatch(es|ing)?\b/i],
+  ["assess", /\b(assess|vet|screen)\b|\breview\b.*\bleads?\b/i],
+  ["research", /\bresearch\b/i],
+  ["outreach", /\b(outreach|emails?|draft|write|reach out|message|dm)\b/i],
+  ["scrape", /\b(find|search|scrape|source|prospect|look for|import|get me|pull)\b/i],
+];
+
+/** The intent read from keywords alone — the fallback when the model can't be asked. */
+export function keywordIntent(message: string): Intent {
+  const text = message.replace(/@[\w'-]+/g, " ").trim();
+  const summary = message.slice(0, 60);
+  if (STATUS.test(text)) return { capability: "status", params: {}, summary };
+  if (QUESTION.test(text)) return { capability: "chat", params: {}, summary };
+  const hit = RULES.find(([, re]) => re.test(text));
+  if (!hit) return { capability: "chat", params: {}, summary };
+  const n = hit[0] === "scrape" ? Number(text.match(/\b(\d{1,3})\b/)?.[1]) : NaN;
+  return { capability: hit[0], params: n > 0 ? { target: n } : {}, summary };
+}
+
 export async function detectIntent(message: string, agents: { name: string; capabilities: string[] }[]): Promise<Intent> {
-  if (!isAIConfigured()) return { capability: "chat", params: {}, summary: message.slice(0, 60) };
+  if (!isAIConfigured()) return keywordIntent(message);
   const turns: Turn[] = [{ role: "user", text: message }];
   try {
     const r = await aiJSON<Intent>(systemPrompt(agents), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 400, temperature: 0.2 });
     return {
-      capability: r.capability ?? "unknown",
+      // The schema enum is only a hint, so anything outside it becomes unknown.
+      capability: CAPABILITIES.includes(r.capability) ? r.capability : "unknown",
       params: r.params ?? {},
       summary: (r.summary ?? message.slice(0, 60)).trim(),
     };
-  } catch {
-    return { capability: "chat", params: {}, summary: message.slice(0, 60) };
+  } catch (e) {
+    console.error("[intent] AI call failed, using keywords:", e);
+    return keywordIntent(message);
   }
 }

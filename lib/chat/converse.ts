@@ -4,7 +4,8 @@ import "server-only";
 // command. The responding agent answers with knowledge of its own persona, its
 // teammates, and what the platform can do — so "how do you assess leads?" or
 // "how do you guys scrape the web?" get real answers, not a canned line.
-// Falls back to a canned line when AI isn't configured or errors.
+// When AI isn't configured or the call fails it says so plainly, rather than
+// passing a canned line off as an answer.
 import { aiGenerate, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { CAPABILITIES } from "@/lib/agentTypes";
 
@@ -12,7 +13,9 @@ interface Responder { id: string; name: string; role: string; goal: string; task
 interface RosterMember { id: string; name: string; capabilities: string[] }
 interface HistMsg { who: string; text: string }
 
-const FALLBACK = `I can help the team find leads, run research, or draft outreach. What would you like me to do?`;
+const COMMANDS = `Direct requests still work — for example "book a meeting", "draft outreach" or "any updates?".`;
+export const AI_NOT_CONFIGURED = `I can't answer questions right now: AI isn't configured on this workspace (OPENROUTER_API_KEY). ${COMMANDS}`;
+export const AI_FAILED = `I couldn't answer that — the AI service didn't respond. Please try again in a moment. ${COMMANDS}`;
 
 const capLabel = (id: string) => CAPABILITIES.find((c) => c.id === id)?.label ?? id;
 
@@ -67,7 +70,7 @@ export async function converse(input: {
   message: string;
 }): Promise<string> {
   const { responder, roster, history, message } = input;
-  if (!isAIConfigured()) return FALLBACK;
+  if (!isAIConfigured()) return AI_NOT_CONFIGURED;
   try {
     const turns = toTurns(history.slice(-10));
     const last = turns[turns.length - 1];
@@ -78,7 +81,7 @@ export async function converse(input: {
     }
     return await aiGenerate(systemPrompt(responder, roster), turns);
   } catch (e) {
-    console.error("[converse] AI call failed, using fallback:", e);
-    return FALLBACK;
+    console.error("[converse] AI call failed:", e);
+    return AI_FAILED;
   }
 }

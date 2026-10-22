@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, Team, Chats } from "./types";
 import { AGENTS_BASE, TEAMS_BASE, chatsInit } from "./data";
-import { typeById } from "./agentTypes";
+import { typeById, templateById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
 import { teamChat, reportTeamJob } from "./chat/actions";
 import type { ThreadMsg } from "./chat/thread";
@@ -480,9 +480,11 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const id = "tx" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const team: Team = {
       id, name, icon: cur.tIcon, iconBg: TEAM_ICON_BG[cur.tIcon] || "#EAF2FF",
-      desc: members.length + " agents · just created", members, meetings: 0, pipeline: "-", leads: 0,
+      // meetings/pipeline/leads/activity are shown from real leads and activity
+      // (lib/agents/derive.ts); the stored fields stay empty.
+      desc: (templateById(cur.tTemplate)?.label ?? "Custom") + " team", members, meetings: 0, pipeline: "-", leads: 0,
       goal: cur.tGoal.trim() || "Define a shared goal for this team.",
-      activity: ["Team created. Agents are onboarding.", "Shared goal set"],
+      activity: [],
       template: cur.tTemplate || "custom",
     };
     creating.current = true;
@@ -506,9 +508,11 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const id = "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const at = typeById(cur.wType) ;
     const capabilities = at?.custom ? cur.wCapabilities : (at?.capabilities ?? []);
+    // Status and score on screen come from live work (lib/agents/derive.ts), not
+    // these fields. task still reaches the AI prompts as the agent's focus.
     const agent: Agent = {
-      id, name, initials, role: at?.label ?? "Custom", color: cur.wColor, status: "working",
-      task: "Onboarding: configuring capabilities", score: 75,
+      id, name, initials, role: at?.label ?? "Custom", color: cur.wColor, status: "idle",
+      task: "Ready for work", score: 0,
       goal: cur.wGoals.split(".")[0] || "Ramp up in week 1",
       char: cur.wCharacter,
       type: cur.wType, capabilities,
@@ -546,8 +550,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     const nm = name.trim() || (at?.label ?? "Agent");
     const initials = nm.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const agent: Agent = {
-      id, name: nm, initials, role: at?.label ?? "Custom", color: "#006AFF", status: "working",
-      task: "Onboarding", score: 75, goal: "Ramp up in week 1",
+      id, name: nm, initials, role: at?.label ?? "Custom", color: "#006AFF", status: "idle",
+      task: "Ready for work", score: 0, goal: "Ramp up in week 1",
       type: typeId, capabilities: at?.capabilities ?? [],
     };
     try { await saveAgent(agent); }

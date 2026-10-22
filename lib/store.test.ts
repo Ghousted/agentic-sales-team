@@ -138,6 +138,6 @@ describe("team modal member selection", () => {
     const ctx = grabCtx();
     expect(ctx.s.tSel).toEqual({});
     await ctx.createTeam();
-    expect(h.saveTeam.mock.calls[0][0]).toMatchObject({ members: [], desc: "0 agents · just created" });
+    expect(h.saveTeam.mock.calls[0][0]).toMatchObject({ members: [], desc: "Custom team", activity: [] });
   });
 });

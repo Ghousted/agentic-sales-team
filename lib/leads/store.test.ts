@@ -68,6 +68,14 @@ describe("applyOutreachResult", () => {
     expect(statements[2].params).toContain(draftId);
   });
 
+  it("updates the score but never the lead's stage", async () => {
+    await applyOutreachResult(USER, "outreach", { ...lead, status: "meeting" }, result);
+    const update = statements[1];
+    expect(update.sql).toMatch(/^update "leads" set "score" = \$1, "updated_at" = \$2 where/);
+    expect(update.sql).not.toContain(`"status"`);
+    expect(update.params).not.toContain("contacted");
+  });
+
   it("returns false when another run already drafted the lead", async () => {
     hasLiveDraft = true;
     expect(await applyOutreachResult(USER, "outreach", lead, result)).toBe(false);

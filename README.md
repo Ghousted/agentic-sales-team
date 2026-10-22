@@ -24,7 +24,7 @@ A single **Next.js** app: web UI, server actions, and the job/scrape runners all
 - **Auth**: `jose` (HS256 JWT session cookie) + `bcryptjs`
 - **AI**: **OpenRouter** (`google/gemini-2.5-flash` for text/JSON, `google/gemini-embedding-001` at 768 dims for embeddings) via raw `fetch` — no SDK
 - **Lead scraping**: **Firecrawl** (`/v2/search`) + LLM extraction, inside a Node route
-- **Landing hero**: **GSAP** + **anime.js**
+- **Landing hero**: **GSAP**
 - Package manager **`pnpm@11.3.0`**
 
 ## Quick start
@@ -78,7 +78,7 @@ app/                 App Router pages + two API routes
   api/jobs/run/        Node job runner (research/qualify/assess/match/outreach/proposal)
   api/scrape/          Node scrape runner (Firecrawl + LLM)
   page.tsx / *Client   Server pages fetch initial data → client components render it
-components/          UI primitives + Shell, Landing, Constellation, bells, modals
+components/          UI primitives + Shell, Landing, bells, modals
 lib/
   db/                  Drizzle schema, Neon client, SQL migrations
   auth/                JWT (edge-safe) + cookie session + form actions
@@ -92,7 +92,6 @@ lib/
   workspace/ agents/   aggregates + persistence
   store.tsx            the React Context store (useApp)
 scripts/             migrate.mjs (custom migration runner)
-worker/              OPTIONAL legacy Python scrape worker (not used by the app)
 ```
 
 The backend uses a **`server-only` / `"use server"` split**: real logic lives in `server-only` modules that take an explicit `userId`; thin `"use server"` action modules resolve the session and delegate. Client components import only the actions.

@@ -144,6 +144,9 @@ export const leads = pgTable("leads", {
   profileUrl: text("profile_url"),
   platform: text("platform"),
   research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),
+  // One line on why the lead fits the agent's goal. The scraper writes it; the
+  // Assessor's reason replaces it (for a dismissed lead, why it does not fit).
+  fitReason: text("fit_reason").notNull().default(""),
   // Set by the qualify stage. Separate from `score`, which assess and outreach also write.
   qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
   // Set when the matchmaker has run on the lead, whether or not anything fit.

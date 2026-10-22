@@ -20,7 +20,7 @@ async function uid(): Promise<string | null> {
 function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
-    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: safeHttpUrl(r.profileUrl), platform: r.platform, research: r.research ?? null,
+    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: safeHttpUrl(r.profileUrl), platform: r.platform, research: r.research ?? null, fitReason: r.fitReason ?? "",
     workedBy: [],
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
@@ -63,14 +63,16 @@ export async function addLead(input: { agentId: string; name: string; title?: st
 
 /** Insert scraped prospects as PENDING leads (the approval gate), deduped against
  *  the agent's existing leads by profileUrl or email. Returns how many were added. */
-export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<number> {
-  if (!isDbConfigured() || prospects.length === 0) return 0;
+/** Save new scraped prospects as pending leads, skipping ones already in the book.
+ *  Returns the new lead ids, so the chat can show the results. */
+export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<string[]> {
+  if (!isDbConfigured() || prospects.length === 0) return [];
   const db = getDb();
   const existing = await db.select({ profileUrl: leads.profileUrl, email: leads.email })
     .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
   const seenUrl = new Set(existing.map((e) => safeHttpUrl(e.profileUrl)).filter(Boolean));
   const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
-  let added = 0;
+  const added: string[] = [];
   for (const p of prospects) {
     const url = safeHttpUrl(p.profileUrl) ?? "";
     const email = (p.email ?? "").trim();
@@ -79,7 +81,7 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
     const [row] = await db.insert(leads).values({
       userId, agentId, name: p.name, title: p.title ?? "", company: p.company ?? "",
       email, status: "new", score: 0, source: "scrape", review: "pending",
-      profileUrl: url || null, platform: p.platform || null,
+      profileUrl: url || null, platform: p.platform || null, fitReason: (p.fit ?? "").trim().slice(0, 300),
     }).returning({ id: leads.id });
     await db.insert(activity).values({
       userId, agentId, type: "lead_added", leadId: row.id,
@@ -87,9 +89,22 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
     });
     if (url) seenUrl.add(url);
     if (email) seenEmail.add(email.toLowerCase());
-    added++;
+    added.push(row.id);
   }
   return added;
+}
+
+/** The user's leads with these ids, in the order given. For the scrape results
+ *  card in the chat. Ids that are not the user's are left out. */
+export async function listLeadsByIds(ids: string[]): Promise<LeadDTO[]> {
+  if (!isDbConfigured()) return [];
+  const userId = await uid();
+  if (!userId) return [];
+  const clean = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 50);
+  if (!clean.length) return [];
+  const rows = await getDb().select().from(leads).where(and(eq(leads.userId, userId), inArray(leads.id, clean)));
+  const dtos = await toLeadDTOs(userId, rows);
+  return clean.map((id) => dtos.find((d) => d.id === id)).filter((d): d is LeadDTO => !!d);
 }
 
 // Minimal RFC-4180-ish CSV parser → array of rows keyed by lowercased header.
@@ -345,14 +360,19 @@ export async function clearSentDrafts(): Promise<number> {
   return rows.length;
 }
 
-/** How many drafts are waiting to be sent. The badge on the sidebar Emails item. */
-export async function countUnsentDrafts(): Promise<number> {
-  if (!isDbConfigured()) return 0;
+/** Counts for the sidebar badges: leads waiting for review (Leads) and drafts
+ *  waiting to be sent (Emails). */
+export async function navCounts(): Promise<{ leads: number; emails: number }> {
+  if (!isDbConfigured()) return { leads: 0, emails: 0 };
   const userId = await uid();
-  if (!userId) return 0;
-  const [r] = await getDb().select({ n: count() }).from(outreachDrafts)
-    .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false), ne(outreachDrafts.status, "sent")));
-  return r?.n ?? 0;
+  if (!userId) return { leads: 0, emails: 0 };
+  const db = getDb();
+  const [[l], [e]] = await Promise.all([
+    db.select({ n: count() }).from(leads).where(and(eq(leads.userId, userId), eq(leads.review, "pending"))),
+    db.select({ n: count() }).from(outreachDrafts)
+      .where(and(eq(outreachDrafts.userId, userId), eq(outreachDrafts.dismissed, false), ne(outreachDrafts.status, "sent"))),
+  ]);
+  return { leads: l?.n ?? 0, emails: e?.n ?? 0 };
 }
 
 /** Hide every draft for a single lead ("Clear all" in the lead detail modal).
@@ -474,8 +494,11 @@ export async function pickLeadsForAssess(userId: string, agentId: string, leadId
 export async function applyAssessResult(userId: string, agentId: string, lead: LeadRow, result: AssessResult): Promise<void> {
   const db = getDb();
   const review = result.accept ? "accepted" : "dismissed";
-  const set: { review: string; updatedAt: Date; score?: number } = { review, updatedAt: new Date() };
+  const set: { review: string; updatedAt: Date; score?: number; fitReason?: string } = { review, updatedAt: new Date() };
   if (result.accept) set.score = Math.max(1, Math.min(100, Math.round(result.score || 0)));
+  // The Assessor's reason replaces the scraper's line. Its fail-open notes say nothing about fit.
+  const reason = (result.reason ?? "").trim();
+  if (reason && !/^Auto-accepted\b/.test(reason)) set.fitReason = reason.slice(0, 300);
   await db.update(leads).set(set).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "lead_assessed", leadId: lead.id, text: `Assessed ${lead.name}: ${result.accept ? "accepted" : "passed"}: ${result.reason}`.slice(0, 400) });
 }

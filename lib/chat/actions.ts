@@ -11,13 +11,14 @@ import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutco
 import { sinceLastUserMessage, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { scrapeHasTarget, askScrapeText, isAskScrapePrompt, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
+import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeStartText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
+import { briefFromRequest, readScrapeAnswer } from "./scrapeBrief";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, messages } from "@/lib/db";
-import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS } from "@/lib/jobs/limits";
+import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET } from "@/lib/jobs/limits";
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
@@ -30,6 +31,23 @@ type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
 const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal", "match"]);
 
 const onItText = (_name: string) => `Understood. I'll begin drafting the outreach now.`;
+
+/** Ask for whatever the scrape brief still misses (who, where, how many), or start
+ *  the scrape once it is complete. Shared by a fresh request and the reply to a
+ *  question. A team-chat scrape kicks off the autonomous chain (scrape → assess → …). */
+async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Promise<TeamChatResult> {
+  const b = settleBrief(brief);
+  const missing = missingBriefFields(b);
+  if (missing.length) return { messages: [{ who: actor.id, text: askScrapeDetailsText(b, missing, MAX_SCRAPE_TARGET) }] };
+  const count = Math.min(b.count!, MAX_SCRAPE_TARGET);
+  const enq = await enqueueJob({
+    agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
+    kind: "scrape", capabilities: actor.capabilities, target: count, instruction: briefInstruction(b),
+    pod: true, teamId,
+  });
+  if ("error" in enq) return { messages: [{ who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  return { messages: [{ who: actor.id, text: scrapeStartText(b, count, MAX_SCRAPE_TARGET) }], job: { id: enq.jobId, kind: "scrape", agentId: actor.id } };
+}
 
 /** Approve any picked leads, then enqueue an outreach job for the target. Shared
  *  by the fresh-request gate and the pending-answer path. */
@@ -121,15 +139,23 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   let lastSpeaker: Member | undefined;
   for (let i = history.length - 1; i >= 0 && !lastSpeaker; i--) lastSpeaker = byId.get(history[i].who);
   let pendingAgent: Member | undefined;
-  let pendingScrapeAgent: Member | undefined;
+  let pendingScrape: { agent: Member; brief: ScrapeBrief } | null = null;
   let pendingMeet: { agent: Member; leadIds: string[]; date?: string } | null = null;
   let pendingMeetingWho: Member | undefined;
+  // An open question can come from an agent on another team: the chat sends a
+  // request across teams when no member can do it. Look those agents up too.
+  const speakers = new Map(byId);
   for (const m of sinceLastUserMessage(history)) {
-    const spk = byId.get(m.who);
+    if (m.who === "me" || m.who === "system" || speakers.has(m.who)) continue;
+    const info = await agentInfo(userId, m.who);
+    if (info) speakers.set(m.who, info);
+  }
+  for (const m of sinceLastUserMessage(history)) {
+    const spk = speakers.get(m.who);
     if (!spk) continue;
     const meet = spk.capabilities.includes("book-meeting") ? pendingMeeting(m.text) : null;
     if (spk.capabilities.includes("outreach") && isAskWhoPrompt(m.text, spk.name)) pendingAgent = spk;
-    else if (spk.capabilities.includes("scrape") && isAskScrapePrompt(m.text)) pendingScrapeAgent = spk;
+    else if (spk.capabilities.includes("scrape") && (pendingScrapeBrief(m.text) || isAskScrapePrompt(m.text))) pendingScrape = { agent: spk, brief: pendingScrapeBrief(m.text) ?? { asked: 1 } };
     else if (meet) pendingMeet = { agent: spk, ...meet };
     else if (spk.capabilities.includes("book-meeting") && isAskMeetingWhoPrompt(m.text)) pendingMeetingWho = spk;
     else continue;
@@ -165,17 +191,14 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     return { messages: await resolveTimeAndBook(userId, a, teamId, ids, message, tz) };
   }
 
-  // Pending scrape clarification: the agent just asked what to look for, and this
-  // is an unmentioned reply that isn't a different command → use it as the target.
-  if (pendingScrapeAgent && mentions.length === 0 && (intent.capability === "scrape" || intent.capability === "chat" || intent.capability === "unknown")) {
-    const a = pendingScrapeAgent;
-    const enq = await enqueueJob({
-      agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
-      kind: "scrape", capabilities: a.capabilities, target: intent.params.target ?? 10, instruction: message,
-      pod: true, teamId,
-    });
-    if ("error" in enq) return { messages: [{ who: a.id, text: "I wasn't able to start that: " + enq.error }] };
-    return { messages: [{ who: a.id, text: "Understood. I am searching for that now. I will post the results here." }], job: { id: enq.jobId, kind: "scrape", agentId: a.id } };
+  // Pending scrape details: the agent asked who, where or how many, and this is an
+  // unmentioned reply that isn't a different command → read it as the answer. It
+  // starts the scrape, or asks for what is still missing.
+  if (pendingScrape && mentions.length === 0 && (intent.capability === "scrape" || intent.capability === "chat" || intent.capability === "unknown")) {
+    const { agent, brief } = pendingScrape;
+    // The question card sends exact values. A typed reply is parsed.
+    const answer = scrapeAnswerFrom(message) ?? await readScrapeAnswer(message, brief, missingBriefFields(brief));
+    return scrapeStep(agent, teamId, mergeBrief(brief, answer));
   }
 
   // Pending-answer path: Outreach just asked "who?", and this is an unmentioned
@@ -231,9 +254,11 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
 
-  // A scrape needs a target. Ask before it runs a bare "find leads".
-  if (cap === "scrape" && !scrapeHasTarget(message)) {
-    return { messages: [...pre, { who: actor.id, text: askScrapeText() }] };
+  // A scrape needs who, where and how many. Ask for what is missing before it runs.
+  if (cap === "scrape") {
+    // A card answer with no open question (a stale card) still gives the place and count.
+    const step = await scrapeStep(actor, teamId, mergeBrief(briefFromRequest(message, intent.params), scrapeAnswerFrom(message) ?? {}));
+    return { ...step, messages: [...pre, ...step.messages] };
   }
 
   // Book-meeting is interactive: needs a lead (/lead pick) + a time. Ask for
@@ -252,12 +277,8 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
     kind: cap, capabilities: actor.capabilities,
     target: intent.params.target ?? 10,
-    instruction: cap === "scrape" ? message : undefined,
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
     batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
-    // A team-chat scrape kicks off the autonomous chain (scrape → assess → …).
-    pod: cap === "scrape" ? true : undefined,
-    teamId: cap === "scrape" ? teamId : undefined,
   });
   if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
   return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: cap, agentId: actor.id } };

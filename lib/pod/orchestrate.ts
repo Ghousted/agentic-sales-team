@@ -11,6 +11,7 @@ import { pickLeadsForMatch } from "@/lib/matches/store";
 import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
+import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
@@ -141,7 +142,7 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
 
 /** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
-export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string): Promise<void> {
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[]): Promise<void> {
   // ranBy is the agent that ran the job. It can be an agent from another team (a
   // cross-team hand-off), so do not look for it among this team's members only.
   const finisherId = ranBy ?? await memberWithCapability(userId, teamId, completedKind);
@@ -163,12 +164,12 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
     if (assessorId) {
       const info = await agentInfo(userId, assessorId);
       if (info) {
-        await postTeamMessage(userId, teamId, finisher.id, `I found the new leads. @${first(info)}, please review them.`);
+        await postTeamMessage(userId, teamId, finisher.id, `I found ${count} new lead${count === 1 ? "" : "s"}. @${first(info)}, please review them.${leadsMarker(leadIds)}`);
         await enqueuePodStage(userId, teamId, "assess", assessorId);
       }
     } else {
       const userName = await userFirstName(userId);
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName}, they are ready for you to review and accept.`);
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase("scrape", count)}. @${userName}, they are ready for you to review and accept.${leadsMarker(leadIds)}`);
     }
     return;
   }

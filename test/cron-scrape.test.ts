@@ -26,7 +26,7 @@ vi.mock("@/lib/db", async () => ({ ...(await import("@/lib/db/schema")), getDb: 
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => null }));
 vi.mock("@/lib/scrape/firecrawl", () => ({ runFirecrawlScrape: vi.fn(async () => [{ name: "P" }]), isFirecrawlConfigured: () => true }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true }));
-vi.mock("@/lib/leads/store", () => ({ addScrapedLeads: vi.fn(async () => 3) }));
+vi.mock("@/lib/leads/store", () => ({ addScrapedLeads: vi.fn(async () => ["l1", "l2", "l3"]) }));
 vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}) }));
 
 const scrapeJob = (id: string, userId: string, extra: Record<string, unknown> = {}) => ({
@@ -65,8 +65,8 @@ describe("GET /api/cron/scrape", () => {
     const res = await GET(cronReq("Bearer s3cret"));
     expect(await res.json()).toEqual({ processed: 1, leadsFound: 3 });
     expect(vi.mocked(addScrapedLeads).mock.calls[0][0]).toBe("u2");
-    expect(fake.state.updates.find((u) => u.status === "done")?.result).toEqual({ leadsFound: 3 });
-    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1");
+    expect(fake.state.updates.find((u) => u.status === "done")?.result).toEqual({ leadsFound: 3, leadIds: ["l1", "l2", "l3"] });
+    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
   });
 
   it("marks the job failed with the reason when the scrape throws", async () => {

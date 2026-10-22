@@ -31,7 +31,7 @@ vi.mock("@/lib/leads/store", () => ({
   pickLeadsForResearch: vi.fn(async () => []), applyResearchResult: vi.fn(async () => {}),
   pickLeadsForQualify: vi.fn(async () => []), applyQualifyResult: vi.fn(),
   pickLeadsForAssess: vi.fn(async () => []), applyAssessResult: vi.fn(),
-  addScrapedLeads: vi.fn(async () => 0),
+  addScrapedLeads: vi.fn(async () => []),
 }));
 vi.mock("@/lib/ai/research", () => ({ draftResearch: vi.fn() }));
 vi.mock("@/lib/ai/assess", () => ({ assessLead: vi.fn() }));

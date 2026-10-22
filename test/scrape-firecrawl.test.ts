@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ai = vi.hoisted(() => ({ aiJSON: vi.fn() }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true, aiJSON: ai.aiJSON }));
+// The Jev gate has its own tests (lib/scrape/jev.test.ts). Here it passes every result through.
+const gate = vi.hoisted(() => ({ gateResults: vi.fn(async (r: unknown[], _ctx?: unknown) => r) }));
+vi.mock("@/lib/scrape/jev", () => gate);
 
 import { runFirecrawlScrape } from "@/lib/scrape/firecrawl";
 
@@ -28,6 +31,14 @@ describe("runFirecrawlScrape", () => {
     await expect(runFirecrawlScrape(agent, 10)).rejects.toThrow(/Lead extraction failed: Unexpected end of JSON input/);
   });
 
+  it("asks the extraction for a fit reason per lead", async () => {
+    ai.aiJSON.mockResolvedValue({ prospects: [] });
+    await runFirecrawlScrape(agent, 10);
+    const [system, , schema] = ai.aiJSON.mock.calls[0];
+    expect(system).toMatch(/- fit: ONE short line/);
+    expect(schema.properties.prospects.items.required).toContain("fit");
+  });
+
   it("gives the extraction enough tokens not to truncate the JSON", async () => {
     ai.aiJSON.mockResolvedValue({ prospects: [] });
     await runFirecrawlScrape(agent, 10);
@@ -48,9 +59,9 @@ describe("runFirecrawlScrape", () => {
   });
 
   it("still returns the extracted leads on success", async () => {
-    ai.aiJSON.mockResolvedValue({ prospects: [{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "web", email: "" }] });
+    ai.aiJSON.mockResolvedValue({ prospects: [{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "web", email: "", fit: " Ready to buy a 3BR now. " }] });
     const leads = await runFirecrawlScrape(agent, 10);
-    expect(leads).toEqual([{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "Reddit", email: "" }]);
+    expect(leads).toEqual([{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "Reddit", email: "", fit: "Ready to buy a 3BR now." }]);
   });
 
   it("searches every planned buyer-voice query on each site", async () => {
@@ -128,9 +139,30 @@ describe("runFirecrawlScrape fit mode (LinkedIn)", () => {
       .mockResolvedValueOnce({ mode: "fit", queries: ["manufacturing company Ohio"], roles: ["HR Director"], platform: "web" })
       .mockResolvedValueOnce({ prospects: [{ name: "Jane Doe", title: "HR Director", company: "Acme Manufacturing", profileUrl: profile.url, platform: "LinkedIn", email: "" }] });
     const leads = await runFirecrawlScrape(agent, 10, "manufacturers in Ohio");
-    expect(leads).toEqual([{ name: "Jane Doe", title: "HR Director", company: "Acme Manufacturing", profileUrl: profile.url, platform: "LinkedIn", email: "" }]);
+    expect(leads).toEqual([{ name: "Jane Doe", title: "HR Director", company: "Acme Manufacturing", profileUrl: profile.url, platform: "LinkedIn", email: "", fit: "" }]);
     const system = ai.aiJSON.mock.calls[1][0] as string;
     expect(system).toMatch(/LinkedIn/);
     expect(system).not.toMatch(/BUYER'S OWN VOICE|Reddit user/);
   });
 });
+
+describe("runFirecrawlScrape Jev gate", () => {
+  const sellerHit = { url: "https://facebook.com/groups/ai/posts/1", title: "Upskilling Teams for AI Adoption", description: "At ZaranTech, we build corporate AI training around your team's roles" };
+  const buyerHit = { url: "https://reddit.com/r/hr/2", title: "Recommend an AI training provider?", description: "Our 80 staff need AI training" };
+
+  afterEach(() => { gate.gateResults.mockImplementation(async (r: unknown[]) => r); });
+
+  it("keeps a seller post the gate rejects out of the extraction prompt", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: { web: [sellerHit, buyerHit] } }), { status: 200 }));
+    gate.gateResults.mockImplementation(async (r: unknown[]) => (r as { url: string }[]).filter((x) => x.url !== sellerHit.url));
+    ai.aiJSON
+      .mockResolvedValueOnce({ mode: "intent", queries: ["need ai training for our team"], roles: [], platform: "web" })
+      .mockResolvedValueOnce({ prospects: [] });
+    await runFirecrawlScrape(agent, 10, "businesses that need AI training");
+    const corpus = ai.aiJSON.mock.calls[1][1][0].text as string;
+    expect(corpus).toContain(buyerHit.url);
+    expect(corpus).not.toContain("ZaranTech");
+    expect(gate.gateResults.mock.lastCall?.[1]).toEqual({ mode: "intent", sells: "Realtor. find home buyers", wants: "businesses that need AI training" });
+  });
+});
+

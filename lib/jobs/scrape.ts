@@ -42,11 +42,13 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
   const instruction = params.instruction ?? undefined;
 
   let leadsFound: number;
+  let leadIds: string[];
   try {
     // Finish inside maxDuration so the job is marked failed, not left 'running'.
     const prospects = await withDeadline(runFirecrawlScrape(agent, target, instruction), SCRAPE_TIMEOUT_MS, "Search");
-    leadsFound = await addScrapedLeads(job.userId, job.agentId, prospects);
-    await getDb().update(jobs).set({ status: "done", result: { leadsFound }, finishedAt: new Date() })
+    leadIds = await addScrapedLeads(job.userId, job.agentId, prospects);
+    leadsFound = leadIds.length;
+    await getDb().update(jobs).set({ status: "done", result: { leadsFound, leadIds }, finishedAt: new Date() })
       .where(and(eq(jobs.id, job.id), eq(jobs.userId, job.userId)));
   } catch (e) {
     await failScrapeJob(job, String(e));
@@ -55,7 +57,7 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
   // Autonomous chain: hand off to the Assessor (or ask the user to review).
   // Its own try: a failed hand-off must not turn the finished scrape into 'failed'.
   if (params.pod && params.teamId) {
-    try { await chainNext(job.userId, params.teamId, "scrape", leadsFound, job.agentId); } catch (e) { console.error("[scrape] chainNext failed:", e); }
+    try { await chainNext(job.userId, params.teamId, "scrape", leadsFound, job.agentId, leadIds); } catch (e) { console.error("[scrape] chainNext failed:", e); }
   }
   return { leadsFound };
 }

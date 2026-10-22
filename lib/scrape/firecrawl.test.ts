@@ -5,6 +5,7 @@ vi.mock("@/lib/ai/openrouter", () => ({
   isAIConfigured: () => true,
   aiJSON: (...args: unknown[]) => aiJSON(...args),
 }));
+vi.mock("./jev", () => ({ gateResults: async (r: unknown[]) => r }));
 
 import { runFirecrawlScrape } from "./firecrawl";
 

@@ -10,7 +10,7 @@ import { LEAD_STAGES, type LeadDTO, type DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { useLiveWork } from "@/lib/useLiveWork";
-import { WorkedBy, LivePulse } from "@/components/LeadBits";
+import { LivePulse, FitReason } from "@/components/LeadBits";
 import { safeHttpUrl, openExternal } from "@/lib/url/safeUrl";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
@@ -239,10 +239,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
               <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                 <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
                   {safeHttpUrl(l.profileUrl) && <Box onClick={() => openExternal(l.profileUrl)} style="font-size:11px;font-weight:600;color:#006AFF;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
-                  {(byLead[l.id] || l.workedBy.length > 0) && (
+                  {/* The Agent column already shows who owns the lead; only show live work here. */}
+                  {byLead[l.id] && (
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:4px")}>
                       <LivePulse info={byLead[l.id]} />
-                      <WorkedBy ids={l.workedBy} byId={byId} />
                     </div>
                   )}
                 </div>
@@ -327,6 +327,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                     <Btn onClick={bookMeetingNow} style={"background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#0052CC">{booking ? "Booking…" : "Book"}</Btn>
                   </div>
                 </div>
+                <FitReason lead={l} />
                 {l.title && <div><div style={css(SEC)}>Intent</div><div style={css("font-size:13px;color:#3F3F46;line-height:1.55")}>{l.title}</div></div>}
                 {rb && (
                   <div>

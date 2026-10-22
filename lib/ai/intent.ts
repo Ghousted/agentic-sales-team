@@ -45,6 +45,7 @@ function systemPrompt(agents: { name: string; capabilities: string[] }[]): strin
     "- unknown: a task request that fits none of the above.",
     "Distinguish commands from questions: 'assess these leads' is `assess`, but 'how do you assess leads?' is `chat`. A message asking HOW/WHAT/WHY/WHETHER you do something is `chat`, not the capability it mentions.",
     "For a scrape request, extract params from the message: industry, titles (job titles), geo (geography), target (how many, integer).",
+    "geo is a real place (city, region or country). A website or platform (LinkedIn, Facebook, Reddit, X, online) is NOT a geo. Leave geo out when the message names no place.",
     "Return a short `summary` restating the ask in a few words.",
     "The team's agents and their capabilities (for context only. You pick the capability, not the agent):",
     roster,

@@ -90,8 +90,9 @@ describe("chainNext", () => {
       [assessor], [], [],         // enqueuePodStage: agentInfo
       [],                         // approvalMode
     ];
-    await chainNext("u1", "t1", "scrape", 7, "s1");
-    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "s1", "I found the new leads. @Ava, please review them."]);
+    const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+    await chainNext("u1", "t1", "scrape", 2, "s1", ids);
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "s1", `I found 2 new leads. @Ava, please review them. ⟦leads:${ids.join(",")}⟧`]);
     expect(fake.state.inserts).toHaveLength(1);
   });
 });

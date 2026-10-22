@@ -47,3 +47,18 @@ describe("runFirecrawlScrape profileUrl", () => {
     expect(p.profileUrl).toBe("");
   });
 });
+
+describe("runFirecrawlScrape names", () => {
+  it("replaces a handle made from the subreddit with the source label", async () => {
+    aiJSON.mockResolvedValue({ prospects: [prospect(POST, "u/RealEstate")] });
+    const [lead] = await runFirecrawlScrape(agent, 10);
+    expect(lead.name).toBe("Reddit user · r/RealEstate");
+  });
+
+  it("keeps a real Reddit username", async () => {
+    aiJSON.mockResolvedValue({ prospects: [prospect(POST, "u/house_hunter_22")] });
+    const [lead] = await runFirecrawlScrape(agent, 10);
+    expect(lead.name).toBe("u/house_hunter_22");
+  });
+});
+

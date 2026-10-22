@@ -1,7 +1,7 @@
 import "server-only";
 // Read/write for a team group-chat thread (messages keyed by teamId) + the user's
 // display name for @mentions. Used by the pod orchestration to narrate its work.
-import { and, asc, eq, gt, like } from "drizzle-orm";
+import { and, asc, eq, gt, like, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs, messages, users } from "@/lib/db";
 import { jobMarker, jobOutcomeText, type StoredMsg } from "./thread";
 
@@ -27,6 +27,20 @@ export async function listTeamMessages(userId: string, teamId: string, afterId =
   const rows = await getDb().select({ id: messages.id, who: messages.who, text: messages.text })
     .from(messages).where(afterId > 0 ? and(scope, gt(messages.id, afterId)) : scope).orderBy(asc(messages.id));
   return rows.map((r) => ({ id: r.id, who: r.who, text: r.text }));
+}
+
+/** Per conversation: the newest message id and how many agent messages came
+ *  after the id in `seen`. A conversation not in `seen` counts 0 unread, so the
+ *  caller can mark it read from `lastId`. One grouped query for the sidebar poll. */
+export async function chatUnread(userId: string, seen: Record<string, number>): Promise<Record<string, { lastId: number; unread: number }>> {
+  if (!isDbConfigured()) return {};
+  const seenJson = JSON.stringify(seen);
+  const rows = await getDb().select({
+    conv: messages.agentId,
+    lastId: sql<number>`max(${messages.id})`,
+    unread: sql<number>`count(*) filter (where ${messages.who} <> 'me' and ${messages.id} > coalesce((${seenJson}::jsonb ->> ${messages.agentId})::int, 2147483647))`,
+  }).from(messages).where(eq(messages.userId, userId)).groupBy(messages.agentId);
+  return Object.fromEntries(rows.map((r) => [r.conv, { lastId: Number(r.lastId), unread: Number(r.unread) }]));
 }
 
 /** Once a job the user started from this thread has ended, post its outcome

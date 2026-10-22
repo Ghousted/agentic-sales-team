@@ -26,11 +26,13 @@ vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => [])
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []) }));
 vi.mock("@/lib/chat/teamMessages", () => ({ postTeamMessage: vi.fn(async () => {}), userFirstName: vi.fn(async () => "Sam") }));
 
-import { enqueuePodStage } from "@/lib/pod/orchestrate";
+import { chainNext, enqueuePodStage } from "@/lib/pod/orchestrate";
+import { membersOfTeam } from "@/lib/teams/membership";
+import { postTeamMessage } from "@/lib/chat/teamMessages";
 
 const agentRow = { id: "a1", userId: "u1", name: "Ann", role: "", goal: "", task: "", capabilities: ["research"] };
 
-beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; });
+beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; vi.mocked(postTeamMessage).mockClear(); });
 
 describe("enqueuePodStage", () => {
   it("still skips when the team has a live running job for the stage", async () => {
@@ -44,6 +46,36 @@ describe("enqueuePodStage", () => {
     const dead = { id: "j", kind: "research", status: "running", startedAt: new Date(Date.now() - 30 * 60_000), params: { teamId: "t1" } };
     fake.state.selects = [[dead], [agentRow], []];
     await enqueuePodStage("u1", "t1", "research", "a1");
+    expect(fake.state.inserts).toHaveLength(1);
+  });
+});
+
+describe("chainNext", () => {
+  const scout = { ...agentRow, id: "s1", name: "Leo Scout", capabilities: ["scrape"] };
+  const assessor = { ...agentRow, id: "as1", name: "Ava", capabilities: ["assess"] };
+
+  it("stops the chain when the stage moved 0 leads forward", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["s1", "as1"]);
+    // agentInfo(s1) for memberWithCapability, then again for the finisher.
+    fake.state.selects = [[scout], [], [], [scout], [], []];
+    await chainNext("u1", "t1", "scrape", 0);
+    expect(fake.state.inserts).toHaveLength(0);
+    expect(postTeamMessage).toHaveBeenCalledOnce();
+    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toMatch(/^@Sam, I found no new leads.*I stopped the chain here\.$/);
+  });
+
+  it("hands a scrape with leads to the assessor", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["s1", "as1"]);
+    fake.state.selects = [
+      [scout], [], [],            // memberWithCapability(scrape)
+      [scout], [], [],            // finisher
+      [scout], [], [], [assessor], [], [], // memberWithCapability(assess)
+      [assessor], [], [],         // assessor info for the hand-off line
+      [],                         // enqueuePodStage: no active jobs
+      [assessor], [], [],         // enqueuePodStage: agentInfo
+      [],                         // approvalMode
+    ];
+    await chainNext("u1", "t1", "scrape", 3);
     expect(fake.state.inserts).toHaveLength(1);
   });
 });

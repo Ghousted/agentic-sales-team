@@ -7,7 +7,7 @@ import { agentInfo } from "@/lib/pod/orchestrate";
 import { detectIntent } from "@/lib/ai/intent";
 import { resolve, parseMentions, type ChatOutMsg } from "./orchestrate";
 import { enqueueJob } from "@/lib/jobs/actions";
-import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutcome } from "./teamMessages";
+import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutcome, chatUnread } from "./teamMessages";
 import { sinceLastUserMessage, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
@@ -268,6 +268,19 @@ export async function listTeamMessages(teamId: string, afterId = 0): Promise<Sto
   const s = await getSession();
   if (!s?.userId) return [];
   return _listTeamMessages(s.userId, teamId, afterId);
+}
+
+/** Unread agent messages per conversation for the sidebar. `seen` is the last
+ *  message id the user saw in each conversation. It comes from the client, so
+ *  keep only plain conversation ids and valid row ids. */
+export async function listChatUnread(seen: Record<string, number>): Promise<Record<string, { lastId: number; unread: number }>> {
+  const s = await getSession();
+  if (!s?.userId) return {};
+  const clean: Record<string, number> = {};
+  for (const [id, n] of Object.entries(seen ?? {}).slice(0, 500)) {
+    if (/^[\w-]{1,64}$/.test(id) && Number.isSafeInteger(n) && n >= 0 && n <= 2147483647) clean[id] = n;
+  }
+  return chatUnread(s.userId, clean);
 }
 
 /** Post a job's outcome into the thread once it has ended (idempotent), and

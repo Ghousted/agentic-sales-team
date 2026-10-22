@@ -52,4 +52,25 @@ describe("runFirecrawlScrape", () => {
     const leads = await runFirecrawlScrape(agent, 10);
     expect(leads).toEqual([{ name: "u/buyer", title: "wants a house", company: "", profileUrl: searchHit.url, platform: "Reddit", email: "" }]);
   });
+
+  it("searches every planned buyer-voice query on each site", async () => {
+    ai.aiJSON
+      .mockResolvedValueOnce({ queries: ["looking for corporate training", "recommend a trainer for our team", "need leadership training"], platform: "web" })
+      .mockResolvedValueOnce({ prospects: [] });
+    await runFirecrawlScrape(agent, 10, "find b2b businesses I can train");
+    const queries = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string).query);
+    expect(queries).toHaveLength(6);
+    expect(queries).toContain("site:facebook.com recommend a trainer for our team");
+    expect(queries).toContain("site:reddit.com need leadership training");
+  });
+
+  it("keeps the results of the searches that worked when one search fails", async () => {
+    ai.aiJSON
+      .mockResolvedValueOnce({ queries: ["looking for corporate training"], platform: "web" })
+      .mockResolvedValueOnce({ prospects: [{ name: "u/buyer", title: "needs training", company: "", profileUrl: searchHit.url, platform: "web", email: "" }] });
+    fetchMock.mockRejectedValueOnce(new Error("Firecrawl 500"));
+    const leads = await runFirecrawlScrape(agent, 10, "find b2b businesses I can train");
+    expect(leads).toHaveLength(1);
+  });
 });
+

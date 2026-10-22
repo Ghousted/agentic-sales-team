@@ -66,26 +66,36 @@ async function firecrawlSearch(query: string, limit: number): Promise<SearchResu
 
 const PLAN_SCHEMA = {
   type: "object",
-  properties: { query: { type: "string" }, platform: { type: "string" } },
-  required: ["query", "platform"],
+  properties: { queries: { type: "array", items: { type: "string" } }, platform: { type: "string" } },
+  required: ["queries", "platform"],
 } as const;
 
-/** Turn the user's free-text instruction into ONE web search query aimed at BUYER
- * posts. The instruction IS the targeting (what/who/where). Platform-aware. */
-async function planSearch(instruction: string, agentGoal: string): Promise<{ query: string; platform: string }> {
-  const fallback = { query: buildQuery(agentGoal), platform: "web" };
+/** How many buyer-voice searches the planner writes. One search copied the
+ *  salesperson's words ("b2b businesses need training") and matched only other
+ *  sellers, so the scrape found 0 leads. */
+const PLAN_QUERIES = 3;
+
+/** Turn the user's free-text instruction into buyer-voice web searches aimed at
+ * BUYER posts. The instruction IS the targeting (what/who/where). Platform-aware. */
+async function planSearch(instruction: string, agentGoal: string): Promise<{ queries: string[]; platform: string }> {
+  const fallback = { queries: [buildQuery(agentGoal)], platform: "web" };
   if (!isAIConfigured()) return fallback;
   const system = [
-    "You write ONE simple web search in the BUYER'S OWN VOICE to surface PUBLIC POSTS where a potential buyer shows intent. Use the phrases people actually post: 'looking to buy', 'LF' (looking for), 'want to buy', 'anyone selling', 'recommend a', 'need a'.",
-    "Compose it from the specifics in the instruction (what they want, and any location).",
-    "Do NOT use seller jargon like 'buyers', 'leads', or 'prospects'. Buyers never write that (it matches broker ads). Do NOT add a site: filter (that's added separately). Do NOT use negative operators ('-word').",
+    "The instruction comes from a SALESPERSON. It says what they sell and who they want to sell to.",
+    "Write web searches that find PUBLIC POSTS by the people who would BUY it. Write each search in the BUYER'S OWN VOICE: the words a buyer posts when they ask for help or a recommendation ('looking for', 'recommend a', 'need a', 'any recommendations for', 'want to buy').",
+    "Translate the offering into the buyer's need. Do NOT copy the salesperson's words. Example: a salesperson who 'provides training to b2b businesses' needs posts like 'recommend a corporate training provider for our team' or 'looking for leadership training for our managers'.",
+    "When the buyer is a business, write as an owner, manager or HR person who speaks for the company ('our team', 'our employees', 'our staff').",
+    `Write ${PLAN_QUERIES} DIFFERENT searches. Each search looks at a different angle of the need. Keep each search short (4 to 9 words). Use the specifics in the instruction (what, who and any location).`,
+    "Do NOT use seller words like 'buyers', 'leads', 'prospects', 'b2b' or 'clients'. Buyers do not write them. Do NOT add a site: filter. Do NOT use negative operators ('-word').",
     agentGoal ? `Salesperson focus (context only): ${agentGoal}.` : "",
-    "platform: return a specific site ONLY if the instruction explicitly names one ('facebook'|'reddit'|'linkedin'|'x'); otherwise 'web'.",
-    "Return JSON { query, platform }.",
+    "platform: return a specific site ONLY if the instruction names one ('facebook'|'reddit'|'linkedin'|'x'). Otherwise return 'web'.",
+    "Return JSON { queries, platform }.",
   ].filter(Boolean).join("\n");
   try {
-    const r = await aiJSON<{ query: string; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 200, temperature: 0.15 });
-    return { query: (r.query || fallback.query).slice(0, 490), platform: (r.platform || "web").toLowerCase() };
+    const r = await aiJSON<{ queries: string[]; platform: string }>(system, [{ role: "user", text: instruction }], PLAN_SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.15 });
+    const queries = (Array.isArray(r.queries) ? r.queries : [])
+      .map((q) => String(q ?? "").trim().slice(0, 490)).filter(Boolean).slice(0, PLAN_QUERIES);
+    return { queries: queries.length ? queries : fallback.queries, platform: (r.platform || "web").toLowerCase() };
   } catch {
     return fallback;
   }
@@ -116,7 +126,7 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
   const corpus = results
     .map((r) => `SOURCE_URL: ${r.url ?? ""}\nTITLE: ${r.title ?? ""}\nSNIPPET: ${(r.description ?? "").slice(0, 600)}\n${(r.markdown ?? "").slice(0, 2000)}`)
     .join("\n\n---\n\n")
-    .slice(0, 22000);
+    .slice(0, 40000); // room for every search's snippets (3 queries x 2 sites)
   const system = [
     "You turn PUBLIC posts/listings into SALES LEADS. A lead is a person the salesperson can contact.",
     `The salesperson is looking for: ${targetDesc}.`,
@@ -158,20 +168,35 @@ export async function runFirecrawlScrape(
   const targetDesc = instruction?.trim() || agent.goal || "potential customers";
   const plan = instruction?.trim()
     ? await planSearch(instruction.trim(), agent.goal)
-    : { query: buildQuery(agent.goal), platform: "web" };
+    : { queries: [buildQuery(agent.goal)], platform: "web" };
   // Buyer-intent posts are on social/community sites. Plain web returns seller
-  // listings/ads. Always search Facebook first, then Reddit after.
+  // listings/ads. Search Facebook first, then Reddit, for every query.
   const sites = ["facebook.com", "reddit.com"];
   const per = Math.max(4, Math.min(target, 8));
+  const searches = plan.queries.flatMap((q) => sites.map((site) => `site:${site} ${q}`));
+  // Run the searches in parallel to stay inside the scrape deadline. One failed
+  // search does not stop the others. When all searches fail, report the first error.
+  const settled = await Promise.allSettled(searches.map((q) => firecrawlSearch(q, per)));
+  const failed = settled.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed.length === settled.length && failed.length) throw failed[0].reason;
   const seen = new Set<string>();
   const results: SearchResult[] = [];
-  for (const site of sites) {
-    const rs = await firecrawlSearch(`site:${site} ${plan.query}`, per);
-    for (const r of rs) if (r.url && !seen.has(r.url)) { seen.add(r.url); results.push(r); }
+  for (const r of settled) {
+    if (r.status !== "fulfilled") continue;
+    for (const hit of r.value) if (hit.url && !seen.has(hit.url)) { seen.add(hit.url); results.push(hit); }
   }
   const sells = [agent.role, agent.goal].filter(Boolean).join(". "); // seller context, to exclude competitors
   const prospects = await extractProspects(targetDesc, sells, results, target, plan.platform);
   return normalizeProspects(prospects, results.map((r) => r.url));
+}
+
+/** The model sometimes turns the subreddit in the URL into a fake handle
+ *  ("u/Training" from r/Training), although the prompt forbids it. A subreddit is
+ *  not a person, so use the source label instead. */
+function subredditAsUser(name: string, url: string): string {
+  const handle = name.match(/^u\/([\w-]+)$/i)?.[1];
+  const sub = url.match(/reddit\.com\/r\/([\w-]+)/i)?.[1];
+  return handle && sub && handle.toLowerCase() === sub.toLowerCase() ? `Reddit user · r/${sub}` : name;
 }
 
 /** Derive platform from the source URL, and keep a profileUrl only when it is one
@@ -183,7 +208,7 @@ export function normalizeProspects(prospects: Prospect[], sourceUrls: (string | 
     const url = safeHttpUrl(p.profileUrl);
     const profileUrl = url && allowed.has(url) ? url : "";
     return {
-      name: p.name, title: p.title ?? "", company: p.company ?? "",
+      name: subredditAsUser(p.name, profileUrl), title: p.title ?? "", company: p.company ?? "",
       profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || p.platform || "web", email: p.email ?? "",
     };
   });

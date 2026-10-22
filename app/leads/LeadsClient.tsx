@@ -43,14 +43,21 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   const [booking, setBooking] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null); // lead id armed for delete
   const delTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState<"accept" | "dismiss" | null>(null); // bulk review armed
+  const bulkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bookMeetingNow = async () => {
     if (!openLead || !bookingWhen.trim() || booking) return;
     setBooking(true);
-    const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
-    setBooking(false);
-    if (res.error) { showToast(res.error); return; }
-    showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
-    setBookingWhen("");
+    try {
+      const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
+      if (res.error || !res.ok) { showToast(res.error || "Couldn't book the meeting"); return; }
+      showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
+      setBookingWhen("");
+    } catch {
+      showToast("Couldn't book the meeting");
+    } finally {
+      setBooking(false);
+    }
   };
   const openLeadDetail = useCallback(async (l: LeadDTO) => {
     setOpenLead(l); setLeadMatches([]); setLeadDrafts([]); setBookingWhen(""); setDetailLoading(true);
@@ -62,17 +69,27 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
 
   const clearLeadDrafts = useCallback(async (leadId: string) => {
     setLeadDrafts([]);
-    const n = await clearDraftsForLead(leadId);
-    if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+    try {
+      const n = await clearDraftsForLead(leadId);
+      if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
+    } catch {
+      showToast("Couldn't clear drafts");
+      setLeadDrafts(await listDraftsForLead(leadId).catch(() => []));
+    }
   }, [showToast]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const [rows, cands] = await Promise.all([listLeadsAction(), listCandidates()]);
-    setLeads(rows);
-    setCandidates(cands);
-    setLoading(false);
-  }, []);
+    try {
+      const [rows, cands] = await Promise.all([listLeadsAction(), listCandidates()]);
+      setLeads(rows);
+      setCandidates(cands);
+    } catch {
+      showToast("Couldn't refresh leads");
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   const filtered = useMemo(
     () => leads.filter((l) => (!fAgent || l.agentId === fAgent) && (!fStage || l.status === fStage)),
@@ -86,7 +103,12 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const a = agentId ? byId(agentId) : undefined;
     if (!agentId) { showToast("Create an agent first, then import."); return; }
     showToast("Importing…");
-    const res = await importLeadsCsv(await file.text(), agentId);
+    let res: Awaited<ReturnType<typeof importLeadsCsv>>;
+    try {
+      res = await importLeadsCsv(await file.text(), agentId);
+    } catch {
+      res = { added: 0, error: "Import failed" };
+    }
     if (fileRef.current) fileRef.current.value = "";
     if (res.error) { showToast(res.error); return; }
     showToast(`Imported ${res.added} lead${res.added === 1 ? "" : "s"}${a ? " for " + a.name.split(" ")[0] : ""}`);
@@ -96,7 +118,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   const submitAdd = async () => {
     const agentId = form.agentId || agents[0]?.id;
     if (!form.name.trim() || !form.email.trim() || !agentId) { showToast("Name, email, and agent are required"); return; }
-    await addLeadAction({ agentId, name: form.name, title: form.title, company: form.company, email: form.email });
+    const added = await addLeadAction({ agentId, name: form.name, title: form.title, company: form.company, email: form.email }).catch(() => null);
+    if (!added) { showToast("Couldn't add the lead"); return; }
     setForm({ name: "", title: "", company: "", email: "", agentId: "" });
     setShowAdd(false);
     showToast("Lead added");
@@ -105,9 +128,27 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
 
   const review = async (ids: string[], accept: boolean) => {
     if (!ids.length) return;
-    if (accept) await acceptLeads(ids); else await dismissLeads(ids);
-    showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
+    try {
+      if (accept) await acceptLeads(ids); else await dismissLeads(ids);
+      showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
+    } catch {
+      showToast(accept ? "Couldn't accept leads" : "Couldn't dismiss leads");
+    }
     refetch();
+  };
+
+  // Two-click bulk review, same pattern as delete: first click arms
+  // ("Accept 12?"), second click within 3s applies it to every candidate.
+  const reviewAll = (accept: boolean) => {
+    const kind = accept ? "accept" : "dismiss";
+    if (bulkTimer.current) clearTimeout(bulkTimer.current);
+    if (confirmBulk !== kind) {
+      setConfirmBulk(kind);
+      bulkTimer.current = setTimeout(() => setConfirmBulk(null), 3000);
+      return;
+    }
+    setConfirmBulk(null);
+    review(candidates.map((c) => c.id), accept);
   };
 
   // Enqueue an outreach run, kick the runner (cookies flow with the browser
@@ -116,17 +157,21 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const a = byId(agentId);
     if (!a) return;
     setRunning(leadIds ? leadIds[0] : agentId);
-    const res = await enqueueOutreachJob({
-      agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
-      leadIds,
-    });
-    if ("error" in res) { showToast(res.error); setRunning(null); return; }
     try {
+      const res = await enqueueOutreachJob({
+        agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
+        leadIds,
+      });
+      if ("error" in res) { showToast(res.error); return; }
       const r = await fetch("/api/jobs/run", { method: "POST" });
+      if (!r.ok) throw new Error("run " + r.status);
       const j = await r.json();
       showToast(j.drafts ? j.drafts + " draft" + (j.drafts === 1 ? "" : "s") + " created" : "No new drafts");
-    } catch { showToast("Run failed"); }
-    setRunning(null);
+    } catch {
+      showToast("Run failed");
+    } finally {
+      setRunning(null);
+    }
     refetch();
   };
 
@@ -134,7 +179,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     const idx = LEAD_STAGES.indexOf(l.status as (typeof LEAD_STAGES)[number]);
     const next = LEAD_STAGES[Math.min(LEAD_STAGES.length - 1, idx + 1)];
     if (next === l.status) return;
-    await setStageAction(l.id, next);
+    try {
+      await setStageAction(l.id, next);
+    } catch {
+      showToast("Couldn't change the stage");
+    }
     refetch();
   };
 
@@ -148,7 +197,12 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       return;
     }
     setConfirmDel(null);
-    await deleteLeads([l.id]);
+    try {
+      await deleteLeads([l.id]);
+    } catch {
+      showToast("Couldn't delete the lead");
+      return;
+    }
     if (openLead?.id === l.id) setOpenLead(null);
     showToast("Lead deleted");
     refetch();
@@ -264,8 +318,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
             <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates. Accept the good ones.</div>
             {candidates.length > 0 && (<>
-              <Btn onClick={() => review(candidates.map((c) => c.id), true)} style="margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Accept all</Btn>
-              <Btn onClick={() => review(candidates.map((c) => c.id), false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Dismiss all</Btn>
+              <Btn onClick={() => reviewAll(true)} style={"margin-left:auto;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (confirmBulk === "accept" ? "background:#0052CC" : "background:#006AFF")} styleHover="background:#0052CC">{confirmBulk === "accept" ? `Accept ${candidates.length}?` : "Accept all"}</Btn>
+              <Btn onClick={() => reviewAll(false)} style={"border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (confirmBulk === "dismiss" ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#3F3F46")} styleHover={confirmBulk === "dismiss" ? "background:#F9D4D4" : "background:#E4E4E7"}>{confirmBulk === "dismiss" ? `Dismiss ${candidates.length}?` : "Dismiss all"}</Btn>
             </>)}
           </div>
           {loading ? (

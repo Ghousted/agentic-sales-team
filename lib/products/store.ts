@@ -45,6 +45,17 @@ export async function deleteFolder(userId: string, id: string): Promise<void> {
   await getDb().delete(productFolders).where(and(eq(productFolders.userId, userId), eq(productFolders.id, id)));
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when folderId is null (no folder) or a folder in this workspace. */
+async function ownsFolder(userId: string, folderId: string | null | undefined): Promise<boolean> {
+  if (folderId == null) return true;
+  if (typeof folderId !== "string" || !UUID_RE.test(folderId)) return false;
+  const [row] = await getDb().select({ id: productFolders.id }).from(productFolders)
+    .where(and(eq(productFolders.userId, userId), eq(productFolders.id, folderId))).limit(1);
+  return !!row;
+}
+
 // ----- Products -----
 export async function listProducts(userId: string, folderId?: string | null): Promise<ProductDTO[]> {
   if (!isDbConfigured()) return [];
@@ -59,6 +70,7 @@ const notIndexed = (n: number, reason: string) =>
 /** Saves the product even when embedding fails; `warning` then says it is keyword search only. */
 export async function addProduct(userId: string, input: ProductInput): Promise<(ProductDTO & { warning?: string }) | null> {
   if (!isDbConfigured() || !input.name?.trim()) return null;
+  if (!(await ownsFolder(userId, input.folderId))) return null;
   let embedding: number[] | null = null;
   let warning: string | undefined;
   try {
@@ -82,6 +94,7 @@ export async function deleteProduct(userId: string, id: string): Promise<void> {
 /** Move a product into a folder (or out of any folder when folderId is null). */
 export async function setProductFolder(userId: string, id: string, folderId: string | null): Promise<void> {
   if (!isDbConfigured()) return;
+  if (!(await ownsFolder(userId, folderId))) return;
   await getDb().update(products).set({ folderId }).where(and(eq(products.userId, userId), eq(products.id, id)));
 }
 
@@ -118,6 +131,7 @@ const FIELD_ALIASES: Record<string, "name" | "description" | "price" | "category
 
 export async function importProductsCsv(userId: string, csvText: string, folderId?: string | null): Promise<ImportResult> {
   if (!isDbConfigured()) return { added: 0, error: "Server not configured." };
+  if (!(await ownsFolder(userId, folderId))) return { added: 0, error: "That folder doesn't exist." };
   const parsed = parseCsv(csvText).slice(0, 200); // bounded import
   const inputs: ProductInput[] = [];
   for (const row of parsed) {
@@ -141,7 +155,8 @@ export async function importProductsCsv(userId: string, csvText: string, folderI
     await getDb().insert(products).values(values);
     return missing ? { added: values.length, warning: notIndexed(missing, embedError ?? "unknown error") } : { added: values.length };
   } catch (e) {
-    return { added: 0, error: "Import failed: " + String(e).slice(0, 150) };
+    console.error("[products] import insert failed:", e);
+    return { added: 0, error: "Import failed. Please try again." };
   }
 }
 

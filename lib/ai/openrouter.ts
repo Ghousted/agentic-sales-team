@@ -50,12 +50,16 @@ async function chat(body: Record<string, unknown>, timeoutMs = GEN_TIMEOUT_MS): 
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`OpenRouter ${res.status}: ${detail.slice(0, 300)}`);
+    // The body can carry provider details; log it here and keep it out of job errors and replies.
+    console.error(`[openrouter] chat ${res.status}:`, (await res.text().catch(() => "")).slice(0, 500));
+    throw new Error(`OpenRouter ${res.status}`);
   }
   const data = await res.json();
   // OpenRouter can answer 200 with an error object when the upstream provider fails.
-  if (data?.error) throw new Error(`OpenRouter: ${data.error.message || JSON.stringify(data.error).slice(0, 300)}`);
+  if (data?.error) {
+    console.error("[openrouter] chat error:", JSON.stringify(data.error).slice(0, 500));
+    throw new Error("OpenRouter returned an error.");
+  }
   const text: string | undefined = data?.choices?.[0]?.message?.content;
   return text?.trim() ?? "";
 }
@@ -124,11 +128,14 @@ async function embedFetch(texts: string[], inputType: EmbedTask): Promise<unknow
     signal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
   });
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`OpenRouter embed ${res.status}: ${detail.slice(0, 300)}`);
+    console.error(`[openrouter] embed ${res.status}:`, (await res.text().catch(() => "")).slice(0, 500));
+    throw new Error(`OpenRouter embed ${res.status}`);
   }
   const data = await res.json();
-  if (data?.error) throw new Error(`OpenRouter embed: ${data.error.message || JSON.stringify(data.error).slice(0, 300)}`);
+  if (data?.error) {
+    console.error("[openrouter] embed error:", JSON.stringify(data.error).slice(0, 500));
+    throw new Error("OpenRouter embed returned an error.");
+  }
   const out: unknown[] = new Array(texts.length).fill(undefined);
   for (const d of data?.data ?? []) out[d.index ?? 0] = d.embedding;
   return out;

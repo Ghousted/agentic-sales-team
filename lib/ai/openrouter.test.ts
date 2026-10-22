@@ -49,9 +49,20 @@ describe("aiGenerate", () => {
     fetchMock.mockResolvedValueOnce(new Response("no credits", { status: 402 }));
     await expect(aiGenerate("s", [])).rejects.toThrow(/402/);
     fetchMock.mockResolvedValueOnce(ok({ error: { message: "upstream down" } }));
-    await expect(aiGenerate("s", [])).rejects.toThrow(/upstream down/);
+    await expect(aiGenerate("s", [])).rejects.toThrow(/returned an error/);
     fetchMock.mockResolvedValueOnce(reply(""));
     await expect(aiGenerate("s", [])).rejects.toThrow(/no text/);
+  });
+
+  it("logs the provider's error body but keeps it out of the thrown message", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce(new Response("acct sk-or-123 has no credits", { status: 402 }));
+    const err = await aiGenerate("s", []).catch((e: Error) => e);
+    expect(String(err)).toBe("Error: OpenRouter 402");
+    fetchMock.mockResolvedValueOnce(ok({ error: { message: "provider said: secret detail" } }));
+    expect(String(await aiGenerate("s", []).catch((e: Error) => e))).not.toMatch(/secret detail/);
+    expect(log.mock.calls.flat().join(" ")).toMatch(/sk-or-123[\s\S]*secret detail/);
+    log.mockRestore();
   });
 
   it("throws when the key is missing, without calling out", async () => {
@@ -94,8 +105,10 @@ describe("aiEmbed", () => {
   });
 
   it("throws on an API error and on a vector that does not fit the column", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockResolvedValueOnce(new Response("model not found", { status: 404 }));
-    await expect(aiEmbed("x")).rejects.toThrow(/404/);
+    await expect(aiEmbed("x")).rejects.toThrow(/^OpenRouter embed 404$/);
+    log.mockRestore();
     fetchMock.mockResolvedValueOnce(embeddings(1, 3072));
     await expect(aiEmbed("x")).rejects.toThrow(/3072 dims/);
   });

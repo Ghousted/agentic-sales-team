@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // A tiny in-memory stand-in for the Drizzle client: enough of select/insert/update/delete
 // for the auth actions, recording every write so tests can assert none happened.
 const h = vi.hoisted(() => {
-  const users = { _: "users", id: "users.id", email: "users.email" };
+  const users = { _: "users", id: "users.id", email: "users.email", sessionVersion: "users.sessionVersion" };
+  // What the mocked sql`${col} + 1` returns; update() applies it as an increment.
+  const INCREMENT = { increment: true };
   const passwordResetTokens = { _: "password_reset_tokens", token: "prt.token", userId: "prt.userId", expiresAt: "prt.expiresAt" };
   const state = {
     users: [] as Array<Record<string, unknown>>,
@@ -33,7 +35,11 @@ const h = vi.hoisted(() => {
       set: (v: Record<string, unknown>) => ({
         where: async (cond: Cond) => {
           state.writes.push("update:" + table._);
-          rowsFor(table).filter(match(cond)).forEach((r) => Object.assign(r, v));
+          rowsFor(table)
+            .filter(match(cond))
+            .forEach((r) => {
+              for (const [k, val] of Object.entries(v)) r[k] = val === INCREMENT ? Number(r[k]) + 1 : val;
+            });
         },
       }),
     }),
@@ -45,19 +51,20 @@ const h = vi.hoisted(() => {
       },
     }),
   };
-  return { users, passwordResetTokens, state, db };
+  return { users, passwordResetTokens, state, db, INCREMENT };
 });
 
-vi.mock("drizzle-orm", () => ({ eq: (col: string, value: unknown) => ({ col, value }) }));
+vi.mock("drizzle-orm", () => ({ eq: (col: string, value: unknown) => ({ col, value }), sql: () => h.INCREMENT }));
 vi.mock("@/lib/db", () => ({
   getDb: () => h.db,
   isDbConfigured: () => true,
   users: h.users,
   passwordResetTokens: h.passwordResetTokens,
 }));
-vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn() }));
+vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn(), revokeSessions: vi.fn() }));
 
-import { requestPasswordReset, resetPassword, signIn, validateResetToken } from "./actions";
+import { requestPasswordReset, resetPassword, signIn, signOut, validateResetToken } from "./actions";
+import { createSession, destroySession, getSession, revokeSessions } from "./session";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const HOUR = 60 * 60 * 1000;
@@ -66,7 +73,8 @@ beforeEach(async () => {
   h.state.users.splice(0);
   h.state.tokens.splice(0);
   h.state.writes.splice(0);
-  h.state.users.push({ id: "u1", email: "alice@example.com", name: "Alice", workspaceName: "W", notifications: {}, passwordHash: await bcrypt.hash("right-password", 4) });
+  vi.clearAllMocks();
+  h.state.users.push({ id: "u1", email: "alice@example.com", name: "Alice", workspaceName: "W", notifications: {}, sessionVersion: 2, passwordHash: await bcrypt.hash("right-password", 4) });
 });
 
 describe("requestPasswordReset", () => {
@@ -96,6 +104,27 @@ describe("signIn", () => {
     expect(unknown.ok).toBe(false);
     expect(unknown.error).toBe(wrong.error);
   });
+
+  it("stamps the session with the user's current session version", async () => {
+    expect((await signIn({ email: "alice@example.com", password: "right-password" })).ok).toBe(true);
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", sessionVersion: 2 }));
+  });
+});
+
+describe("signOut", () => {
+  it("revokes the user's sessions everywhere, then clears the cookie", async () => {
+    vi.mocked(getSession).mockResolvedValue({ userId: "u1", email: "alice@example.com", name: "Alice", sessionVersion: 2 });
+    await signOut();
+    expect(revokeSessions).toHaveBeenCalledWith("u1");
+    expect(destroySession).toHaveBeenCalled();
+  });
+
+  it("still clears the cookie when there is no valid session", async () => {
+    vi.mocked(getSession).mockResolvedValue(null);
+    await signOut();
+    expect(revokeSessions).not.toHaveBeenCalled();
+    expect(destroySession).toHaveBeenCalled();
+  });
 });
 
 describe("reset tokens", () => {
@@ -115,6 +144,12 @@ describe("reset tokens", () => {
     h.state.tokens.push({ token: sha256("raw-token"), userId: "u1", expiresAt: new Date(Date.now() + HOUR) });
     expect((await resetPassword({ token: "raw-token", password: "new-password-1" })).ok).toBe(true);
     expect(h.state.tokens).toEqual([]);
+  });
+
+  it("resetPassword revokes every existing session", async () => {
+    h.state.tokens.push({ token: sha256("raw-token"), userId: "u1", expiresAt: new Date(Date.now() + HOUR) });
+    await resetPassword({ token: "raw-token", password: "new-password-1" });
+    expect(h.state.users[0].sessionVersion).toBe(3);
   });
 
   it("rejects an expired token", async () => {

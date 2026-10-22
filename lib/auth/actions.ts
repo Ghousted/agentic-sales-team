@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, users, passwordResetTokens } from "@/lib/db";
 import { createSession, destroySession, getSession, revokeSessions } from "./session";
+import { checkAuthLimit, clearAuthLimit } from "./rateLimit";
 
 // Reset tokens are stored as a SHA-256 hash, never in plain text. A row holding a
 // raw token from before hashing no longer matches, so old links stop working.
@@ -32,6 +33,8 @@ export async function signUp(input: { email: string; password: string; name?: st
   const password = input.password;
   if (!EMAIL_RE.test(email)) return { ok: false, error: "Enter a valid email address." };
   if (password.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const limited = await checkAuthLimit("signUp", email);
+  if (limited) return { ok: false, error: limited };
 
   const db = getDb();
   const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
@@ -52,6 +55,9 @@ export async function signIn(input: { email: string; password: string }): Promis
   if (!isDbConfigured()) return { ok: false, error: NOT_CONFIGURED };
   const email = input.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email) || !input.password) return { ok: false, error: "Enter your email and password." };
+  // Checked before the user lookup, so a blocked attempt says nothing about whether the account exists.
+  const limited = await checkAuthLimit("signIn", email);
+  if (limited) return { ok: false, error: limited };
 
   const db = getDb();
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -60,6 +66,7 @@ export async function signIn(input: { email: string; password: string }): Promis
     return { ok: false, error: "Incorrect email or password." };
   }
 
+  await clearAuthLimit("signIn", email);
   await createSession({ userId: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion });
   return { ok: true, user: { name: user.name, email: user.email, workspaceName: user.workspaceName, notifications: user.notifications } };
 }
@@ -83,6 +90,10 @@ export interface ResetRequestResult {
 export async function requestPasswordReset(input: { email: string }): Promise<ResetRequestResult> {
   const email = input.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return { ok: false, error: "Enter a valid email address." };
+  if (isDbConfigured()) {
+    const limited = await checkAuthLimit("resetRequest", email);
+    if (limited) return { ok: false, error: limited };
+  }
   return { ok: true };
 }
 
@@ -101,6 +112,8 @@ export async function validateResetToken(token: string): Promise<{ ok: boolean }
 export async function resetPassword(input: { token: string; password: string }): Promise<AuthResult> {
   if (!isDbConfigured()) return { ok: false, error: NOT_CONFIGURED };
   if (input.password.length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const limited = await checkAuthLimit("resetPassword");
+  if (limited) return { ok: false, error: limited };
 
   const db = getDb();
   const [row] = await db

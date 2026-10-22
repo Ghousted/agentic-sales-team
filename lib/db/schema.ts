@@ -8,6 +8,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   workspaceName: text("workspace_name").notNull().default("My Workspace"),
   notifications: jsonb("notifications").$type<Record<string, boolean>>().notNull().default({}),
+  // Stamped into every session token; bumping it (logout, password reset) revokes
+  // all of the user's existing sessions.
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

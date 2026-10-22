@@ -2,9 +2,9 @@
 // Auth server actions called from the client login form.
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, users, passwordResetTokens } from "@/lib/db";
-import { createSession, destroySession, getSession } from "./session";
+import { createSession, destroySession, getSession, revokeSessions } from "./session";
 
 // Reset tokens are stored as a SHA-256 hash, never in plain text. A row holding a
 // raw token from before hashing no longer matches, so old links stop working.
@@ -42,9 +42,9 @@ export async function signUp(input: { email: string; password: string; name?: st
   const [user] = await db
     .insert(users)
     .values({ email, name, passwordHash })
-    .returning({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications, id: users.id });
+    .returning({ name: users.name, email: users.email, workspaceName: users.workspaceName, notifications: users.notifications, id: users.id, sessionVersion: users.sessionVersion });
 
-  await createSession({ userId: user.id, email: user.email, name: user.name });
+  await createSession({ userId: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion });
   return { ok: true, user: { name: user.name, email: user.email, workspaceName: user.workspaceName, notifications: user.notifications } };
 }
 
@@ -60,11 +60,15 @@ export async function signIn(input: { email: string; password: string }): Promis
     return { ok: false, error: "Incorrect email or password." };
   }
 
-  await createSession({ userId: user.id, email: user.email, name: user.name });
+  await createSession({ userId: user.id, email: user.email, name: user.name, sessionVersion: user.sessionVersion });
   return { ok: true, user: { name: user.name, email: user.email, workspaceName: user.workspaceName, notifications: user.notifications } };
 }
 
+/** Sign out everywhere: the session version is bumped, so a copied or stolen
+ *  token stops working too, not just this browser's cookie. */
 export async function signOut(): Promise<void> {
+  const session = isDbConfigured() ? await getSession() : null;
+  if (session) await revokeSessions(session.userId);
   await destroySession();
 }
 
@@ -109,7 +113,11 @@ export async function resetPassword(input: { token: string; password: string }):
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
-  await db.update(users).set({ passwordHash }).where(eq(users.id, row.userId));
+  // Bumping the session version signs out every device holding the old password's sessions.
+  await db
+    .update(users)
+    .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, row.userId));
   await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, row.userId));
   return { ok: true };
 }

@@ -9,6 +9,8 @@ export interface SessionPayload {
   userId: string;
   email: string;
   name: string;
+  /** users.sessionVersion when the token was issued; getSession rejects a stale one. */
+  sessionVersion: number;
 }
 
 function secret(): Uint8Array {
@@ -30,7 +32,10 @@ export async function encodeSession(payload: SessionPayload): Promise<string> {
 export async function verifySession(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
-    return { userId: payload.userId as string, email: payload.email as string, name: payload.name as string };
+    // Tokens issued before sessionVersion existed carry no claim: read them as 0,
+    // the column's default, so they stay valid until the user's first bump.
+    const sessionVersion = typeof payload.sessionVersion === "number" ? payload.sessionVersion : 0;
+    return { userId: payload.userId as string, email: payload.email as string, name: payload.name as string, sessionVersion };
   } catch {
     return null;
   }

@@ -1,7 +1,7 @@
 import "server-only";
 // Matchmaker persistence: the lead pool for a match run, bulk insert of a lead's
 // matches, and the per-lead match list (joined to products for display).
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, isDbConfigured, matches, leads, products } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { teammatesOf } from "@/lib/teams/membership";
@@ -27,8 +27,8 @@ export interface MatchDTO {
 }
 
 /** Leads a match run should process: the given ids (own accepted leads, honored
- *  regardless of team book), or the agent's teammate-book accepted leads that
- *  don't have any match rows yet (idempotent re-runs), oldest first, capped. */
+ *  regardless of team book), or the agent's teammate-book accepted leads the
+ *  matchmaker hasn't run on yet (matchedAt unset), oldest first, capped. */
 export async function pickLeadsForMatch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
   if (!isDbConfigured()) return [];
   const db = getDb();
@@ -38,20 +38,22 @@ export async function pickLeadsForMatch(userId: string, agentId: string, leadIds
       .limit(batchSize);
   }
   const mates = await teammatesOf(userId, agentId);
-  const pool = await db.select().from(leads)
-    .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"))).orderBy(asc(leads.createdAt));
-  if (!pool.length) return [];
-  const poolIds = pool.map((l) => l.id);
-  const matched = await db.select({ leadId: matches.leadId }).from(matches)
-    .where(and(eq(matches.userId, userId), inArray(matches.leadId, poolIds)));
-  const has = new Set(matched.map((m) => m.leadId));
-  return pool.filter((l) => !has.has(l.id)).slice(0, batchSize);
+  return db.select().from(leads)
+    .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"), isNull(leads.matchedAt)))
+    .orderBy(asc(leads.createdAt)).limit(batchSize);
 }
 
-/** Persist a lead's matches (skip when empty). */
+/** Persist a lead's matches and stamp the lead matched in one batch, so the
+ *  queue moves on even when nothing fit. */
 export async function addMatches(userId: string, agentId: string, leadId: string, results: MatchResult[]): Promise<void> {
-  if (!isDbConfigured() || results.length === 0) return;
-  await getDb().insert(matches).values(results.map((m) => ({ userId, agentId, leadId, productId: m.productId, score: m.score, reason: m.reason })));
+  if (!isDbConfigured()) return;
+  const db = getDb();
+  const stamp = db.update(leads).set({ matchedAt: new Date() }).where(and(eq(leads.id, leadId), eq(leads.userId, userId)));
+  if (results.length === 0) { await stamp; return; }
+  await db.batch([
+    db.insert(matches).values(results.map((m) => ({ userId, agentId, leadId, productId: m.productId, score: m.score, reason: m.reason }))),
+    stamp,
+  ]);
 }
 
 /** A lead's matches joined to their listing details, best fit first. Session-scoped. */

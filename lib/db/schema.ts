@@ -135,6 +135,8 @@ export const leads = pgTable("leads", {
   research: jsonb("research").$type<{ summary: string; priorities: string[]; hooks: string[]; angle: string }>(),
   // Set by the qualify stage. Separate from `score`, which assess and outreach also write.
   qualifiedAt: timestamp("qualified_at", { withTimezone: true }),
+  // Set when the matchmaker has run on the lead, whether or not anything fit.
+  matchedAt: timestamp("matched_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

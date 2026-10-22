@@ -116,8 +116,9 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         await eachLead(batch, "match", async (lead) => {
           const listings = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 8);
           const m = await matchLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, listings);
+          if (!m) return; // couldn't run: the lead stays unstamped for a later run
           await addMatches(userId, params.agent.id, lead.id, m);
-          created++;
+          if (m.length) created++; // only leads with at least one match count as matched
         });
         await done({ matched: created, failed });
       } else if (candidate.kind === "assess") {

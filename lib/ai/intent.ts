@@ -5,8 +5,10 @@ import "server-only";
 // still route instead of all reading as small talk.
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
 
+const CAPABILITIES = ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "assess", "status", "chat", "unknown"] as const;
+
 export interface Intent {
-  capability: "scrape" | "research" | "outreach" | "follow-up" | "book-meeting" | "qualify" | "proposal" | "enrich" | "match" | "assess" | "status" | "chat" | "unknown";
+  capability: (typeof CAPABILITIES)[number];
   params: { industry?: string; titles?: string; geo?: string; target?: number };
   summary: string;
 }
@@ -14,7 +16,7 @@ export interface Intent {
 const SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string", enum: ["scrape", "research", "outreach", "follow-up", "book-meeting", "qualify", "proposal", "enrich", "match", "assess", "status", "chat", "unknown"] },
+    capability: { type: "string", enum: CAPABILITIES },
     params: {
       type: "object",
       properties: { industry: { type: "string" }, titles: { type: "string" }, geo: { type: "string" }, target: { type: "integer" } },
@@ -87,7 +89,8 @@ export async function detectIntent(message: string, agents: { name: string; capa
   try {
     const r = await aiJSON<Intent>(systemPrompt(agents), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 400, temperature: 0.2 });
     return {
-      capability: r.capability ?? "unknown",
+      // The schema enum is only a hint, so anything outside it becomes unknown.
+      capability: CAPABILITIES.includes(r.capability) ? r.capability : "unknown",
       params: r.params ?? {},
       summary: (r.summary ?? message.slice(0, 60)).trim(),
     };

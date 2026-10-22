@@ -92,7 +92,10 @@ describe("detectIntent", () => {
     expect((await detectIntent(msg, agents)).capability).toBe(cap);
   });
 
-  // The schema enum is only a hint (strict: false), and detectIntent passes the
-  // value through unchecked, so an out-of-enum capability reaches the caller.
-  it.todo("maps a capability outside the enum to unknown");
+  it("maps a capability outside the enum, or a missing one, to unknown", async () => {
+    fetchMock.mockResolvedValueOnce(reply({ capability: "delete-everything", params: {}, summary: "x" }));
+    expect((await detectIntent("wipe the leads", agents)).capability).toBe("unknown");
+    fetchMock.mockResolvedValueOnce(reply({ params: {}, summary: "x" }));
+    expect((await detectIntent("wipe the leads", agents)).capability).toBe("unknown");
+  });
 });

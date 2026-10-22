@@ -3,7 +3,7 @@ import "server-only";
 // enqueue or chain pod-stage jobs. Server-only. No engine work here — it wires
 // the existing capability jobs into an auto-handed-off pipeline.
 import { and, eq, inArray } from "drizzle-orm";
-import { getDb, isDbConfigured, agents, agentConfig, jobs } from "@/lib/db";
+import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { pickLeadsForResearch, pickLeadsForRun, pickLeadsForQualify, pickLeadsForAssess } from "@/lib/leads/store";
@@ -42,14 +42,21 @@ function finalAction(cap: string): string {
   }
 }
 
-/** Merge the static seed roster + the user's created agents to look one up. */
+/** The agent as this user has it now: the static seed roster or the user's
+ *  created agents, with the user's role/goal edits applied. Null when the agent
+ *  is unknown, removed or paused, so it gets no chat routing and no pod stages. */
 export async function agentInfo(userId: string, agentId: string): Promise<AgentInfo | null> {
   const seed = AGENTS_BASE.find((a) => a.id === agentId);
-  if (seed) return { id: seed.id, name: seed.name, role: seed.role, goal: seed.goal, task: seed.task, capabilities: seed.capabilities };
-  if (!isDbConfigured()) return null;
-  const [row] = await getDb().select().from(agents).where(and(eq(agents.userId, userId), eq(agents.id, agentId))).limit(1);
-  if (!row) return null;
-  return { id: row.id, name: row.name, role: row.role, goal: row.goal, task: row.task, capabilities: row.capabilities };
+  if (!isDbConfigured()) return seed ? { id: seed.id, name: seed.name, role: seed.role, goal: seed.goal, task: seed.task, capabilities: seed.capabilities } : null;
+  const db = getDb();
+  const [created, [state], [cfg]] = await Promise.all([
+    seed ? Promise.resolve([]) : db.select().from(agents).where(and(eq(agents.userId, userId), eq(agents.id, agentId))).limit(1),
+    db.select().from(agentStates).where(and(eq(agentStates.userId, userId), eq(agentStates.agentId, agentId))).limit(1),
+    db.select().from(agentConfig).where(and(eq(agentConfig.userId, userId), eq(agentConfig.agentId, agentId))).limit(1),
+  ]);
+  const base = seed ?? created[0];
+  if (!base || state?.removed || state?.paused) return null;
+  return { id: base.id, name: base.name, role: cfg?.role ?? base.role, goal: cfg?.goal ?? base.goal, task: base.task, capabilities: base.capabilities };
 }
 
 export async function memberWithCapability(userId: string, teamId: string, capability: string): Promise<string | null> {

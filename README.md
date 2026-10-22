@@ -107,4 +107,4 @@ Workflow: edit `lib/db/schema.ts` → `pnpm db:generate` → `pnpm db:migrate`. 
 
 ## Deployment
 
-**Single deploy** to Vercel (or any Node host) — including scraping. Set `DATABASE_URL`, `AUTH_SECRET`, `OPENROUTER_API_KEY`, and `FIRECRAWL_API_KEY` in the project environment. The scrape route caps at `maxDuration = 60`; the job runner at `300`. No persistent process, no browser. Ensure pgvector is enabled on your Neon database.
+**Single deploy** to Vercel (or any Node host) — including scraping. Set `DATABASE_URL`, `AUTH_SECRET`, `OPENROUTER_API_KEY`, `FIRECRAWL_API_KEY` and `CRON_SECRET` in the project environment. The scrape route caps at `maxDuration = 60`; the job runner at `300`. No persistent process, no browser: Vercel Cron (`vercel.json`, every minute, needs the Pro plan) calls `/api/cron/jobs` and `/api/cron/scrape` with `CRON_SECRET` to run queued jobs and scrapes for every user, so they finish with no tab open. Ensure pgvector is enabled on your Neon database.

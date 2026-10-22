@@ -6,10 +6,12 @@ import { verifySession, SESSION_COOKIE } from "@/lib/auth/jwt";
 
 // Routes reachable without a session (login screen + password reset).
 const PUBLIC_PATHS = ["/", "/reset"];
+// Called by Vercel Cron with no session; the route checks CRON_SECRET itself.
+const CRON_PATHS = ["/api/cron/jobs", "/api/cron/scrape"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
+  if (PUBLIC_PATHS.includes(pathname) || CRON_PATHS.includes(pathname)) return NextResponse.next();
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token) : null;

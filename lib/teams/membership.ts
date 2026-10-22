@@ -4,7 +4,7 @@ import "server-only";
 // effective membership = the `team_members` override if present, else the team's
 // base members. Used to expand a capability's lead pool to the shared team book.
 import { and, eq } from "drizzle-orm";
-import { getDb, isDbConfigured, teams as teamsTable, teamMembers } from "@/lib/db";
+import { getDb, isDbConfigured, teams as teamsTable, teamMembers, agentStates } from "@/lib/db";
 import { TEAMS_BASE } from "@/lib/data";
 
 export async function teammatesOf(userId: string, agentId: string): Promise<string[]> {
@@ -27,16 +27,22 @@ export async function teammatesOf(userId: string, agentId: string): Promise<stri
   return Array.from(mates);
 }
 
-/** The agent ids on a team (team_members override, else base members). */
+/** The agent ids on a team (team_members override, else base members), minus
+ *  agents the user removed. Paused agents stay members: their leads are still
+ *  the team's, and agentInfo keeps them from acting. */
 export async function membersOfTeam(userId: string, teamId: string): Promise<string[]> {
   if (!isDbConfigured()) return TEAMS_BASE.find((t) => t.id === teamId)?.members ?? [];
   const db = getDb();
-  const [override] = await db.select().from(teamMembers)
-    .where(and(eq(teamMembers.userId, userId), eq(teamMembers.teamId, teamId))).limit(1);
-  if (override) return override.members;
+  const [[override], removedRows] = await Promise.all([
+    db.select().from(teamMembers).where(and(eq(teamMembers.userId, userId), eq(teamMembers.teamId, teamId))).limit(1),
+    db.select({ agentId: agentStates.agentId }).from(agentStates).where(and(eq(agentStates.userId, userId), eq(agentStates.removed, true))),
+  ]);
+  const removed = new Set(removedRows.map((r) => r.agentId));
+  const keep = (members: string[]) => members.filter((id) => !removed.has(id));
+  if (override) return keep(override.members);
   const seed = TEAMS_BASE.find((t) => t.id === teamId);
-  if (seed) return seed.members;
+  if (seed) return keep(seed.members);
   const [userTeam] = await db.select().from(teamsTable)
     .where(and(eq(teamsTable.userId, userId), eq(teamsTable.id, teamId))).limit(1);
-  return userTeam?.members ?? [];
+  return keep(userTeam?.members ?? []);
 }

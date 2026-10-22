@@ -4,6 +4,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { validateResetToken, resetPassword } from "@/lib/auth/actions";
+import { callAction, ACTION_FAILED } from "@/lib/auth/call-action";
+import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
 
 const FIELD_WRAP = "background:#fff;border:1px solid #e4e4e4;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 16px;height:52px;width:100%";
@@ -21,10 +23,11 @@ function Wordmark() {
 
 function ResetInner() {
   const router = useRouter();
+  const { set } = useApp();
   const params = useSearchParams();
   const token = params.get("token") || "";
 
-  const [state, setState] = useState<"checking" | "invalid" | "form" | "done">("checking");
+  const [state, setState] = useState<"checking" | "invalid" | "unreachable" | "form" | "done">("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -32,10 +35,10 @@ function ResetInner() {
 
   useEffect(() => {
     let live = true;
-    validateResetToken(token).then((res) => {
-      if (!live) return;
-      setState(res.ok ? "form" : "invalid");
-    });
+    validateResetToken(token).then(
+      (res) => { if (live) setState(res.ok ? "form" : "invalid"); },
+      (e) => { console.error("[reset] validateResetToken failed:", e); if (live) setState("unreachable"); },
+    );
     return () => { live = false; };
   }, [token]);
 
@@ -44,12 +47,15 @@ function ResetInner() {
     setError("");
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (password !== confirm) { setError("Passwords don’t match."); return; }
-    setLoading(true);
-    const res = await resetPassword({ token, password });
-    setLoading(false);
+    const res = await callAction(() => resetPassword({ token, password }), setError, setLoading);
+    if (!res) return;
     if (!res.ok) { setError(res.error || "Something went wrong. Please try again."); return; }
     setState("done");
   };
+
+  // "/" shows the marketing Landing to logged-out visitors unless showAuth is
+  // set, so open the login form explicitly before navigating there.
+  const toLogin = () => { set({ showAuth: true, authMode: "login" }); router.push("/"); router.refresh(); };
 
   return (
     <div style={css("min-height:100vh;background:#fff;display:flex;align-items:center;justify-content:center;padding:48px 24px;animation:fadeUp .3s ease")}>
@@ -64,7 +70,14 @@ function ResetInner() {
           <div style={css("display:flex;flex-direction:column;gap:20px;width:100%;text-align:center")}>
             <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Link expired or invalid</div>
             <div style={css("font-size:15px;color:#535862;line-height:22px")}>This password reset link is no longer valid. Contact support to reset your password.</div>
-            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Back to login</Btn>
+            <Btn onClick={toLogin} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Back to login</Btn>
+          </div>
+        )}
+
+        {state === "unreachable" && (
+          <div style={css("display:flex;flex-direction:column;gap:20px;width:100%;text-align:center")}>
+            <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Couldn’t check your link</div>
+            <div role="alert" style={css("font-size:15px;color:#535862;line-height:22px")}>{ACTION_FAILED}</div>
           </div>
         )}
 
@@ -100,12 +113,12 @@ function ResetInner() {
             <div style={css("width:56px;height:56px;border-radius:50%;background:#E7F7EC;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto")}>✓</div>
             <div style={css("font-size:26px;font-weight:700;color:#181d27;letter-spacing:-.01em")}>Password updated</div>
             <div style={css("font-size:15px;color:#535862;line-height:22px")}>Your password has been changed. Log in with your new password.</div>
-            <Btn onClick={() => { router.push("/"); router.refresh(); }} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Go to login</Btn>
+            <Btn onClick={toLogin} style="background:#006AFF;color:#fff;border:none;border-radius:100px;padding:12px 16px;width:100%;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,106,255,.3)" styleHover="background:#0052CC">Go to login</Btn>
           </div>
         )}
 
-        {(state === "form" || state === "invalid") && (
-          <Box as="span" onClick={() => { router.push("/"); router.refresh(); }} style="font-size:14px;font-weight:600;color:#006AFF;cursor:pointer">← Back to login</Box>
+        {(state === "form" || state === "invalid" || state === "unreachable") && (
+          <Box as="span" onClick={toLogin} style="font-size:14px;font-weight:600;color:#006AFF;cursor:pointer">← Back to login</Box>
         )}
       </div>
     </div>

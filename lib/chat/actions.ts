@@ -13,6 +13,7 @@ import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
 import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeStartText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
+import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer } from "./scrapeBrief";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
@@ -105,7 +106,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   if (text.length > MAX_CHAT_MESSAGE_CHARS) {
     return { messages: [{ who: "system", text: `That message is too long. Keep it under ${MAX_CHAT_MESSAGE_CHARS} characters.` }] };
   }
-  if ((await sentToday(userId)) >= DAILY_CHAT_MESSAGE_QUOTA) {
+  if ((await sentToday(s.accountId)) >= DAILY_CHAT_MESSAGE_QUOTA) {
     return { messages: [{ who: "system", text: `You've reached today's limit of ${DAILY_CHAT_MESSAGE_QUOTA} messages. Try again tomorrow.` }] };
   }
 
@@ -118,11 +119,11 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   return { ...res, messages: await insertTeamMessages(userId, teamId, res.messages) };
 }
 
-/** Messages this user has sent, in any chat, in the quota window. */
-async function sentToday(userId: string): Promise<number> {
+/** Messages the account has sent, in any chat of any of its workspaces, in the quota window. */
+async function sentToday(accountId: string): Promise<number> {
   if (!isDbConfigured()) return 0;
   const [r] = await getDb().select({ n: sql<number>`count(*)::int` }).from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.who, "me"), gte(messages.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
+    .where(and(inAccountWorkspaces(messages.userId, accountId), eq(messages.who, "me"), gte(messages.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
   return Number(r?.n ?? 0);
 }
 

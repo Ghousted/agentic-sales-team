@@ -2,7 +2,7 @@ import "server-only";
 // Read/write for a team group-chat thread (messages keyed by teamId) + the user's
 // display name for @mentions. Used by the pod orchestration to narrate its work.
 import { and, asc, eq, gt, like, sql } from "drizzle-orm";
-import { getDb, isDbConfigured, jobs, messages, users } from "@/lib/db";
+import { getDb, isDbConfigured, jobs, messages, users, workspaces } from "@/lib/db";
 import { jobMarker, jobOutcomeText, type StoredMsg } from "./thread";
 
 /** Post a message into a team's chat thread, spoken by an agent (or "system"). */
@@ -63,9 +63,11 @@ export async function postJobOutcome(userId: string, teamId: string, jobId: stri
   return job.status;
 }
 
-/** The user's first name, for @mentions in narration. */
+/** The first name of the workspace's owner, for @mentions in narration.
+ *  `userId` is a workspace id (see the workspaces table). */
 export async function userFirstName(userId: string): Promise<string> {
   if (!isDbConfigured()) return "there";
-  const [u] = await getDb().select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  const [u] = await getDb().select({ name: users.name }).from(workspaces)
+    .innerJoin(users, eq(users.id, workspaces.ownerId)).where(eq(workspaces.id, userId)).limit(1);
   return (u?.name ?? "there").split(" ")[0];
 }

@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import { limitJobSize, jobQuotaError, QUOTA_WINDOW_MS } from "./limits";
+import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 
 // Callers still send a whole snapshot; only its id is read.
 type AgentRef = Pick<AgentSnapshot, "id"> & Partial<AgentSnapshot>;
@@ -21,8 +22,9 @@ async function uid(): Promise<string | null> {
 // and a paused, removed or unknown agent gets no job.
 export async function enqueueJob(input: { agent: AgentRef; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number; target?: number; instruction?: string; pod?: boolean; teamId?: string }): Promise<{ jobId: string } | { error: string }> {
   if (!isDbConfigured()) return { error: "Server not configured." };
-  const userId = await uid();
-  if (!userId) return { error: "Not signed in." };
+  const session = await getSession();
+  const userId = session?.userId;
+  if (!session || !userId) return { error: "Not signed in." };
   const info = await agentInfo(userId, input.agent.id);
   if (!info) return { error: "This agent is paused or no longer exists." };
   // Capability gating: an agent can only run a kind its stored capabilities include.
@@ -37,7 +39,8 @@ export async function enqueueJob(input: { agent: AgentRef; kind: string; capabil
   const [recent] = await db.select({
     total: sql<number>`count(*)::int`,
     scrapes: sql<number>`(count(*) filter (where ${jobs.kind} = 'scrape'))::int`,
-  }).from(jobs).where(and(eq(jobs.userId, userId), gte(jobs.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
+    // Counted across all the account's workspaces, not just this one.
+  }).from(jobs).where(and(inAccountWorkspaces(jobs.userId, session.accountId), gte(jobs.createdAt, new Date(Date.now() - QUOTA_WINDOW_MS))));
   const quota = jobQuotaError(input.kind, { total: Number(recent?.total ?? 0), scrapes: Number(recent?.scrapes ?? 0) });
   if (quota) return { error: quota };
   const agent = { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task };

@@ -1,5 +1,5 @@
 // Drizzle schema for the app's Postgres (Neon) database.
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial, vector } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial, vector, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -14,12 +14,23 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// A workspace is one business. Every data table's user_id holds a workspace id
+// (the column kept its name): agents, teams, leads, jobs and so on belong to a
+// workspace, not to the login. An account's first workspace has the account's
+// own id, so data from before workspaces needed no move.
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ ownerIdx: index("workspaces_owner_id_idx").on(t.ownerId) }));
+
 // Agents CREATED by a user (via the onboarding wizard). The 8 seed agents remain
 // static template data; only a user's own additions are persisted here.
 export const agents = pgTable(
   "agents",
   {
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     id: text("id").notNull(), // app-level agent code, unique per user
     name: text("name").notNull(),
     initials: text("initials").notNull(),
@@ -41,7 +52,7 @@ export const agents = pgTable(
 export const teams = pgTable(
   "teams",
   {
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     id: text("id").notNull(),
     name: text("name").notNull(),
     icon: text("icon").notNull(),
@@ -64,7 +75,7 @@ export const teams = pgTable(
 export const agentConfig = pgTable(
   "agent_config",
   {
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     agentId: text("agent_id").notNull(),
     role: text("role"),
     goal: text("goal"),
@@ -79,7 +90,7 @@ export const agentConfig = pgTable(
 export const teamMembers = pgTable(
   "team_members",
   {
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     teamId: text("team_id").notNull(),
     members: jsonb("members").$type<string[]>().notNull().default([]),
   },
@@ -107,7 +118,7 @@ export const authRateLimits = pgTable("auth_rate_limits", {
 export const agentStates = pgTable(
   "agent_states",
   {
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     agentId: text("agent_id").notNull(),
     removed: boolean("removed").notNull().default(false),
     paused: boolean("paused").notNull().default(false),
@@ -119,7 +130,7 @@ export const agentStates = pgTable(
 // within each conversation. Seed opener messages stay static (not stored here).
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   who: text("who").notNull(), // 'ai' | 'me'
   text: text("text").notNull(),
@@ -131,7 +142,7 @@ export const messages = pgTable("messages", {
 // Real prospects an agent works. `source` is 'manual' now, 'scrape' in milestone 2.
 export const leads = pgTable("leads", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   name: text("name").notNull(),
   title: text("title").notNull().default(""),
@@ -158,7 +169,7 @@ export const leads = pgTable("leads", {
 // Agent-written outreach emails.
 export const outreachDrafts = pgTable("outreach_drafts", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
   subject: text("subject").notNull(),
@@ -175,7 +186,7 @@ export const outreachDrafts = pgTable("outreach_drafts", {
 // Agent-written proposals (products/services bundled for a lead).
 export const proposals = pgTable("proposals", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
@@ -189,7 +200,7 @@ export const proposals = pgTable("proposals", {
 // Meetings that a Meeting agent booked. This is the only source for the calendar view.
 export const meetings = pgTable("meetings", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
   title: text("title").notNull().default("Meeting"),
@@ -201,7 +212,7 @@ export const meetings = pgTable("meetings", {
 // Matchmaker output: one row per lead↔listing pair the Matchmaker judged a fit.
 export const matches = pgTable("matches", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   leadId: uuid("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
   productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
@@ -214,7 +225,7 @@ export type ProposalRow = typeof proposals.$inferSelect;
 // Real event log (feeds notifications + dashboard/analytics in a later milestone).
 export const activity = pgTable("activity", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   type: text("type").notNull(), // lead_added|lead_qualified|email_drafted|email_sent
   leadId: uuid("lead_id"),
@@ -229,7 +240,7 @@ export const activity = pgTable("activity", {
 // Run queue. `kind` is 'outreach' now, 'scrape' in milestone 2.
 export const jobs = pgTable("jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   agentId: text("agent_id").notNull(),
   kind: text("kind").notNull(),
   status: text("status").notNull().default("queued"), // queued|running|done|failed
@@ -246,7 +257,7 @@ export const jobs = pgTable("jobs", {
 export const jobSteps = pgTable("job_steps", {
   id: uuid("id").defaultRandom().primaryKey(),
   jobId: uuid("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   idx: integer("idx").notNull(),
   caption: text("caption").notNull().default(""),
   url: text("url").notNull().default(""),
@@ -257,7 +268,7 @@ export const jobSteps = pgTable("job_steps", {
 // Folders group the products catalog (e.g. "Subscriptions", "Services").
 export const productFolders = pgTable("product_folders", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -266,7 +277,7 @@ export type ProductFolderRow = typeof productFolders.$inferSelect;
 // Products & Services catalog, embedded for RAG-based retrieval during outreach.
 export const products = pgTable("products", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   folderId: uuid("folder_id").references(() => productFolders.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),

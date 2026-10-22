@@ -8,6 +8,7 @@ import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type SeenIds } from "./unread";
 import { listChatUnread } from "@/lib/chat/actions";
 import { navCounts } from "@/lib/leads/actions";
@@ -192,11 +193,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div style={css("flex:none;padding:8px 10px 12px;border-top:1px solid #eceef1;display:flex;flex-direction:column;gap:2px")}>
-            <Btn onClick={() => router.push("/settings")} style={"width:100%;height:44px;display:flex;align-items:center;gap:10px;padding:0 10px;border:0;border-radius:10px;background:" + (path.startsWith("/settings") ? "#eceef1" : "transparent") + ";text-align:left;cursor:pointer"} styleHover="background:#eceef1">
-              <span style={css("width:28px;height:28px;flex:none;border-radius:8px;background:#101418;color:#ffffff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{wsInitial}</span>
-              <span style={css("flex:1;min-width:0")}><span style={css("display:block;font-size:11.5px;color:#6b7686")}>Workspace</span><span style={css("display:block;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{s.workspaceName}</span></span>
-              <i className="icon-chevrons-up-down" style={{ fontSize: 15, color: "#8a94a3" }} />
-            </Btn>
+            <WorkspaceSwitcher name={s.workspaceName} onSettings={() => router.push("/settings")} />
             <div ref={pmRef} style={css("position:relative")}>
               <Btn onClick={() => setPm((v) => !v)} aria-haspopup="menu" aria-expanded={pm} aria-label="Account" style={"width:100%;height:48px;display:flex;align-items:center;gap:10px;padding:0 10px;border:0;border-radius:10px;background:" + (pm ? "#eceef1" : "transparent") + ";text-align:left;cursor:pointer"} styleHover="background:#eceef1">
                 <span style={css("width:32px;height:32px;flex:none;border-radius:50%;background:#eceef1;color:#4a5565;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px #e3e7ed")}>{userInitials}</span>
@@ -232,7 +229,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           ))}
           <Btn onClick={() => router.push("/chats")} aria-label={anyUnread ? "Chats, unread messages" : "Chats"} title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} />{anyUnread && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           <div style={{ flex: 1 }} />
-          <Btn onClick={() => router.push("/settings")} aria-label="Workspace" title="Workspace" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><span style={css("width:26px;height:26px;border-radius:7px;background:#101418;color:#ffffff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{wsInitial}</span></Btn>
+          <Btn onClick={() => set({ sidebarOpen: true })} aria-label={`Workspace: ${s.workspaceName}`} title={s.workspaceName} style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><span style={css("width:26px;height:26px;border-radius:7px;background:#101418;color:#ffffff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{wsInitial}</span></Btn>
           <Btn onClick={doLogout} aria-label="Log out" title="Log out" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="log-out" size={18} /></Btn>
         </nav>
       )}

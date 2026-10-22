@@ -11,15 +11,17 @@ const h = vi.hoisted(() => {
   type Sql = { increment: true; text: string; values: unknown[] };
   const isIncrement = (v: unknown): v is Sql => typeof v === "object" && v !== null && "increment" in v;
   const passwordResetTokens = { _: "password_reset_tokens", token: "prt.token", userId: "prt.userId", expiresAt: "prt.expiresAt" };
+  const workspaces = { _: "workspaces", id: "workspaces.id", ownerId: "workspaces.ownerId", name: "workspaces.name" };
   const state = {
     users: [] as Array<Record<string, unknown>>,
     tokens: [] as Array<Record<string, unknown>>,
+    workspaces: [] as Array<Record<string, unknown>>,
     writes: [] as string[],
     // auth_rate_limits rows: key -> fixed-window counter.
     limits: new Map<string, { count: number; start: number }>(),
   };
   type Cond = { col: string; value: unknown };
-  const rowsFor = (table: { _: string }) => (table._ === "users" ? state.users : state.tokens);
+  const rowsFor = (table: { _: string }) => (table._ === "users" ? state.users : table._ === "workspaces" ? state.workspaces : state.tokens);
   const colKey = (col: string) => col.split(".")[1];
   const match = (cond: Cond) => (row: Record<string, unknown>) => row[colKey(cond.col)] === cond.value;
   const db = {
@@ -31,6 +33,7 @@ const h = vi.hoisted(() => {
     insert: (table: { _: string }) => ({
       values: (v: Record<string, unknown>) => {
         state.writes.push("insert:" + table._);
+        if (table._ === "users") v = { id: "u-new", workspaceName: "My Workspace", ...v };
         rowsFor(table).push(v);
         return { returning: async () => [v] };
       },
@@ -69,21 +72,23 @@ const h = vi.hoisted(() => {
       return { rows: [{ count: next.count, retry_after: Math.ceil((next.start + windowMs - now) / 1000) }] };
     },
   };
-  return { users, passwordResetTokens, state, db, isIncrement, ip: { value: "203.0.113.7" } };
+  return { users, passwordResetTokens, workspaces, state, db, isIncrement, ip: { value: "203.0.113.7" } };
 });
 
 vi.mock("drizzle-orm", () => ({
   eq: (col: string, value: unknown) => ({ col, value }),
+  and: (...conds: unknown[]) => conds[0],
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ increment: true, text: strings.join("?"), values }),
 }));
-vi.mock("next/headers", () => ({ headers: () => new Headers({ "x-forwarded-for": `${h.ip.value}, 10.0.0.1` }) }));
+vi.mock("next/headers", () => ({ headers: () => new Headers({ "x-forwarded-for": `${h.ip.value}, 10.0.0.1` }), cookies: () => ({ delete: () => {} }) }));
 vi.mock("@/lib/db", () => ({
   getDb: () => h.db,
   isDbConfigured: () => true,
   users: h.users,
   passwordResetTokens: h.passwordResetTokens,
+  workspaces: h.workspaces,
 }));
-vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn(), revokeSessions: vi.fn() }));
+vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn(), revokeSessions: vi.fn(), WORKSPACE_COOKIE: "ws" }));
 
 import { requestPasswordReset, resetPassword, signIn, signOut, signUp, validateResetToken } from "./actions";
 import { createSession, destroySession, getSession, revokeSessions } from "./session";
@@ -93,6 +98,7 @@ const HOUR = 60 * 60 * 1000;
 
 beforeEach(async () => {
   h.state.users.splice(0);
+  h.state.workspaces.splice(0);
   h.state.tokens.splice(0);
   h.state.writes.splice(0);
   h.state.limits.clear();
@@ -121,6 +127,13 @@ describe("requestPasswordReset", () => {
   });
 });
 
+describe("signUp workspaces", () => {
+  it("creates the account's first workspace, with the account's own id", async () => {
+    expect((await signUp({ email: "bea@example.com", password: "password-123" })).ok).toBe(true);
+    expect(h.state.workspaces).toEqual([{ id: "u-new", ownerId: "u-new", name: "My Workspace" }]);
+  });
+});
+
 describe("signIn", () => {
   it("gives the same error for an unknown email and a wrong password", async () => {
     const unknown = await signIn({ email: "nobody@example.com", password: "whatever-1" });
@@ -137,7 +150,8 @@ describe("signIn", () => {
 
 describe("signOut", () => {
   it("revokes the user's sessions everywhere, then clears the cookie", async () => {
-    vi.mocked(getSession).mockResolvedValue({ userId: "u1", email: "alice@example.com", name: "Alice", sessionVersion: 2 });
+    // Signed in to a second workspace: the account's sessions are revoked, not the workspace id.
+    vi.mocked(getSession).mockResolvedValue({ userId: "ws-2", accountId: "u1", email: "alice@example.com", name: "Alice", sessionVersion: 2 });
     await signOut();
     expect(revokeSessions).toHaveBeenCalledWith("u1");
     expect(destroySession).toHaveBeenCalled();

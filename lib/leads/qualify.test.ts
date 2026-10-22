@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import * as schema from "@/lib/db/schema";
+import { withBatch } from "../../test/fake-batch";
 
 // Every query the store sends, as rendered SQL + params.
 const sent: { sql: string; params: unknown[] }[] = [];
-const fakeDb = drizzle(async (sql, params) => {
+const fakeDb = withBatch(drizzle(async (sql, params) => {
   sent.push({ sql, params });
   return { rows: [] };
-}, { schema });
+}, { schema }));
 
 vi.mock("@/lib/db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/db")>()),

@@ -95,6 +95,14 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Fixed-window counters for auth throttling (sign-in, sign-up, password reset).
+// key is "<action>:<ip|email>:<value>"; emails are stored as a SHA-256 hash.
+export const authRateLimits = pgTable("auth_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Per-user flags on any agent (seed or created): soft-delete and pause.
 export const agentStates = pgTable(
   "agent_states",

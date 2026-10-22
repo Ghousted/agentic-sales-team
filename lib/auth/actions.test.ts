@@ -6,13 +6,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // for the auth actions, recording every write so tests can assert none happened.
 const h = vi.hoisted(() => {
   const users = { _: "users", id: "users.id", email: "users.email", sessionVersion: "users.sessionVersion" };
-  // What the mocked sql`${col} + 1` returns; update() applies it as an increment.
-  const INCREMENT = { increment: true };
+  // The mocked sql`...` tags its result as an increment; update() applies it as one,
+  // and execute() reads the rate-limit statements from its text and values.
+  type Sql = { increment: true; text: string; values: unknown[] };
+  const isIncrement = (v: unknown): v is Sql => typeof v === "object" && v !== null && "increment" in v;
   const passwordResetTokens = { _: "password_reset_tokens", token: "prt.token", userId: "prt.userId", expiresAt: "prt.expiresAt" };
   const state = {
     users: [] as Array<Record<string, unknown>>,
     tokens: [] as Array<Record<string, unknown>>,
     writes: [] as string[],
+    // auth_rate_limits rows: key -> fixed-window counter.
+    limits: new Map<string, { count: number; start: number }>(),
   };
   type Cond = { col: string; value: unknown };
   const rowsFor = (table: { _: string }) => (table._ === "users" ? state.users : state.tokens);
@@ -38,7 +42,7 @@ const h = vi.hoisted(() => {
           rowsFor(table)
             .filter(match(cond))
             .forEach((r) => {
-              for (const [k, val] of Object.entries(v)) r[k] = val === INCREMENT ? Number(r[k]) + 1 : val;
+              for (const [k, val] of Object.entries(v)) r[k] = isIncrement(val) ? Number(r[k]) + 1 : val;
             });
         },
       }),
@@ -50,11 +54,29 @@ const h = vi.hoisted(() => {
         rowsFor(table).splice(0, rowsFor(table).length, ...keep);
       },
     }),
+    // Mirrors the upsert in rateLimit.ts: reset the window once it has passed, else count up.
+    execute: async (q: Sql) => {
+      const key = q.values[0] as string;
+      if (q.text.trim().startsWith("DELETE")) {
+        state.limits.delete(key);
+        return { rows: [] };
+      }
+      const windowMs = Number(q.values[1]) * 1000;
+      const now = Date.now();
+      const cur = state.limits.get(key);
+      const next = !cur || cur.start <= now - windowMs ? { count: 1, start: now } : { count: cur.count + 1, start: cur.start };
+      state.limits.set(key, next);
+      return { rows: [{ count: next.count, retry_after: Math.ceil((next.start + windowMs - now) / 1000) }] };
+    },
   };
-  return { users, passwordResetTokens, state, db, INCREMENT };
+  return { users, passwordResetTokens, state, db, isIncrement, ip: { value: "203.0.113.7" } };
 });
 
-vi.mock("drizzle-orm", () => ({ eq: (col: string, value: unknown) => ({ col, value }), sql: () => h.INCREMENT }));
+vi.mock("drizzle-orm", () => ({
+  eq: (col: string, value: unknown) => ({ col, value }),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ increment: true, text: strings.join("?"), values }),
+}));
+vi.mock("next/headers", () => ({ headers: () => new Headers({ "x-forwarded-for": `${h.ip.value}, 10.0.0.1` }) }));
 vi.mock("@/lib/db", () => ({
   getDb: () => h.db,
   isDbConfigured: () => true,
@@ -63,7 +85,7 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn(), revokeSessions: vi.fn() }));
 
-import { requestPasswordReset, resetPassword, signIn, signOut, validateResetToken } from "./actions";
+import { requestPasswordReset, resetPassword, signIn, signOut, signUp, validateResetToken } from "./actions";
 import { createSession, destroySession, getSession, revokeSessions } from "./session";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -73,6 +95,8 @@ beforeEach(async () => {
   h.state.users.splice(0);
   h.state.tokens.splice(0);
   h.state.writes.splice(0);
+  h.state.limits.clear();
+  h.ip.value = "203.0.113.7";
   vi.clearAllMocks();
   h.state.users.push({ id: "u1", email: "alice@example.com", name: "Alice", workspaceName: "W", notifications: {}, sessionVersion: 2, passwordHash: await bcrypt.hash("right-password", 4) });
 });
@@ -155,5 +179,78 @@ describe("reset tokens", () => {
   it("rejects an expired token", async () => {
     h.state.tokens.push({ token: sha256("raw-token"), userId: "u1", expiresAt: new Date(Date.now() - 1) });
     expect((await validateResetToken("raw-token")).ok).toBe(false);
+  });
+});
+
+describe("rate limiting", () => {
+  const TOO_MANY = /too many attempts/i;
+  const wrong = (email = "alice@example.com") => signIn({ email, password: "wrong-password" });
+
+  it("blocks the 6th sign-in for one email inside 15 minutes, even with the right password", async () => {
+    for (let i = 0; i < 5; i++) expect((await wrong()).error).toBe("Incorrect email or password.");
+    const sixth = await signIn({ email: "alice@example.com", password: "right-password" });
+    expect(sixth.ok).toBe(false);
+    expect(sixth.error).toMatch(TOO_MANY);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it("blocks an unknown email exactly like a real one", async () => {
+    for (let i = 0; i < 5; i++) {
+      await wrong("alice@example.com");
+      await wrong("nobody@example.com");
+    }
+    const real = await wrong("alice@example.com");
+    const ghost = await wrong("nobody@example.com");
+    expect(real.error).toMatch(TOO_MANY);
+    expect(ghost).toEqual(real);
+  });
+
+  it("blocks one IP after 20 sign-ins across many emails", async () => {
+    for (let i = 0; i < 20; i++) expect((await wrong(`user${i}@example.com`)).error).not.toMatch(TOO_MANY);
+    expect((await wrong("fresh@example.com")).error).toMatch(TOO_MANY);
+    h.ip.value = "198.51.100.9";
+    expect((await wrong("fresh@example.com")).error).not.toMatch(TOO_MANY);
+  });
+
+  it("lets the email try again once the window has passed", async () => {
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 5; i++) await wrong();
+      expect((await wrong()).error).toMatch(TOO_MANY);
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+      expect((await signIn({ email: "alice@example.com", password: "right-password" })).ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a successful sign-in clears that email's failed attempts", async () => {
+    for (let i = 0; i < 4; i++) await wrong();
+    expect((await signIn({ email: "alice@example.com", password: "right-password" })).ok).toBe(true);
+    for (let i = 0; i < 5; i++) expect((await wrong()).error).not.toMatch(TOO_MANY);
+  });
+
+  it("stores emails hashed, never in plain text", async () => {
+    await wrong();
+    const keys = [...h.state.limits.keys()].join(" ");
+    expect(keys).not.toContain("alice");
+    expect(keys).toContain("signIn:ip:203.0.113.7");
+  });
+
+  it("blocks the 6th sign-up from one IP inside an hour", async () => {
+    for (let i = 0; i < 5; i++) expect((await signUp({ email: `new${i}@example.com`, password: "password-123" })).ok).toBe(true);
+    const sixth = await signUp({ email: "new6@example.com", password: "password-123" });
+    expect(sixth.error).toMatch(TOO_MANY);
+    expect(h.state.users.some((u) => u.email === "new6@example.com")).toBe(false);
+  });
+
+  it("blocks the 4th reset request for one email inside an hour", async () => {
+    for (let i = 0; i < 3; i++) expect((await requestPasswordReset({ email: "alice@example.com" })).ok).toBe(true);
+    expect((await requestPasswordReset({ email: "alice@example.com" })).error).toMatch(TOO_MANY);
+  });
+
+  it("blocks the 11th reset-token attempt from one IP inside an hour", async () => {
+    for (let i = 0; i < 10; i++) expect((await resetPassword({ token: `guess-${i}`, password: "new-password-1" })).error).not.toMatch(TOO_MANY);
+    expect((await resetPassword({ token: "guess-x", password: "new-password-1" })).error).toMatch(TOO_MANY);
   });
 });

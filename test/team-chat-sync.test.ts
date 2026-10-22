@@ -10,6 +10,7 @@ vi.mock("@/lib/pod/orchestrate", () => {
   const roster: Record<string, unknown> = {
     out: { id: "out", name: "Ollie", role: "", goal: "", task: "", capabilities: ["outreach"] },
     asr: { id: "asr", name: "Ada", role: "", goal: "", task: "", capabilities: ["assess"] },
+    mtg: { id: "mtg", name: "Mia", role: "", goal: "", task: "", capabilities: ["book-meeting"] },
   };
   return { agentInfo: vi.fn(async (_u: string, id: string) => roster[id] ?? null) };
 });
@@ -24,7 +25,7 @@ vi.mock("@/lib/leads/store", () => ({
   setLeadReview: vi.fn(async () => {}),
 }));
 vi.mock("@/lib/ai/resolveLeads", () => ({ resolveTargetLeads: vi.fn(async () => ({ mode: "some", leadIds: ["l1"] })) }));
-vi.mock("@/lib/ai/meetingTime", () => ({ parseMeetingTime: vi.fn() }));
+vi.mock("@/lib/ai/meetingTime", async (importActual) => ({ ...(await importActual<typeof import("@/lib/ai/meetingTime")>()), parseMeetingTime: vi.fn() }));
 vi.mock("@/lib/meetings/store", () => ({ bookMeeting: vi.fn(), meetingSettings: vi.fn() }));
 vi.mock("@/lib/chat/teamMessages", () => ({
   listTeamMessages: vi.fn(async () => db.rows.map((r) => ({ ...r }))),
@@ -42,6 +43,10 @@ import { teamChat } from "@/lib/chat/actions";
 import { enqueueJob } from "@/lib/jobs/actions";
 import { resolve } from "@/lib/chat/orchestrate";
 import { askWhoText } from "@/lib/chat/outreachTarget";
+import { askWhenText } from "@/lib/chat/clarify";
+import { membersOfTeam } from "@/lib/teams/membership";
+import { parseMeetingTime } from "@/lib/ai/meetingTime";
+import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 
 beforeEach(() => { db.rows = []; db.inserts = []; vi.clearAllMocks(); });
 
@@ -81,5 +86,40 @@ describe("teamChat", () => {
     vi.mocked(resolve).mockResolvedValueOnce({ messages: [] });
     const res = await teamChat("t1", "hmm");
     expect(res.messages).toEqual([{ id: 2, who: "system", text: "No one picked that up. Try @mentioning an agent on this team." }]);
+  });
+
+  describe("booking a meeting", () => {
+    const SETTINGS = { type: "Intro call", duration: 30, windowStart: 9, windowEnd: 17, weekdaysOnly: true };
+    beforeEach(() => {
+      vi.mocked(membersOfTeam).mockResolvedValue(["mtg"]);
+      vi.mocked(meetingSettings).mockResolvedValue(SETTINGS);
+      vi.mocked(parseMeetingTime).mockResolvedValue({ iso: "2026-10-23T18:00:00.000Z", label: "Fri, Oct 23 · 2:00–2:30 PM", hasTime: true });
+      db.rows = [{ id: 1, who: "mtg", text: askWhenText("Jane Doe", ["l1"]) }];
+    });
+
+    it("reads the time in the timezone the client sent", async () => {
+      vi.mocked(bookMeeting).mockResolvedValue(true);
+      await teamChat("t1", "tomorrow 2pm", undefined, "America/New_York");
+      expect(parseMeetingTime).toHaveBeenCalledWith("tomorrow 2pm", { ...SETTINGS, timeZone: "America/New_York" });
+    });
+
+    it("uses UTC when the client's timezone isn't a real one", async () => {
+      vi.mocked(bookMeeting).mockResolvedValue(true);
+      await teamChat("t1", "tomorrow 2pm", undefined, "<script>");
+      expect(parseMeetingTime).toHaveBeenCalledWith("tomorrow 2pm", { ...SETTINGS, timeZone: "UTC" });
+    });
+
+    it("says Booked when the meeting was booked", async () => {
+      vi.mocked(bookMeeting).mockResolvedValue(true);
+      const res = await teamChat("t1", "tomorrow 2pm", undefined, "America/New_York");
+      expect(res.messages.map((m) => m.text)).toEqual(["Booked — a Intro call with Jane Doe on Fri, Oct 23 · 2:00–2:30 PM. It's on your calendar."]);
+    });
+
+    it("doesn't say Booked when bookMeeting refused the lead", async () => {
+      vi.mocked(bookMeeting).mockResolvedValue(false);
+      const res = await teamChat("t1", "tomorrow 2pm", undefined, "America/New_York");
+      expect(res.messages[0].text).not.toMatch(/Booked/);
+      expect(res.messages[0].text).toMatch(/couldn't book/);
+    });
   });
 });

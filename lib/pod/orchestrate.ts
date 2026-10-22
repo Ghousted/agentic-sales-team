@@ -19,6 +19,16 @@ interface AgentInfo { id: string; name: string; role: string; goal: string; task
 const DOING: Record<string, string> = { scrape: "finding leads", assess: "reviewing the new leads", research: "researching the book", qualify: "qualifying the leads", match: "matching leads to listings", outreach: "drafting outreach", proposal: "drafting proposals" };
 const VERB: Record<string, string> = { assess: "review these leads", research: "research these leads", qualify: "qualify the leads", match: "match these leads", outreach: "draft outreach", proposal: "draft proposals" };
 const NOUN: Record<string, string> = { assess: "the review", research: "research", qualify: "qualification", match: "matching", outreach: "outreach", proposal: "proposals" };
+// What the finisher says when its stage moved no leads forward.
+const NOTHING: Record<string, string> = {
+  scrape: "I found no new leads for that search. Try again with more detail, for example the industry, the company size or the location.",
+  assess: "I reviewed the new leads, but none of them were a good fit.",
+  research: "I had no leads to research.",
+  qualify: "I had no leads to qualify.",
+  match: "I found no listings that match these leads.",
+  outreach: "I had no leads to write to.",
+  proposal: "I had no leads that need a proposal.",
+};
 function donePhrase(cap: string, n: number): string {
   const s = n === 1 ? "" : "s";
   switch (cap) {
@@ -136,6 +146,14 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   const finisher = finisherId ? await agentInfo(userId, finisherId) : null;
   if (!finisher) return;
   const first = (info: AgentInfo) => info.name.split(" ")[0];
+
+  // A stage that moved no leads forward ends the chain. The next stage has no
+  // new work, so tell the user instead of running each later stage on 0 leads.
+  if (count <= 0) {
+    const userName = await userFirstName(userId);
+    await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."} I stopped the chain here.`);
+    return;
+  }
 
   // Scrape → the assessor gate (the only stage that turns pending into accepted).
   if (completedKind === "scrape") {

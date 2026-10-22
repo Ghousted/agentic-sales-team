@@ -2,18 +2,24 @@
 // App chrome, styled after the redesign: a 272px light sidebar (collapses to a
 // 64px icon rail) with Search, New chat, the main pages, recent team chats and
 // workspace/account rows; a slim header with the inbox + notification bells.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsBell from "./NotificationsBell";
 import InboxBell from "./InboxBell";
-import { hasUnread, loadRead, saveRead, sameRead, syncRead, type ReadCounts } from "./unread";
+import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type SeenIds } from "./unread";
+import { listChatUnread } from "@/lib/chat/actions";
+import { setFaviconDot } from "./faviconBadge";
 
 // Lucide "calendar" (not in the design's icon-font subset).
 const CalendarIcon = ({ size = 17 }: { size?: number }) => (
   <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+);
+// Lucide "trash-2" (also not in the subset).
+const TrashIcon = ({ size = 15 }: { size?: number }) => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" /></svg>
 );
 const Ico = ({ name, size = 17 }: { name: string; size?: number }) => name === "calendar" ? <CalendarIcon size={size} /> : <i className={"icon-" + name} style={{ fontSize: size }} />;
 
@@ -48,24 +54,59 @@ const ROW = "height:40px;display:flex;align-items:center;gap:12px;padding:0 12px
 const RAIL_BTN = "position:relative;width:40px;height:40px;border:0;border-radius:12px;color:#4a5565;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
-  const { s, set, teams, logout } = useApp();
+  const { s, set, teams, logout, clearChat, showToast } = useApp();
   const router = useRouter();
   const path = usePathname();
   const open = s.sidebarOpen;
   const [pm, setPm] = useState(false);
   const pmRef = useRef<HTMLDivElement>(null);
   const [focusSearch, setFocusSearch] = useState(false);
-  // Messages seen per conversation; null until loaded from storage (no dots before then).
-  const [read, setRead] = useState<ReadCounts | null>(null);
+  // Last message id seen per conversation (from storage) and the server's unread
+  // counts. Agents post into closed chats (pod hand-offs, job results), so the
+  // counts come from a poll, not from the chats already in the store.
+  const seenRef = useRef<SeenIds | null>(null);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const readUser = s.userEmail || s.userName;
   const viewing = path.startsWith("/chats") ? s.convId : null;
+  const lastViewing = useRef<string | null>(null);
 
-  useEffect(() => { setRead(loadRead(readUser)); }, [readUser]);
+  useEffect(() => { seenRef.current = loadSeen(readUser); }, [readUser]);
+  const refreshUnread = useCallback(async (markRead: (string | null)[]) => {
+    const before = seenRef.current;
+    if (!before) return;
+    try {
+      const heads = await listChatUnread(before);
+      const cur = seenRef.current ?? before;
+      const next = syncSeen(cur, heads, markRead);
+      if (!sameSeen(cur, next)) { seenRef.current = next; saveSeen(readUser, next); }
+      setUnread(unreadCounts(heads, markRead));
+    } catch { /* temporary error. Try again on the next tick. */ }
+  }, [readUser]);
   useEffect(() => {
-    if (!read) return;
-    const next = syncRead(read, s.chats, viewing);
-    if (!sameRead(read, next)) { setRead(next); saveRead(readUser, next); }
-  }, [read, s.chats, viewing, readUser]);
+    // The chat just left was on screen until now, so mark it read too.
+    const left = lastViewing.current !== viewing ? lastViewing.current : null;
+    lastViewing.current = viewing;
+    refreshUnread([viewing, left]);
+    const tick = () => { if (document.visibilityState === "visible") refreshUnread([viewing]); };
+    const iv = setInterval(tick, 10_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", tick); window.removeEventListener("focus", tick); };
+  }, [viewing, refreshUnread]);
+  // Recent-chat row that shows its delete button (hover or keyboard focus), and
+  // the row waiting for the user to confirm the delete.
+  const [rowTools, setRowTools] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const deleteHistory = async (id: string, name: string) => {
+    setConfirmDel(null);
+    setUnread((u) => ({ ...u, [id]: 0 }));
+    await clearChat(id);
+    showToast(`Deleted the chat history of ${name}.`);
+  };
+  const anyUnread = teams.some((t) => t.id !== viewing && (unread[t.id] ?? 0) > 0);
+  // The browser tab shows new messages too: a red dot on the favicon.
+  useEffect(() => { setFaviconDot(anyUnread); }, [anyUnread]);
+  useEffect(() => () => { setFaviconDot(false); }, []);
 
   useEffect(() => {
     if (!pm) return;
@@ -108,13 +149,27 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {teams.length === 0 && <div style={css("padding:6px 12px;font-size:14px;color:#6b7686")}>No chats yet</div>}
             {teams.map((t, i) => {
               const cur = path.startsWith("/chats") && s.convId === t.id;
-              const dot = !!read && !cur && hasUnread(s.chats[t.id], read[t.id]);
+              const n = cur ? 0 : unread[t.id] ?? 0;
+              const dot = n > 0;
+              const tools = !cur && (rowTools === t.id || confirmDel === t.id);
+              if (confirmDel === t.id) return (
+                <div key={t.id} role="group" aria-label={`Delete the chat history of ${t.name}?`} style={css("display:flex;align-items:center;gap:6px;height:36px;padding:0 6px 0 12px;border-radius:10px;background:#fdecec")}>
+                  <span style={css("flex:1;min-width:0;font-size:13px;color:#b91c1c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>Delete history?</span>
+                  <Btn onClick={() => deleteHistory(t.id, t.name)} autoFocus style="height:26px;padding:0 10px;border:0;border-radius:999px;background:#c0392b;color:#ffffff;font-size:12px;font-weight:600;cursor:pointer" styleHover="background:#a93226">Delete</Btn>
+                  <Btn onClick={() => setConfirmDel(null)} style="height:26px;padding:0 10px;border:0;border-radius:999px;background:transparent;color:#4a5565;font-size:12px;font-weight:500;cursor:pointer" styleHover="background:#f6d5d5">Cancel</Btn>
+                </div>
+              );
               return (
-                <Btn key={t.id} onClick={() => openChat(t.id)} aria-current={cur ? "page" : undefined} style={{ ...css("position:relative;width:100%;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 12px;border:0;border-radius:10px;text-align:left;cursor:pointer;transition:background .12s,transform .1s;animation:cUp .25s ease-out backwards"), background: cur ? "#eceef1" : "transparent", animationDelay: i * 0.03 + "s" }} styleHover="background:#eceef1">
+                <div key={t.id} onMouseEnter={() => setRowTools(t.id)} onMouseLeave={() => setRowTools((r) => (r === t.id ? null : r))} onFocus={() => setRowTools(t.id)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setRowTools((r) => (r === t.id ? null : r)); }} style={{ ...css("position:relative;animation:cUp .25s ease-out backwards"), animationDelay: i * 0.03 + "s" }}>
+                <Btn onClick={() => openChat(t.id)} aria-current={cur ? "page" : undefined} aria-label={dot ? `${t.name}, ${n} unread message${n === 1 ? "" : "s"}` : undefined} style={{ ...css("position:relative;width:100%;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 12px;border:0;border-radius:10px;text-align:left;cursor:pointer;transition:background .12s,transform .1s"), background: cur || tools ? "#eceef1" : "transparent" }} styleHover="background:#eceef1">
                   <span style={css("width:18px;height:18px;flex:none;border-radius:50%;background:" + t.iconBg + ";font-size:10px;display:flex;align-items:center;justify-content:center")}>{t.icon}</span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: dot || cur ? 500 : 400, color: dot || cur ? "#101418" : "#6b7686", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color .2s" }}>{t.name}</span>
-                  {dot && <span aria-hidden="true" style={css("width:7px;height:7px;flex:none;border-radius:50%;background:#006aff")} />}
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: dot || cur ? 500 : 400, color: dot || cur ? "#101418" : "#6b7686", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color .2s", paddingRight: tools ? 24 : 0 }}>{t.name}</span>
+                  {dot && !tools && <span aria-hidden="true" style={css("min-width:18px;height:18px;flex:none;padding:0 5px;border-radius:999px;background:#006aff;color:#ffffff;font-size:11px;font-weight:600;line-height:18px;text-align:center;animation:cUp .2s ease-out backwards")}>{badgeText(n)}</span>}
                 </Btn>
+                {!cur && (
+                  <Btn onClick={() => setConfirmDel(t.id)} aria-label={`Delete the chat history of ${t.name}`} title="Delete chat history" style={{ ...css("position:absolute;top:4px;right:6px;width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .12s"), opacity: tools ? 1 : 0 }} styleHover="background:#e2e5e9;color:#b91c1c"><TrashIcon /></Btn>
+                )}
+                </div>
               );
             })}
           </nav>
@@ -158,7 +213,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           {NAV.map((nv) => (
             <Btn key={nv.href} onClick={() => router.push(nv.href)} aria-label={nv.label} title={nv.label} style={RAIL_BTN + ";background:" + (isActive(nv.href, path) ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name={nv.icon} size={18} /></Btn>
           ))}
-          <Btn onClick={() => router.push("/chats")} aria-label="Chats" title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} /></Btn>
+          <Btn onClick={() => router.push("/chats")} aria-label={anyUnread ? "Chats, unread messages" : "Chats"} title="Chats" style={RAIL_BTN + ";background:" + (path.startsWith("/chats") ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="messages-square" size={18} />{anyUnread && <span aria-hidden="true" style={css("position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#006aff;box-shadow:0 0 0 2px #f6f7f9")} />}</Btn>
           <div style={{ flex: 1 }} />
           <Btn onClick={() => router.push("/settings")} aria-label="Workspace" title="Workspace" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><span style={css("width:26px;height:26px;border-radius:7px;background:#101418;color:#ffffff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center")}>{wsInitial}</span></Btn>
           <Btn onClick={doLogout} aria-label="Log out" title="Log out" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="log-out" size={18} /></Btn>

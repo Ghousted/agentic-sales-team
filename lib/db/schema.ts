@@ -1,5 +1,6 @@
 // Drizzle schema for the app's Postgres (Neon) database.
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial, vector, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, primaryKey, serial, vector, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -181,7 +182,13 @@ export const outreachDrafts = pgTable("outreach_drafts", {
   dismissed: boolean("dismissed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
-});
+}, (t) => ({
+  // At most one live (unsent, not discarded) draft per lead, so two runs on the
+  // same team book can't both draft the same lead. Sent and discarded drafts
+  // don't count, so a lead can be drafted again after either.
+  liveLeadIdx: uniqueIndex("outreach_drafts_live_lead_idx").on(t.leadId)
+    .where(sql`${t.status} <> 'sent' AND ${t.dismissed} = false`),
+}));
 
 // Agent-written proposals (products/services bundled for a lead).
 export const proposals = pgTable("proposals", {
@@ -195,7 +202,11 @@ export const proposals = pgTable("proposals", {
   status: text("status").notNull().default("draft"), // draft|sent
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
-});
+}, (t) => ({
+  // One proposal per lead, matching pickLeadsForProposal, which never picks a
+  // lead that already has one. Stops concurrent runs writing two.
+  leadIdx: uniqueIndex("proposals_lead_id_idx").on(t.leadId),
+}));
 
 // Meetings that a Meeting agent booked. This is the only source for the calendar view.
 export const meetings = pgTable("meetings", {

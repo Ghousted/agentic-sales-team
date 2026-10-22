@@ -410,17 +410,21 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
   return pool.filter((l) => !draftedIds.has(l.id)).slice(0, batchSize);
 }
 
-/** Persist one engine result: the draft, the lead's new score/stage, and activity. */
-export async function applyOutreachResult(userId: string, agentId: string, lead: LeadRow, result: OutreachResult): Promise<void> {
+/** Persist one engine result: the draft, the lead's new score/stage, and activity.
+ *  Returns false, writing nothing, when the lead already has a live draft (a
+ *  concurrent run got there first; see outreach_drafts_live_lead_idx). */
+export async function applyOutreachResult(userId: string, agentId: string, lead: LeadRow, result: OutreachResult): Promise<boolean> {
   const db = getDb();
-  await db.insert(outreachDrafts).values({
+  const inserted = await db.insert(outreachDrafts).values({
     userId, agentId, leadId: lead.id, subject: result.subject, body: result.body, rationale: result.rationale,
-  });
+  }).onConflictDoNothing().returning({ id: outreachDrafts.id });
+  if (!inserted.length) return false;
   const stage = LEAD_STAGES.includes(result.stage as (typeof LEAD_STAGES)[number]) ? result.stage : lead.status;
   await db.update(leads).set({
     score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
   }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId)));
   await db.insert(activity).values({ userId, agentId, type: "email_drafted", leadId: lead.id, text: `Drafted "${result.subject}" for ${lead.name}` });
+  return true;
 }
 
 /** Pick the agent's leads that don't have a research brief yet (or the given

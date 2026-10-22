@@ -41,20 +41,43 @@ export const AGENT_TYPES: AgentType[] = [
 export function typeById(id: string): AgentType | undefined {
   return AGENT_TYPES.find((t) => t.id === id);
 }
-export interface TeamTemplate { id: string; label: string; desc: string; requiredCapabilities: Capability[] }
+export interface TeamTemplate { id: string; label: string; desc: string; requiredCapabilities: Capability[]; comingSoon: Capability[] }
+
+/** True when the job engine can actually run this capability today. */
+export function isEngineReady(cap: Capability): boolean {
+  return CAPABILITIES.find((c) => c.id === cap)?.engineReady ?? false;
+}
+
+// A template lists every capability it wants. Only engine-ready ones become
+// requirements; the rest are shown as "coming soon" so a team isn't blocked on
+// (or nudged to hire an agent for) work nothing can run yet.
+function template(id: string, label: string, desc: string, caps: Capability[]): TeamTemplate {
+  return { id, label, desc, requiredCapabilities: caps.filter(isEngineReady), comingSoon: caps.filter((c) => !isEngineReady(c)) };
+}
 
 export const TEAM_TEMPLATES: TeamTemplate[] = [
-  { id: "outbound", label: "Outbound", desc: "Cold prospecting engine.", requiredCapabilities: ["scrape", "outreach", "follow-up"] },
-  { id: "leadgen", label: "Lead-Gen / Research", desc: "Top-of-funnel list building.", requiredCapabilities: ["scrape"] },
-  { id: "enterprise", label: "Enterprise / Named Accounts", desc: "Multi-thread warm accounts to meetings.", requiredCapabilities: ["outreach", "book-meeting"] },
-  { id: "fullcycle", label: "Full-Cycle Pod", desc: "Self-contained squad, end to end.", requiredCapabilities: ["scrape", "outreach", "follow-up", "book-meeting"] },
-  { id: "nurture", label: "Nurture / Re-engagement", desc: "Revive cold & stalled leads.", requiredCapabilities: ["follow-up", "outreach"] },
-  { id: "meetings", label: "Meeting-Booking / SDR→AE", desc: "Book demos, hand off to closers.", requiredCapabilities: ["outreach", "book-meeting"] },
-  { id: "recruitment", label: "Recruitment", desc: "Source & contact candidates.", requiredCapabilities: ["scrape", "outreach"] },
-  { id: "success", label: "Customer Success", desc: "Retention, check-ins, renewals.", requiredCapabilities: ["follow-up"] },
-  { id: "revenue", label: "Qualify → Propose", desc: "Prioritize the book and send proposals.", requiredCapabilities: ["qualify", "proposal"] },
-  { id: "custom", label: "Custom", desc: "Freeform — pick any agents.", requiredCapabilities: [] },
+  template("outbound", "Outbound", "Cold prospecting engine.", ["scrape", "outreach", "follow-up"]),
+  template("leadgen", "Lead-Gen / Research", "Top-of-funnel list building.", ["scrape"]),
+  template("enterprise", "Enterprise / Named Accounts", "Multi-thread warm accounts to meetings.", ["outreach", "book-meeting"]),
+  template("fullcycle", "Full-Cycle Pod", "Self-contained squad, end to end.", ["scrape", "outreach", "follow-up", "book-meeting"]),
+  template("nurture", "Nurture / Re-engagement", "Revive cold & stalled leads.", ["follow-up", "outreach"]),
+  template("meetings", "Meeting-Booking / SDR→AE", "Book demos, hand off to closers.", ["outreach", "book-meeting"]),
+  template("recruitment", "Recruitment", "Source & contact candidates.", ["scrape", "outreach"]),
+  template("success", "Customer Success", "Retention, check-ins, renewals.", ["follow-up"]),
+  template("revenue", "Qualify → Propose", "Prioritize the book and send proposals.", ["qualify", "proposal"]),
+  template("custom", "Custom", "Freeform — pick any agents.", []),
 ];
+
+/** Parse the wizard's free-text meeting length ("30", "30 min", "1 hour", "1.5h")
+ *  into the whole minutes lib/meetings/store.ts reads as book-meeting.duration.
+ *  Returns undefined for anything unparseable or outside 5 min – 8 h. */
+export function parseMeetingMinutes(text: string): number | undefined {
+  const m = text.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(m|mins?|minutes?|h|hrs?|hours?)?$/);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]) * (m[2]?.startsWith("h") ? 60 : 1);
+  const minutes = Math.round(n);
+  return minutes >= 5 && minutes <= 480 ? minutes : undefined;
+}
 
 export function templateById(id: string): TeamTemplate | undefined {
   return TEAM_TEMPLATES.find((t) => t.id === id);

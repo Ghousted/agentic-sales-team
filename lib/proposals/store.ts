@@ -1,7 +1,7 @@
 import "server-only";
 // Generated proposals: per-agent list + create + mark-sent, and the lead pool
 // for the proposal job (accepted teammate leads without a proposal yet).
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notExists } from "drizzle-orm";
 import { getDb, isDbConfigured, proposals, leads } from "@/lib/db";
 import { teammatesOf } from "@/lib/teams/membership";
 import type { ProposalResult } from "@/lib/leads/types";
@@ -33,18 +33,17 @@ export async function markProposalSent(userId: string, id: string): Promise<void
 }
 
 // Accepted teammate leads that don't yet have a proposal, oldest first, capped.
+// The "no proposal yet" filter runs in SQL before LIMIT, so leads that already
+// have one can't fill the window and starve newer leads.
 export async function pickLeadsForProposal(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
   if (!isDbConfigured()) return [];
   const db = getDb();
+  const noProposal = notExists(db.select({ id: proposals.id }).from(proposals)
+    .where(and(eq(proposals.userId, userId), eq(proposals.leadId, leads.id))));
+  const accepted = and(eq(leads.userId, userId), eq(leads.review, "accepted"), noProposal);
+  if (leadIds && leadIds.length) {
+    return db.select().from(leads).where(and(accepted, inArray(leads.id, leadIds))).limit(batchSize);
+  }
   const mates = await teammatesOf(userId, agentId);
-  const accepted = and(eq(leads.userId, userId), eq(leads.review, "accepted"));
-  const candidates = leadIds && leadIds.length
-    ? await db.select().from(leads).where(and(accepted, inArray(leads.id, leadIds))).limit(batchSize + 50)
-    : await db.select().from(leads).where(and(accepted, inArray(leads.agentId, mates))).orderBy(asc(leads.createdAt)).limit(batchSize + 50);
-  if (candidates.length === 0) return [];
-  const ids = candidates.map((l) => l.id);
-  const existing = await db.select({ leadId: proposals.leadId }).from(proposals)
-    .where(and(eq(proposals.userId, userId), inArray(proposals.leadId, ids)));
-  const has = new Set(existing.map((e) => e.leadId));
-  return candidates.filter((l) => !has.has(l.id)).slice(0, batchSize);
+  return db.select().from(leads).where(and(accepted, inArray(leads.agentId, mates))).orderBy(asc(leads.createdAt)).limit(batchSize);
 }

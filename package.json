@@ -10,7 +10,8 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -20,7 +21,7 @@
     "drizzle-orm": "^0.45.2",
     "gsap": "^3.15.0",
     "jose": "^6.2.3",
-    "next": "14.2.15",
+    "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "server-only": "^0.0.1"
@@ -32,6 +33,7 @@
     "@types/react-dom": "18.3.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
-    "typescript": "5.5.3"
+    "typescript": "5.5.3",
+    "vitest": "3.2.4"
   }
 }

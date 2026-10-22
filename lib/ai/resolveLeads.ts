@@ -15,10 +15,25 @@ const SCHEMA = {
   required: ["mode", "leadIds"],
 } as const;
 
+const words = (s: string) => s.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+
+/** Without AI: "all"/"everyone" → all; else the leads whose full name, first or
+ *  last name, or company appears as whole words in the reply. */
+export function matchLeadsByName(reply: string, leads: TeamLeadPick[]): TargetResolution {
+  if (/^\s*(all|everyone|everybody|all of them|the whole list)\s*[.!]?\s*$/i.test(reply)) return { mode: "all", leadIds: [] };
+  const said = new Set(words(reply));
+  const ids = leads
+    .filter((l) => words(l.name).some((w) => said.has(w)) || (l.company && words(l.company).length > 0 && words(l.company).every((w) => said.has(w))))
+    .map((l) => l.id);
+  return ids.length ? { mode: "some", leadIds: ids } : { mode: "none", leadIds: [] };
+}
+
 /** Map a reply like "Maria", "the Makati buyer", "all", or "this" to lead ids.
- *  Returns mode='none' (safe re-ask) on empty catalog, no AI key, or error. */
+ *  Uses name matching when AI isn't configured or fails; mode='none' (safe
+ *  re-ask) on an empty catalog or no match. */
 export async function resolveTargetLeads(reply: string, leads: TeamLeadPick[]): Promise<TargetResolution> {
-  if (!isAIConfigured() || leads.length === 0) return { mode: "none", leadIds: [] };
+  if (leads.length === 0) return { mode: "none", leadIds: [] };
+  if (!isAIConfigured()) return matchLeadsByName(reply, leads);
   const list = leads
     .map((l) => `id=${l.id} | ${l.name}${l.title ? " — " + l.title : ""}${l.company ? " @ " + l.company : ""}${l.platform ? " (" + l.platform + ")" : ""}`)
     .join("\n");
@@ -37,7 +52,8 @@ export async function resolveTargetLeads(reply: string, leads: TeamLeadPick[]): 
     const mode = r.mode === "all" || r.mode === "some" || r.mode === "none" ? r.mode : "none";
     const ids = Array.isArray(r.leadIds) ? r.leadIds.filter((id) => leads.some((l) => l.id === id)) : [];
     return { mode, leadIds: mode === "some" ? ids : [] };
-  } catch {
-    return { mode: "none", leadIds: [] };
+  } catch (e) {
+    console.error("[resolveLeads] AI call failed, matching by name:", e);
+    return matchLeadsByName(reply, leads);
   }
 }

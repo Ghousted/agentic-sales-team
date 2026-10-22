@@ -3,9 +3,9 @@ import { drizzle } from "drizzle-orm/pg-proxy";
 import * as schema from "@/lib/db/schema";
 
 // The fake database answers only the "messages sent today" count.
-const db = drizzle(async (sql) => ({ rows: /^select count/.test(sql) ? [[0]] : [] }), { schema });
+const db = drizzle(async (sql) => ({ rows: /^select count/.test(sql) ? [[0]] : /from "jobs"/.test(sql) ? state.lastJobs : [] }), { schema });
 const scout = { id: "s1", name: "Ava Reyes", role: "Scout", goal: "find buyers", task: "", capabilities: ["scrape"] };
-const state = vi.hoisted(() => ({ history: [] as { id: number; who: string; text: string }[] }));
+const state = vi.hoisted(() => ({ history: [] as { id: number; who: string; text: string }[], lastJobs: [] as unknown[][] }));
 
 vi.mock("@/lib/db", async (importActual) => ({ ...(await importActual<typeof import("@/lib/db")>()), isDbConfigured: () => true, getDb: () => db }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
@@ -45,6 +45,7 @@ function agentSaid(text: string) {
 
 beforeEach(() => {
   state.history = [];
+  state.lastJobs = [];
   team.members = ["s1"];
   vi.mocked(enqueueJob).mockClear();
 });
@@ -142,6 +143,25 @@ describe("scrape clarifying questions", () => {
     const res = await teamChat("t1", scrapeAnswerText({ where: "Manila", count: "5" }));
     expect(enqueueJob).not.toHaveBeenCalled();
     expect(res.messages[0].text).toMatch(/Who should I look for\?/);
+  });
+
+  it("asks only how many for 'look for more', with the last search's who and where", async () => {
+    state.lastJobs = [[{ teamId: "t1", instruction: "find AI training buyers. Location: Metro Manila Philippines." }]];
+    intent("scrape");
+    const res = await teamChat("t1", "Lets look for more @Nina");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/^I will search again for find AI training buyers, in Metro Manila Philippines\. One detail first\.\nHow many leads/);
+    agentSaid(res.messages[0].text);
+    intent("chat");
+    await teamChat("t1", "10");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Location: Metro Manila Philippines." });
+  });
+
+  it("passes the agent's last message to intent detection", async () => {
+    agentSaid("If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
+    intent("chat");
+    await teamChat("t1", "yes");
+    expect(vi.mocked(detectIntent).mock.calls.at(-1)?.[2]).toBe("If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
   });
 
   it("caps the count and says so", async () => {

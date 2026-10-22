@@ -99,3 +99,20 @@ describe("detectIntent", () => {
     expect((await detectIntent("wipe the leads", agents)).capability).toBe("unknown");
   });
 });
+
+describe("detectIntent context", () => {
+  it("sends the agent's last message so a short reply can be read", async () => {
+    fetchMock.mockResolvedValue(reply({ capability: "scrape", params: {}, summary: "find more leads" }));
+    await detectIntent("yes", agents, "If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
+    const user = body().messages.at(-1).content as string;
+    expect(user).toMatch(/^The agent's last message: If you'd like to adjust the criteria/);
+    expect(user).toMatch(/The user's message: yes$/);
+    expect(body().messages[0].content).toMatch(/'Look for more'.*are scrape requests/);
+  });
+
+  it("sends the message alone when there is no agent message", async () => {
+    fetchMock.mockResolvedValue(reply({ capability: "chat", params: {}, summary: "hi" }));
+    await detectIntent("hello", agents);
+    expect(body().messages.at(-1).content).toBe("hello");
+  });
+});

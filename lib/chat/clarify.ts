@@ -48,6 +48,10 @@ export interface ScrapeBrief {
   count?: number;
   /** How many times the agent has asked. */
   asked?: number;
+  /** "Look for more": who and where come from the last search. */
+  again?: boolean;
+  /** The last search's values, offered as quick picks in the question card. */
+  suggest?: { what?: string; where?: string };
 }
 
 export type BriefField = "what" | "where" | "count";
@@ -79,6 +83,8 @@ export function mergeBrief(base: ScrapeBrief, add: ScrapeBrief): ScrapeBrief {
     where: add.where?.trim() || base.where,
     count: add.count && add.count > 0 ? add.count : base.count,
     asked: base.asked,
+    again: base.again,
+    suggest: base.suggest,
   };
 }
 
@@ -103,7 +109,9 @@ const BRIEF_QUESTION: Record<BriefField, string> = {
 /** One message that asks only for the missing details. The hidden ⟦scrape:…⟧
  *  marker (stripped in the chat UI) carries what is already known. */
 export function askScrapeDetailsText(b: ScrapeBrief, missing: BriefField[], maxCount: number): string {
-  const lead = `Before I start, I need ${missing.length === 1 ? (b.asked ? "one more detail" : "one detail") : "a few details"}.`;
+  const lead = b.again && b.what
+    ? `I will search again for ${b.what.length > 120 ? b.what.slice(0, 117).trimEnd() + "…" : b.what}${b.where && b.where !== "anywhere" ? `, in ${b.where}` : ""}. ${missing.length === 1 ? "One detail first." : "A few details first."}`
+    : `Before I start, I need ${missing.length === 1 ? (b.asked ? "one more detail" : "one detail") : "a few details"}.`;
   const qs = missing.map((f, i) => `${missing.length > 1 ? `${i + 1}. ` : ""}${BRIEF_QUESTION[f].replace("25", String(maxCount))}`);
   const state = encodeURIComponent(JSON.stringify({ ...b, asked: (b.asked ?? 0) + 1 }));
   return `${lead}\n${qs.join("\n")} ⟦scrape:${state}⟧`;
@@ -117,7 +125,9 @@ export function pendingScrapeBrief(text: string): ScrapeBrief | null {
     const raw = JSON.parse(decodeURIComponent(m[1])) as Record<string, unknown>;
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : undefined);
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
-    return { what: str(raw.what), where: str(raw.where), count: num(raw.count), asked: num(raw.asked) ?? 1 };
+    const sg = raw.suggest && typeof raw.suggest === "object" ? (raw.suggest as Record<string, unknown>) : null;
+    const suggest = sg ? { what: str(sg.what), where: str(sg.where) } : undefined;
+    return { what: str(raw.what), where: str(raw.where), count: num(raw.count), asked: num(raw.asked) ?? 1, ...(raw.again === true ? { again: true } : {}), ...(suggest && (suggest.what || suggest.where) ? { suggest } : {}) };
   } catch {
     return null;
   }
@@ -127,6 +137,18 @@ export function pendingScrapeBrief(text: string): ScrapeBrief | null {
 export function askedBriefFields(text: string): BriefField[] {
   const b = pendingScrapeBrief(text);
   return b ? missingBriefFields(b) : [];
+}
+
+/** The quick picks for each field of a ⟦scrape:…⟧ question: the last search's
+ *  values first, then the standard options. */
+export function briefOptions(text: string): Record<BriefField, string[]> {
+  const sg = pendingScrapeBrief(text)?.suggest;
+  const first = (v: string | undefined, rest: string[]) => (v ? [v, ...rest.filter((o) => o.toLowerCase() !== v.toLowerCase())] : rest);
+  return {
+    what: first(sg?.what, BRIEF_OPTIONS.what),
+    where: first(sg?.where && sg.where.toLowerCase() !== "anywhere" ? sg.where : undefined, BRIEF_OPTIONS.where),
+    count: BRIEF_OPTIONS.count,
+  };
 }
 
 /** The reply the question card sends: readable text plus a hidden ⟦answer:…⟧
@@ -164,6 +186,18 @@ export function scrapeStartText(b: ScrapeBrief, count: number, maxCount: number)
     `• How many: ${count} lead${count === 1 ? "" : "s"}${b.count && b.count > maxCount ? ` (${maxCount} is the most per search)` : ""}`,
     "I will post the results here.",
   ].join("\n");
+}
+
+/** The brief behind a search instruction written by briefInstruction. */
+export function briefFromInstruction(instruction: string): ScrapeBrief {
+  const m = instruction.trim().match(/^([\s\S]*?)(?:\.\s*Location:\s*([^]+?)\.?)?$/);
+  const what = m?.[1]?.trim().replace(/\.$/, "");
+  return { what: what || undefined, where: m?.[2]?.trim() || undefined };
+}
+
+/** "Look for more" / "search again": the user wants another batch like the last. */
+export function isMoreRequest(message: string): boolean {
+  return /\b(more|again|another (batch|round|search|set)|same (search|criteria|again))\b/i.test(message.replace(/@[\w'-]+/g, " "));
 }
 
 /** The search instruction for a complete brief. */

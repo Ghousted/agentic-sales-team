@@ -8,12 +8,12 @@ import { detectIntent } from "@/lib/ai/intent";
 import { resolve, parseMentions, type ChatOutMsg } from "./orchestrate";
 import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutcome, chatUnread } from "./teamMessages";
-import { sinceLastUserMessage, type StoredMsg } from "./thread";
+import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
 import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeStartText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
-import { briefFromRequest, readScrapeAnswer } from "./scrapeBrief";
+import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
 import { runMarker } from "@/lib/scrape/steps";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
@@ -164,7 +164,9 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     break;
   }
 
-  const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })));
+  // The agent's last line lets a short reply ("yes") be read as an answer to it.
+  const lastAgent = [...history].reverse().find((m) => m.who !== "me" && m.who !== "system");
+  const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })), lastAgent ? stripMarkers(lastAgent.text) : undefined);
   const mentions = parseMentions(message, members);
 
   // Pending meeting time: the Meeting agent asked "when?" or "what time?". This
@@ -259,7 +261,8 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // A scrape needs who, where and how many. Ask for what is missing before it runs.
   if (cap === "scrape") {
     // A card answer with no open question (a stale card) still gives the place and count.
-    const step = await scrapeStep(actor, teamId, mergeBrief(briefFromRequest(message, intent.params), scrapeAnswerFrom(message) ?? {}));
+    const asked = mergeBrief(briefFromRequest(message, intent.params), scrapeAnswerFrom(message) ?? {});
+    const step = await scrapeStep(actor, teamId, withLastSearch(asked, message, await lastScrapeBrief(userId, teamId)));
     return { ...step, messages: [...pre, ...step.messages] };
   }
 

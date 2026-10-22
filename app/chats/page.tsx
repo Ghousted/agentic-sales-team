@@ -6,7 +6,7 @@ import { av } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
 import { listTeamMessages } from "@/lib/chat/actions";
 import { mergeThread, stripMarkers, threadCursor, leadIdsFrom, type StoredMsg, type ThreadMsg } from "@/lib/chat/thread";
-import { askedBriefFields } from "@/lib/chat/clarify";
+import { askedBriefFields, briefOptions } from "@/lib/chat/clarify";
 import ScrapeQuestions from "./ScrapeQuestions";
 import ScrapeResults from "./ScrapeResults";
 import ScrapeProgress from "./ScrapeProgress";
@@ -293,7 +293,7 @@ function ChatsInner() {
                   )}
                   {runId && <ScrapeProgress jobId={runId} />}
                   {foundIds.length > 0 && <ScrapeResults ids={foundIds} />}
-                  {showQuestions && <ScrapeQuestions key={(m as ThreadMsg).id ?? i} fields={asked} onSend={(text) => sendTeamChat(activeTeam.id, text, [])} />}
+                  {showQuestions && <ScrapeQuestions key={(m as ThreadMsg).id ?? i} fields={asked} options={briefOptions(m.text)} onSend={(text) => sendTeamChat(activeTeam.id, text, [])} />}
                   {showApprove && (
                     <div style={css("display:flex;gap:6px;flex-wrap:wrap;animation:cUp .25s ease-out backwards")}>
                       <Btn onClick={() => onApprove(am![1])} style="height:34px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="background:#2a313b"><i className="icon-check" style={{ fontSize: 15 }} />Approve</Btn>

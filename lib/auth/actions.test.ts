@@ -34,8 +34,17 @@ const h = vi.hoisted(() => {
       values: (v: Record<string, unknown>) => {
         state.writes.push("insert:" + table._);
         if (table._ === "users") v = { id: "u-new", workspaceName: "My Workspace", ...v };
-        rowsFor(table).push(v);
-        return { returning: async () => [v] };
+        // users.email is unique: with onConflictDoNothing a taken email inserts nothing.
+        const taken = table._ === "users" && state.users.some((r) => r.email === v.email);
+        if (!taken) rowsFor(table).push(v);
+        const rows = taken ? [] : [v];
+        return {
+          returning: async () => {
+            if (taken) throw new Error("duplicate key value violates unique constraint");
+            return rows;
+          },
+          onConflictDoNothing: () => ({ returning: async () => rows }),
+        };
       },
     }),
     update: (table: { _: string }) => ({
@@ -131,6 +140,39 @@ describe("signUp workspaces", () => {
   it("creates the account's first workspace, with the account's own id", async () => {
     expect((await signUp({ email: "bea@example.com", password: "password-123" })).ok).toBe(true);
     expect(h.state.workspaces).toEqual([{ id: "u-new", ownerId: "u-new", name: "My Workspace" }]);
+  });
+});
+
+describe("signUp email enumeration", () => {
+  it("refuses a registered email with the same error as other failed sign-ups, and creates nothing", async () => {
+    const res = await signUp({ email: "alice@example.com", password: "password-123" });
+    expect(res.ok).toBe(false);
+    expect(res.error).not.toMatch(/exists|registered|taken/i);
+    expect(h.state.users).toHaveLength(1);
+    expect(h.state.workspaces).toHaveLength(0);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it("hashes the password even when the email is taken, so both paths cost the same", async () => {
+    const hash = vi.spyOn(bcrypt, "hash");
+    await signUp({ email: "alice@example.com", password: "password-123" });
+    await signUp({ email: "bea@example.com", password: "password-123" });
+    expect(hash).toHaveBeenCalledTimes(2);
+    hash.mockRestore();
+  });
+
+  it("never reads the users table to check the email first", async () => {
+    const select = vi.spyOn(h.db, "select");
+    await signUp({ email: "alice@example.com", password: "password-123" });
+    expect(select).not.toHaveBeenCalled();
+    select.mockRestore();
+  });
+
+  it("is still rate limited per email", async () => {
+    const results = [];
+    for (let i = 0; i < 30; i++) results.push(await signUp({ email: "alice@example.com", password: "password-123" }));
+    const errors = new Set(results.map((r) => r.error));
+    expect(errors.size).toBe(2); // the generic refusal, then the rate-limit message
   });
 });
 

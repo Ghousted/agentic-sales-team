@@ -1,4 +1,4 @@
-// Time limits for the job runners (/api/jobs/run, /api/cron/jobs, /api/scrape). A serverless
+// Time limits for the job runners (/api/jobs/run, /api/cron/jobs, /api/scrape, /api/cron/scrape). A serverless
 // function killed at maxDuration leaves its claimed job 'running' with nothing to
 // finish it, so the runners keep inside a budget and reap jobs that outlived one.
 import { and, eq, inArray } from "drizzle-orm";

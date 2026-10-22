@@ -90,7 +90,7 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("./session", () => ({ createSession: vi.fn(), destroySession: vi.fn(), getSession: vi.fn(), revokeSessions: vi.fn(), WORKSPACE_COOKIE: "ws" }));
 
-import { requestPasswordReset, resetPassword, signIn, signOut, signUp, validateResetToken } from "./actions";
+import { currentUser, requestPasswordReset, resetPassword, signIn, signOut, signUp, validateResetToken } from "./actions";
 import { createSession, destroySession, getSession, revokeSessions } from "./session";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -266,5 +266,24 @@ describe("rate limiting", () => {
   it("blocks the 11th reset-token attempt from one IP inside an hour", async () => {
     for (let i = 0; i < 10; i++) expect((await resetPassword({ token: `guess-${i}`, password: "new-password-1" })).error).not.toMatch(TOO_MANY);
     expect((await resetPassword({ token: "guess-x", password: "new-password-1" })).error).toMatch(TOO_MANY);
+  });
+});
+
+describe("currentUser", () => {
+  it("rethrows Next's dynamic-usage signal instead of logging it as a failure", async () => {
+    const dynamic = Object.assign(new Error("Dynamic server usage: cookies"), { digest: "DYNAMIC_SERVER_USAGE" });
+    vi.mocked(getSession).mockRejectedValue(dynamic);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(currentUser()).rejects.toBe(dynamic);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("treats a real session read failure as logged-out", async () => {
+    vi.mocked(getSession).mockRejectedValue(new Error("db down"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await currentUser()).toBeNull();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

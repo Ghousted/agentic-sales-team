@@ -34,7 +34,8 @@ export default function TeamDetail() {
   const [eGoal, setEGoal] = useState("");
   const { live, byLead } = useLiveWork();
 
-  const team = teams.find((t) => t.id === params.id) || teams[0];
+  // No fallback to another team: Edit/Delete would act on the wrong record.
+  const team = teams.find((t) => t.id === params.id);
   // Only user-created teams can be deleted; the 4 seed teams are fixtures.
   const isSeedTeam = TEAMS_BASE.some((t) => t.id === team?.id);
 
@@ -47,7 +48,15 @@ export default function TeamDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberIds.join(","), team?.id]);
 
-  if (!team) return null;
+  if (!team) return (
+    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+      <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
+      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
+        <div style={css("font-size:17px;font-weight:700")}>Team not found</div>
+        <div style={css("font-size:13px;color:#71717A;margin-top:6px")}>This team was deleted or the link is wrong.</div>
+      </div>
+    </div>
+  );
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
   const workingCount = liveAgentCount(live, team.members);

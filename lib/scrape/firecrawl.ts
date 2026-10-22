@@ -3,6 +3,7 @@ import "server-only";
 // public pages for an ICP query, then LLM extracts structured Prospects. Replaces
 // the browser-use worker. Runs synchronously inside a Node route (Vercel Hobby-safe).
 import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
+import { safeHttpUrl } from "@/lib/url/safeUrl";
 
 export interface Prospect {
   name: string;
@@ -170,9 +171,20 @@ export async function runFirecrawlScrape(
   }
   const sells = [agent.role, agent.goal].filter(Boolean).join(" — "); // seller context, to exclude competitors
   const prospects = await extractProspects(targetDesc, sells, results, target, plan.platform);
-  // normalize: derive platform from the source URL; ensure a profileUrl.
-  return prospects.map((p) => ({
-    name: p.name, title: p.title ?? "", company: p.company ?? "",
-    profileUrl: p.profileUrl || "", platform: (p.profileUrl && platformFromUrl(p.profileUrl)) || p.platform || "web", email: p.email ?? "",
-  }));
+  return normalizeProspects(prospects, results.map((r) => r.url));
+}
+
+/** Derive platform from the source URL, and keep a profileUrl only when it is one
+ *  of the URLs Firecrawl returned. The LLM writes profileUrl, so a prompt
+ *  injection in a post could otherwise plant a `javascript:` or phishing link. */
+export function normalizeProspects(prospects: Prospect[], sourceUrls: (string | undefined)[]): Prospect[] {
+  const allowed = new Set(sourceUrls.map(safeHttpUrl).filter((u): u is string => !!u));
+  return prospects.map((p) => {
+    const url = safeHttpUrl(p.profileUrl);
+    const profileUrl = url && allowed.has(url) ? url : "";
+    return {
+      name: p.name, title: p.title ?? "", company: p.company ?? "",
+      profileUrl, platform: (profileUrl && platformFromUrl(profileUrl)) || p.platform || "web", email: p.email ?? "",
+    };
+  });
 }

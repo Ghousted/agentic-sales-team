@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
 import { teammatesOf, membersOfTeam } from "@/lib/teams/membership";
 import type { Prospect } from "@/lib/scrape/firecrawl";
+import { safeHttpUrl } from "@/lib/url/safeUrl";
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -19,7 +20,7 @@ async function uid(): Promise<string | null> {
 function toLeadDTO(r: LeadRow): LeadDTO {
   return {
     id: r.id, agentId: r.agentId, name: r.name, title: r.title, company: r.company,
-    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: r.profileUrl, platform: r.platform, research: r.research ?? null,
+    email: r.email, status: r.status, score: r.score, source: r.source, review: r.review, profileUrl: safeHttpUrl(r.profileUrl), platform: r.platform, research: r.research ?? null,
     workedBy: [],
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };
@@ -67,11 +68,11 @@ export async function addScrapedLeads(userId: string, agentId: string, prospects
   const db = getDb();
   const existing = await db.select({ profileUrl: leads.profileUrl, email: leads.email })
     .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
-  const seenUrl = new Set(existing.map((e) => (e.profileUrl ?? "").trim()).filter(Boolean));
+  const seenUrl = new Set(existing.map((e) => safeHttpUrl(e.profileUrl)).filter(Boolean));
   const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
   let added = 0;
   for (const p of prospects) {
-    const url = (p.profileUrl ?? "").trim();
+    const url = safeHttpUrl(p.profileUrl) ?? "";
     const email = (p.email ?? "").trim();
     if (url && seenUrl.has(url)) continue;
     if (email && seenEmail.has(email.toLowerCase())) continue;
@@ -264,7 +265,7 @@ export async function listDraftsForAgent(agentId: string): Promise<DraftDTO[]> {
   return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
     rationale: d.rationale, status: d.status, createdAt: d.createdAt.toISOString(),
-    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform,
+    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl: safeHttpUrl(leadProfileUrl), leadPlatform,
   }));
 }
 
@@ -284,7 +285,7 @@ export async function listAllDrafts(): Promise<DraftDTO[]> {
   return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
     rationale: d.rationale, status: d.status, createdAt: d.createdAt.toISOString(),
-    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform,
+    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl: safeHttpUrl(leadProfileUrl), leadPlatform,
   }));
 }
 
@@ -303,7 +304,7 @@ export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
   return rows.map(({ d, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform }) => ({
     id: d.id, agentId: d.agentId, leadId: d.leadId, subject: d.subject, body: d.body,
     rationale: d.rationale, status: d.status, createdAt: d.createdAt.toISOString(),
-    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl, leadPlatform,
+    sentAt: d.sentAt ? d.sentAt.toISOString() : null, leadName, leadCompany, leadEmail, leadProfileUrl: safeHttpUrl(leadProfileUrl), leadPlatform,
   }));
 }
 

@@ -184,3 +184,28 @@ describe("match job", () => {
     expect(doneUpdate()?.result).toEqual({ matched: 1, failed: 1 });
   });
 });
+
+describe("failed job errors", () => {
+  const leak = 'relation "leads" does not exist at Pool.query (postgres://user:pw@host/db)';
+
+  it("stores a generic line, not the raw database error, when a run throws", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    fake.state.selects = [[researchJob()]];
+    vi.mocked(pickLeadsForResearch).mockRejectedValueOnce(new Error(leak));
+    await runJobs();
+    const failed = fake.state.updates.find((u) => u.status === "failed");
+    expect(failed?.error).toBe("Research failed. Please try again.");
+    expect(log.mock.calls.some((c) => String(c[1]).includes("does not exist"))).toBe(true);
+  });
+
+  it("stores a generic line when a scrape throws an unexpected error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fake.state.selects = [[{ id: "s1", userId: "u1", agentId: "a1", kind: "scrape", status: "queued", params: { agent } }]];
+    vi.mocked(runFirecrawlScrape).mockRejectedValueOnce(new Error(leak));
+    const res = await runScrape(new Request("http://x/api/scrape", { method: "POST", body: JSON.stringify({ jobId: "s1" }) }));
+    expect(res.status).toBe(500);
+    const failed = fake.state.updates.find((u) => u.status === "failed");
+    expect(failed?.error).toBe("The search failed. Please try again.");
+    expect(JSON.stringify(await res.json())).not.toContain("does not exist");
+  });
+});

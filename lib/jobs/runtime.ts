@@ -3,6 +3,7 @@
 // finish it, so the runners keep inside a budget and reap jobs that outlived one.
 import { and, eq, inArray } from "drizzle-orm";
 import { jobs, type getDb } from "@/lib/db";
+import { UserFacingError } from "@/lib/jobs/errors";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -58,7 +59,7 @@ export async function reapStaleJobs(db: Db, userId: string | null, now = new Dat
 export function withDeadline<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    timer = setTimeout(() => reject(new UserFacingError(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
   });
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }

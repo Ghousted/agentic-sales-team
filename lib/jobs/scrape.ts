@@ -10,6 +10,7 @@ import { createStepLog } from "@/lib/scrape/steps";
 import { isAIConfigured } from "@/lib/ai/openrouter";
 import { addScrapedLeads } from "@/lib/leads/store";
 import { chainNext, leadOwnerForTeam } from "@/lib/pod/orchestrate";
+import { jobErrorMessage } from "@/lib/jobs/errors";
 import { reapStaleJobs, withDeadline, SCRAPE_TIMEOUT_MS } from "@/lib/jobs/runtime";
 
 type Job = typeof jobs.$inferSelect;
@@ -68,7 +69,9 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
       .where(and(eq(jobs.id, job.id), eq(jobs.userId, job.userId)));
   } catch (e) {
     await log.flush();
-    await failScrapeJob(job, String(e));
+    // The error column reaches the browser: log the details, store a safe line.
+    console.error(`[scrape] job ${job.id} failed:`, e);
+    await failScrapeJob(job, jobErrorMessage("scrape", e));
     throw e;
   }
   // Autonomous chain: hand off to the Assessor (or ask the user to review).
@@ -97,9 +100,8 @@ export async function drainOneScrapeJob(): Promise<{ processed: number; leadsFou
     try {
       const { leadsFound } = await runClaimedScrapeJob(job);
       return { processed: 1, leadsFound };
-    } catch (e) {
-      console.error("[scrape] cron job failed:", e);
-      return { processed: 1, leadsFound: 0 };
+    } catch {
+      return { processed: 1, leadsFound: 0 }; // runClaimedScrapeJob logged it and marked the job failed
     }
   }
   return { processed: 0, leadsFound: 0 };

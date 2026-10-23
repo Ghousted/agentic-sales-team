@@ -97,14 +97,14 @@ describe("GET /api/cron/scrape", () => {
     expect(vi.mocked(addScrapedLeads).mock.calls[0][1]).toBe("a1");
   });
 
-  it("marks the job failed with the reason when the scrape throws", async () => {
+  it("marks the job failed with a safe message when the scrape throws", async () => {
     const { GET } = await cronRoute();
     const { runFirecrawlScrape } = await import("@/lib/scrape/firecrawl");
     vi.mocked(runFirecrawlScrape).mockRejectedValueOnce(new Error("Lead extraction failed: boom"));
     fake.state.selects = [[scrapeJob("s1", "u1")]];
     const res = await GET(cronReq("Bearer s3cret"));
     expect(res.status).toBe(200);
-    expect(String(fake.state.updates.find((u) => u.status === "failed")?.error)).toMatch(/boom/);
+    expect(fake.state.updates.find((u) => u.status === "failed")?.error).toBe("The search failed. Please try again.");
   });
 
   it("moves on when a browser kick claimed the job first", async () => {

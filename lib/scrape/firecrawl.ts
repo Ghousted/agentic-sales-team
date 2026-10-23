@@ -7,6 +7,7 @@ import "server-only";
 import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { cleanField, LEAD_FIELD_LIMITS, untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
+import { UserFacingError } from "@/lib/jobs/errors";
 import { gateResults } from "./jev";
 import { AGENCY_RULE, JOB_AD_RULE } from "./rules";
 import { cleanTitle, domainOf, trunc, type StepLog } from "./steps";
@@ -66,13 +67,13 @@ async function firecrawlSearch(query: string, limit: number, recentOnly: boolean
     cache: "no-store",
     signal: AbortSignal.timeout(FIRECRAWL_TIMEOUT_MS),
   }).catch((e) => {
-    if ((e as Error)?.name === "TimeoutError") throw new Error(`Firecrawl search timed out after ${FIRECRAWL_TIMEOUT_MS / 1000}s`);
+    if ((e as Error)?.name === "TimeoutError") throw new UserFacingError(`Firecrawl search timed out after ${FIRECRAWL_TIMEOUT_MS / 1000}s`);
     throw e;
   });
   if (!res.ok) {
     // The body can echo the request or account details; log it, keep it out of job errors.
     console.error(`[firecrawl] search ${res.status}:`, (await res.text().catch(() => "")).slice(0, 500));
-    throw new Error(`Firecrawl ${res.status}`);
+    throw new UserFacingError(`Firecrawl ${res.status}`);
   }
   const data = await res.json();
   const web = data?.data?.web;

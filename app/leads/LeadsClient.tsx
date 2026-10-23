@@ -9,6 +9,7 @@ import { enqueueOutreachJob } from "@/lib/jobs/actions";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO } from "@/lib/leads/types";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import Modal from "@/components/Modal";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { LivePulse, FitReason } from "@/components/LeadBits";
 import { safeHttpUrl, openExternal } from "@/lib/url/safeUrl";
@@ -18,10 +19,10 @@ const STAGE_COLORS: Record<string, [string, string]> = {
   replied: ["#E7F7EC", "#1B7A3D"], meeting: ["#EAF2FF", "#006AFF"],
 };
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
-const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
+const LABEL = "display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
 const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
-const SEC = "font-size:11px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
-const MUTED = "font-size:12.5px;color:#A1A1AA";
+const SEC = "font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
+const MUTED = "font-size:12.5px;color:var(--text-muted)";
 
 export default function LeadsClient({ initialLeads, initialCandidates }: { initialLeads: LeadDTO[]; initialCandidates: LeadDTO[] }) {
   const { agents, byId, showToast, showError } = useApp();
@@ -219,11 +220,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
         <div className="m-wrap" style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           {view === "active" && (
             <>
-              <select value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
+              <select aria-label="Filter by agent" value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
                 <option value="">All agents</option>
                 {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-              <select value={fStage} onChange={(e) => setFStage(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
+              <select aria-label="Filter by stage" value={fStage} onChange={(e) => setFStage(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
                 <option value="">All stages</option>
                 {LEAD_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -236,34 +237,33 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       </div>
 
       {showAdd && (
-        <div onClick={() => setShowAdd(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+        <Modal onClose={() => setShowAdd(false)} labelledBy="add-lead-title" style="background:#fff;border-radius:18px;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
             <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
-              <div style={css("font-size:15px;font-weight:700")}>Add a lead</div>
+              <h2 id="add-lead-title" style={css("margin:0;font-size:15px;font-weight:700")}>Add a lead</h2>
               <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Create a prospect and assign it to an agent.</div>
             </div>
             <div style={css("padding:18px 20px;display:flex;flex-direction:column;gap:14px")}>
               <div>
-                <div style={css(LABEL)}>Name</div>
-                <input autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="Full name" style={css(FIELD)} />
+                <label htmlFor="add-lead-name" style={css(LABEL)}>Name</label>
+                <input id="add-lead-name" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="Full name" style={css(FIELD)} />
               </div>
               <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:12px")}>
                 <div>
-                  <div style={css(LABEL)}>Title</div>
-                  <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. VP Data" style={css(FIELD)} />
+                  <label htmlFor="add-lead-role" style={css(LABEL)}>Title</label>
+                  <input id="add-lead-role" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. VP Data" style={css(FIELD)} />
                 </div>
                 <div>
-                  <div style={css(LABEL)}>Company</div>
-                  <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Ramp" style={css(FIELD)} />
+                  <label htmlFor="add-lead-company" style={css(LABEL)}>Company</label>
+                  <input id="add-lead-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Ramp" style={css(FIELD)} />
                 </div>
               </div>
               <div>
-                <div style={css(LABEL)}>Email</div>
-                <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="name@company.com" style={css(FIELD)} />
+                <label htmlFor="add-lead-email" style={css(LABEL)}>Email</label>
+                <input id="add-lead-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="name@company.com" style={css(FIELD)} />
               </div>
               <div>
-                <div style={css(LABEL)}>Assign to agent</div>
-                <select value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} style={css(FIELD + ";cursor:pointer;appearance:none;background:#fff")}>
+                <label htmlFor="add-lead-agent" style={css(LABEL)}>Assign to agent</label>
+                <select id="add-lead-agent" value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} style={css(FIELD + ";cursor:pointer;appearance:none;background:#fff")}>
                   <option value="">{agents[0] ? agents[0].name : "No agents"}</option>
                   {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
@@ -273,8 +273,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
               <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
               <Btn onClick={submitAdd} style="background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">Add lead</Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {view === "active" ? (
@@ -283,15 +282,15 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             <div>Lead</div><div>Company</div><div>Agent</div><div>Stage</div><div>Score</div><div>Actions</div>
           </div>
           {loading ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>Loading…</div>
           ) : filtered.length === 0 ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No leads yet.</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>No leads yet.</div>
           ) : filtered.map((l) => {
             const a = byId(l.agentId);
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
             return (
               <div key={l.id} className="m-table" style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:var(--text-muted);font-weight:400")}>{l.title || l.email}</div>
                   {safeHttpUrl(l.profileUrl) && <Box onClick={() => openExternal(l.profileUrl)} style="font-size:11px;font-weight:600;color:#006AFF;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
                   {/* The Agent column already shows who owns the lead; only show live work here. */}
                   {byLead[l.id] && (
@@ -307,7 +306,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div style={css("display:flex;gap:6px")}>
                   <Btn onClick={() => runOutreach(l.agentId, [l.id])} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E6F0FF;color:#006AFF;" + (running === l.id ? "opacity:.6" : "")} styleHover="background:#D6E6FF">{running === l.id ? "Running…" : "Run outreach"}</Btn>
                   <Btn onClick={() => advance(l)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#3F3F46" styleHover="background:#E4E4E7">Advance</Btn>
-                  <Btn onClick={() => del(l)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
+                  <Btn onClick={() => del(l)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:var(--text-muted)")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
                 </div>
               </div>
             );
@@ -323,21 +322,21 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             </>)}
           </div>
           {loading ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>Loading…</div>
           ) : candidates.length === 0 ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No candidates awaiting review.</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>No candidates awaiting review.</div>
           ) : candidates.map((c) => {
             const a = byId(c.agentId);
             return (
               <div key={c.id} className="m-table" style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "-")}</div></div>
+                <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:var(--text-muted);font-weight:400")}>{c.title || (c.platform ? c.platform : "-")}</div></div>
                 <div style={css("color:#3F3F46")}>{c.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>
                 <div style={css("display:flex;gap:6px;align-items:center")}>
                   {safeHttpUrl(c.profileUrl) && <Box onClick={() => openExternal(c.profileUrl)} style="font-size:11.5px;font-weight:600;color:#006AFF;cursor:pointer" styleHover="text-decoration:underline">View post ↗</Box>}
                   <Btn onClick={() => review([c.id], true)} style="margin-left:auto;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Accept</Btn>
                   <Btn onClick={() => review([c.id], false)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Dismiss</Btn>
-                  <Btn onClick={() => del(c)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === c.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === c.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === c.id ? "Delete?" : "Delete"}</Btn>
+                  <Btn onClick={() => del(c)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === c.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:var(--text-muted)")} styleHover={confirmDel === c.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === c.id ? "Delete?" : "Delete"}</Btn>
                 </div>
               </div>
             );
@@ -351,11 +350,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
         const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
         const rb = l.research;
         return (
-          <div onClick={() => setOpenLead(null)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-            <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+          <Modal onClose={() => setOpenLead(null)} labelledBy="lead-detail-title" focusField={false} style="background:#fff;border-radius:18px;width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
               <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3;display:flex;align-items:flex-start;gap:10px")}>
                 <div style={css("flex:1;min-width:0")}>
-                  <div style={css("font-size:16px;font-weight:700")}>{l.name}</div>
+                  <h2 id="lead-detail-title" style={css("margin:0;font-size:16px;font-weight:700")}>{l.name}</h2>
                   <div style={css("font-size:12px;color:#71717A;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;align-items:center")}>
                     {l.email && <a href={"mailto:" + l.email} style={css("color:#006AFF;text-decoration:none;font-weight:600")}>{l.email}</a>}
                     {l.company && <span>{l.company}</span>}
@@ -363,8 +361,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                     {safeHttpUrl(l.profileUrl) && <Box onClick={() => openExternal(l.profileUrl)} style="color:#006AFF;cursor:pointer;font-weight:600" styleHover="text-decoration:underline">View post ↗</Box>}
                   </div>
                 </div>
-                <Btn onClick={() => del(l)} style={"flex:none;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:#A1A1AA")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
-                <Box onClick={() => setOpenLead(null)} style="font-size:18px;color:#A1A1AA;cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
+                <Btn onClick={() => del(l)} style={"flex:none;border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;" + (confirmDel === l.id ? "background:#FDE8E8;color:#C0362C" : "background:#F4F4F5;color:var(--text-muted)")} styleHover={confirmDel === l.id ? "background:#F9D4D4" : "background:#FDE8E8;color:#C0362C"}>{confirmDel === l.id ? "Delete?" : "Delete"}</Btn>
+                <Box onClick={() => setOpenLead(null)} aria-label="Close" style="font-size:18px;color:var(--text-muted);cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
               </div>
               <div style={css("padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px")}>
                 <div style={css("display:flex;flex-wrap:wrap;gap:6px;align-items:center")}>
@@ -377,7 +375,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                 <div>
                   <div style={css(SEC)}>Book a meeting</div>
                   <div style={css("display:flex;gap:8px;align-items:center;flex-wrap:wrap")}>
-                    <input value={bookingWhen} onChange={(e) => setBookingWhen(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bookMeetingNow(); }} placeholder='e.g. "tomorrow 2pm" or "next Tue 10am"' style={css(FIELD + ";flex:1;min-width:180px")} />
+                    <input aria-label="Meeting time" value={bookingWhen} onChange={(e) => setBookingWhen(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bookMeetingNow(); }} placeholder='e.g. "tomorrow 2pm" or "next Tue 10am"' style={css(FIELD + ";flex:1;min-width:180px")} />
                     <Btn onClick={bookMeetingNow} style={"background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;flex:none;" + (booking ? "opacity:.6" : "")} styleHover="background:#0052CC">{booking ? "Booking…" : "Book"}</Btn>
                   </div>
                 </div>
@@ -426,8 +424,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+          </Modal>
         );
       })()}
     </div>

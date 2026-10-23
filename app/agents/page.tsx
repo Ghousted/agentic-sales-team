@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useLiveWork } from "@/lib/useLiveWork";
@@ -44,7 +45,7 @@ export default function AgentsPage() {
               <div style={css("display:flex;align-items:center;gap:12px")}>
                 <div style={css(av(a, 42))}>{a.initials}</div>
                 <div style={css("min-width:0")}>
-                  <div style={css("font-size:14px;font-weight:700")}>{a.name}</div>
+                  <Link href={"/agents/" + a.id} onClick={(e) => e.stopPropagation()} style={css("display:block;font-size:14px;font-weight:700;color:inherit;text-decoration:none")}>{a.name}</Link>
                   <div style={css("font-size:12px;color:#71717A")}>{a.role}</div>
                 </div>
                 <span style={css(statusPill(m))}>
@@ -56,7 +57,7 @@ export default function AgentsPage() {
                 {now.task}
               </div>
               <div style={css("display:flex;align-items:center;gap:12px;margin-top:14px")}>
-                <div style={css("font-size:11px;color:#A1A1AA;line-height:1.5")}>
+                <div style={css("font-size:11px;color:var(--text-muted);line-height:1.5")}>
                   {out ? <><b style={css("color:#18181B")}>{out.leadsWorked}</b> leads · <b style={css("color:#18181B")}>{out.sent}</b> sent</> : "No work yet"}
                 </div>
                 <div style={css("margin-left:auto;display:flex;gap:6px")}>

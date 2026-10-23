@@ -111,7 +111,7 @@ export default function NotificationsBell() {
             </div>
             <div style={css("max-height:60vh;overflow-y:auto")}>
               {items.length === 0 ? (
-                <div style={css("padding:16px;font-size:12.5px;color:#A1A1AA")}>No recent activity.</div>
+                <div style={css("padding:16px;font-size:12.5px;color:var(--text-muted)")}>No recent activity.</div>
               ) : (
                 items.map(({ f, a }) => (
                   <div key={f.id} style={css("display:flex;align-items:stretch;border-bottom:1px solid #F4F4F6")}>
@@ -126,7 +126,7 @@ export default function NotificationsBell() {
                       </div>
                       <div style={css("display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none")}>
                         <span style={css(chip(actChip(f.type).bg, actChip(f.type).fg))}>{actChip(f.type).label}</span>
-                        <span style={css("font-size:10.5px;color:#A1A1AA")}>{relTime(f.createdAt)}</span>
+                        <span style={css("font-size:10.5px;color:var(--text-muted)")}>{relTime(f.createdAt)}</span>
                       </div>
                     </Link>
                     <Btn onClick={() => dismiss(f.id)} aria-label="Clear notification" title="Clear" style="flex:none;align-self:stretch;background:transparent;border:none;color:#D4D4D8;cursor:pointer;padding:0 12px;font-size:17px;line-height:1" styleHover="color:#F43F7E">×</Btn>

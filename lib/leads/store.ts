@@ -447,8 +447,7 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
 }
 
 /** Persist one engine result: the draft, the lead's new score, and activity.
- *  The lead's stage is left alone: a draft isn't contact yet, and the engine's
- *  guess could rewind a lead (e.g. 'meeting' -> 'contacted'). markDraftSent
+ *  The lead's stage is left alone: a draft isn't contact yet. markDraftSent
  *  advances it when the draft actually goes out.
  *  Returns false, writing nothing, when the lead already has a live draft (a
  *  concurrent run got there first; see outreach_drafts_live_lead_idx).

@@ -12,7 +12,9 @@ import ScrapeResults from "./ScrapeResults";
 import ScrapeProgress from "./ScrapeProgress";
 import { runIdFrom } from "@/lib/scrape/steps";
 import { isNearBottom, shouldStick } from "@/lib/chat/scroll";
+import { lastAgent, revealWait, takeSinceSent, thinkPause } from "@/lib/chat/pace";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
+import { settleDecision } from "@/lib/pod/decide";
 import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
 
@@ -67,7 +69,7 @@ function renderComposer(text: string): ReactNode[] {
 }
 
 function ChatsInner() {
-  const { s, set, teams, byId, sendTeamChat, clearChat, registerThreadPoll } = useApp();
+  const { s, set, teams, byId, sendTeamChat, followJob, pullThread, clearChat, registerThreadPoll, showError } = useApp();
   const router = useRouter();
 
   const teamById = (id: string) => teams.find((t) => t.id === id);
@@ -94,6 +96,7 @@ function ChatsInner() {
   const [typer, setTyper] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [handled, setHandled] = useState<Set<string>>(new Set());
+  const [deciding, setDeciding] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
   const [leadsLoaded, setLeadsLoaded] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -123,15 +126,20 @@ function ChatsInner() {
   // so deleting the token drops the lead and the message stays the source of truth.
   const activeLeadIds = () => s.chatLeadPicks.filter((p) => s.chatInput.includes("«" + p.name + "»")).map((p) => p.id);
 
+  // Every agent asks before it acts: Proceed starts the job, Cancel stops the
+  // whole run and the agent posts a summary. The buttons stay (disabled) while
+  // the click is in flight, and come back with a notice if it fails.
   const APPROVE_RE = /⟦approve:([0-9a-f-]{36})⟧/;
-  const onApprove = async (jobId: string) => {
+  const decide = async (jobId: string, proceed: boolean) => {
+    if (!activeTeam || deciding.has(jobId)) return;
+    const teamId = activeTeam.id;
+    setDeciding((d) => new Set(d).add(jobId));
+    const res = await settleDecision(() => (proceed ? approveJob(jobId) : rejectJob(jobId)), proceed);
+    setDeciding((d) => { const n = new Set(d); n.delete(jobId); return n; });
+    if ("error" in res) { showError(res.error); return; }
     setHandled((h) => new Set(h).add(jobId));
-    await approveJob(jobId);
-    try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
-  };
-  const onReject = async (jobId: string) => {
-    setHandled((h) => new Set(h).add(jobId));
-    await rejectJob(jobId);
+    if (proceed && res.kind) await followJob(teamId, { id: jobId, kind: res.kind, pod: res.pod });
+    else await pullThread(teamId); // the agent's reply (the cancel summary) right away
   };
 
   // Live-poll the open team thread so agent-written hand-offs / approvals appear.
@@ -152,7 +160,6 @@ function ChatsInner() {
     cursorRef.current = threadCursor(chatsRef.current[teamId]);
     queueRef.current = [];
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    const replyDelay = (t: string) => Math.min(2000, Math.max(650, Math.round((t || "").length * 18)));
     const show = (rows: StoredMsg[]) => set((prev) => ({ chats: { ...prev.chats, [teamId]: mergeThread(prev.chats[teamId], rows) } }));
     const reveal = async () => {
       if (revealing) return;
@@ -161,8 +168,13 @@ function ChatsInner() {
         while (alive && queueRef.current.length) {
           const m = queueRef.current[0];
           if (m.who !== "me" && m.who !== "system") {
+            const since = takeSinceSent(teamId);
+            const newSpeaker = lastAgent(chatsRef.current[teamId]) !== m.who;
+            // A beat with no indicator, so the dots don't start the moment the last row lands.
+            const pause = thinkPause(since, newSpeaker);
+            if (pause) { await sleep(pause); if (!alive) return; }
             setTyper(m.who);
-            await sleep(replyDelay(m.text));
+            await sleep(revealWait(since, newSpeaker));
             if (!alive) return;
             if (queueRef.current[0] !== m) continue; // a clear emptied the queue meanwhile
           }
@@ -281,6 +293,7 @@ function ChatsInner() {
             const foundIds = mine ? [] : leadIdsFrom(m.text);
             const runId = mine ? null : runIdFrom(m.text);
             const showApprove = !!am && pendingIds.has(am[1]) && !handled.has(am[1]);
+            const busy = !!am && deciding.has(am[1]);
             return (
               <div key={(m as ThreadMsg).id ?? "local-" + i} style={css("display:flex;gap:12px;animation:cUp .25s ease-out backwards;justify-content:" + (mine ? "flex-end" : "flex-start"))}>
                 {!mine && <span style={css("width:30px;flex:none")}>{speaker && (i === 0 || messages[i - 1].who !== m.who) && <span style={css(av(speaker, 30))}>{speaker.initials}</span>}</span>}
@@ -296,8 +309,8 @@ function ChatsInner() {
                   {showQuestions && <ScrapeQuestions key={(m as ThreadMsg).id ?? i} fields={asked} options={briefOptions(m.text)} onSend={(text) => sendTeamChat(activeTeam.id, text, [])} />}
                   {showApprove && (
                     <div style={css("display:flex;gap:6px;flex-wrap:wrap;animation:cUp .25s ease-out backwards")}>
-                      <Btn onClick={() => onApprove(am![1])} style="height:34px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="background:#2a313b"><i className="icon-check" style={{ fontSize: 15 }} />Approve</Btn>
-                      <Btn onClick={() => onReject(am![1])} style="height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#6b7686;font-size:14px;cursor:pointer" styleHover="background:#f1f3f6;color:#101418">Skip</Btn>
+                      <Btn onClick={() => decide(am![1], true)} disabled={busy} aria-busy={busy} style={"height:34px;padding:0 16px;border:0;border-radius:999px;background:#101418;color:#ffffff;font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px;" + (busy ? "opacity:.6;cursor:default" : "cursor:pointer")} styleHover={busy ? undefined : "background:#2a313b"}><i className="icon-check" style={{ fontSize: 15 }} />Proceed</Btn>
+                      <Btn onClick={() => decide(am![1], false)} disabled={busy} style={"height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#6b7686;font-size:14px;" + (busy ? "opacity:.6;cursor:default" : "cursor:pointer")} styleHover={busy ? undefined : "background:#f1f3f6;color:#101418"}>Cancel</Btn>
                     </div>
                   )}
                 </div>

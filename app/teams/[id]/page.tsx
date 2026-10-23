@@ -10,6 +10,7 @@ import { listLeadsForAgents } from "@/lib/leads/actions";
 import type { LeadDTO } from "@/lib/leads/types";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import type { ApprovalDTO } from "@/lib/pod/types";
+import { settleDecision } from "@/lib/pod/decide";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import { agentNow, liveAgentCount, teamKpis, teamSubtitle, teamActivity } from "@/lib/agents/derive";
@@ -19,13 +20,14 @@ import type { ActivityItem } from "@/lib/workspace/stats";
 const ICONS = ["🚀", "🌎", "🏛", "📣", "🎯", "💎"];
 
 export default function TeamDetail() {
-  const { s, agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast } = useApp();
+  const { s, agents, teams, byId, addTeamMembers, updateTeam, removeTeamMember, deleteTeam, showToast, showError } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [showAdd, setShowAdd] = useState(false);
   const [pick, setPick] = useState<Record<string, boolean>>({});
   const [teamLeads, setTeamLeads] = useState<LeadDTO[]>([]);
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([]);
+  const [deciding, setDeciding] = useState<Set<string>>(new Set());
   const [acts, setActs] = useState<ActivityItem[]>([]);
   const [confirmDel, setConfirmDel] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -34,7 +36,8 @@ export default function TeamDetail() {
   const [eGoal, setEGoal] = useState("");
   const { live, byLead } = useLiveWork();
 
-  const team = teams.find((t) => t.id === params.id) || teams[0];
+  // No fallback to another team: Edit/Delete would act on the wrong record.
+  const team = teams.find((t) => t.id === params.id);
   // Only user-created teams can be deleted; the 4 seed teams are fixtures.
   const isSeedTeam = TEAMS_BASE.some((t) => t.id === team?.id);
 
@@ -47,7 +50,15 @@ export default function TeamDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberIds.join(","), team?.id]);
 
-  if (!team) return null;
+  if (!team) return (
+    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+      <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
+      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
+        <div style={css("font-size:17px;font-weight:700")}>Team not found</div>
+        <div style={css("font-size:13px;color:#71717A;margin-top:6px")}>This team was deleted or the link is wrong.</div>
+      </div>
+    </div>
+  );
 
   const members = team.members.map((id) => byId(id)).filter(Boolean);
   const workingCount = liveAgentCount(live, team.members);
@@ -70,8 +81,18 @@ export default function TeamDetail() {
     listPendingApprovals(team.id).then(setApprovals);
     if (memberIds.length) listLeadsForAgents(memberIds).then(setTeamLeads);
   };
-  const approve = async (id: string) => { await approveJob(id); try { await fetch("/api/jobs/run", { method: "POST" }); } catch {} refetchPod(); };
-  const reject = async (id: string) => { await rejectJob(id); refetchPod(); };
+  // The row and its buttons stay (disabled) until the server accepts the click;
+  // on failure they come back with an error notice instead of vanishing.
+  const decide = async (id: string, proceed: boolean) => {
+    if (deciding.has(id)) return;
+    setDeciding((d) => new Set(d).add(id));
+    const res = await settleDecision(() => (proceed ? approveJob(id) : rejectJob(id)), proceed);
+    setDeciding((d) => { const n = new Set(d); n.delete(id); return n; });
+    if ("error" in res) { showError(res.error); return; }
+    setApprovals((list) => list.filter((ap) => ap.id !== id));
+    if (proceed) { try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* the cron runs it */ } }
+    refetchPod();
+  };
 
   const kpis: [string, string][] = [
     ["Meetings", k.meetings], ["In pipeline", k.pipeline], ["Leads", k.leads], ["Avg lead score", k.avgScore],
@@ -196,15 +217,19 @@ export default function TeamDetail() {
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
               <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Pending approvals <span style={css("font-size:11px;font-weight:700;color:#fff;background:#006AFF;border-radius:99px;padding:1px 7px")}>{approvals.length}</span></div>
               <div style={css("display:flex;flex-direction:column;gap:10px")}>
-                {approvals.map((ap) => (
-                  <div key={ap.id} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:10px 12px")}>
-                    <div style={css("font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>{ap.agentName}</span> wants to {ap.capability} for {ap.leadCount} lead{ap.leadCount === 1 ? "" : "s"}.</div>
-                    <div style={css("display:flex;gap:8px;margin-top:9px")}>
-                      <Btn onClick={() => approve(ap.id)} style="border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;background:#E7F7EC;color:#1B7A3D" styleHover="background:#D6EFDD">Approve</Btn>
-                      <Btn onClick={() => reject(ap.id)} style="border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#71717A" styleHover="background:#E4E4E7">Reject</Btn>
+                {approvals.map((ap) => {
+                  const busy = deciding.has(ap.id);
+                  const cur = busy ? "opacity:.6;cursor:default" : "cursor:pointer";
+                  return (
+                    <div key={ap.id} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:10px 12px")}>
+                      <div style={css("font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>{ap.agentName}</span> wants to {ap.capability} for {ap.leadCount} lead{ap.leadCount === 1 ? "" : "s"}.</div>
+                      <div style={css("display:flex;gap:8px;margin-top:9px")}>
+                        <Btn onClick={() => decide(ap.id, true)} disabled={busy} aria-busy={busy} style={"border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;background:#E7F7EC;color:#1B7A3D;" + cur} styleHover={busy ? undefined : "background:#D6EFDD"}>Approve</Btn>
+                        <Btn onClick={() => decide(ap.id, false)} disabled={busy} style={"border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;background:#F4F4F5;color:#71717A;" + cur} styleHover={busy ? undefined : "background:#E4E4E7"}>Reject</Btn>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

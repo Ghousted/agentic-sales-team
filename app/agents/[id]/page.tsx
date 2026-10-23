@@ -16,6 +16,9 @@ import Link from "next/link";
 import { getAgentStats } from "@/lib/agents/actions";
 import type { AgentStats } from "@/lib/agents/stats";
 import { listProposalsForAgent, markProposalSent } from "@/lib/proposals/actions";
+import { listMeetings } from "@/lib/meetings/actions";
+import type { MeetingDTO } from "@/lib/meetings/store";
+import { useRunGuard } from "@/lib/useRunGuard";
 import type { ProposalDTO } from "@/lib/proposals/store";
 
 // [key, label, requiredCapability?]. A tab with no capability always shows.
@@ -62,13 +65,14 @@ function SectionTitle({ id, children }: { id: string; children: React.ReactNode 
 }
 
 export default function AgentDetail() {
-  const { s, agents, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
+  const { s, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
   const { live, byLead } = useLiveWork();
 
-  const sel = byId(params.id) || agents[0];
+  // No fallback to another agent: Edit/Delete would act on the wrong record.
+  const sel = byId(params.id);
 
   // Editable Configuration state (role + goal), seeded from the config-applied
   // agent. Reset whenever the viewed agent changes (route stays mounted).
@@ -96,11 +100,11 @@ export default function AgentDetail() {
   }, [selId]);
 
   const [drafts, setDrafts] = useState<DraftDTO[]>([]);
-  const [runningOutreach, setRunningOutreach] = useState(false);
-  const [runningScrape, setRunningScrape] = useState(false);
-  const [runningResearch, setRunningResearch] = useState(false);
-  const [runningQualify, setRunningQualify] = useState(false);
   const [scrapeNote, setScrapeNote] = useState("");
+  // One guard for every run button: disabled while in flight, a double click
+  // starts nothing, and a throw shows a toast instead of a stuck spinner.
+  const onRunError = useCallback(() => showToast("Something went wrong. Please try again."), [showToast]);
+  const { busy, run } = useRunGuard(onRunError);
 
   const refetchDrafts = useCallback(async (id: string) => {
     setDrafts(await listDraftsForAgent(id));
@@ -110,86 +114,69 @@ export default function AgentDetail() {
   }, [selId, refetchDrafts]);
 
   const [proposals, setProposals] = useState<ProposalDTO[]>([]);
-  const [runningProposal, setRunningProposal] = useState(false);
   useEffect(() => {
     if (selId) listProposalsForAgent(selId).then(setProposals);
   }, [selId]);
 
-  const runOutreachForAgent = useCallback(async () => {
-    if (!sel) return;
-    setRunningOutreach(true);
-    const res = await enqueueOutreachJob({ agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task } });
-    if (!("error" in res)) {
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort trigger; drafts are refetched below regardless */ }
-    }
-    setRunningOutreach(false);
-    refetchDrafts(sel.id);
-  }, [sel, refetchDrafts]);
+  const [agentMeetings, setAgentMeetings] = useState<MeetingDTO[]>([]);
+  useEffect(() => {
+    if (selId) listMeetings().then((ms) => setAgentMeetings(ms.filter((m) => m.agentId === selId)));
+  }, [selId]);
 
-  const runScrape = useCallback(async () => {
+  // Nudge the runner after an enqueue. A refused enqueue shows its error and
+  // returns false.
+  const enqueueAndRun = useCallback(async (res: { jobId: string } | { error: string }): Promise<boolean> => {
+    if ("error" in res) { showToast(res.error); return false; }
+    try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort trigger; results are refetched by the caller */ }
+    return true;
+  }, [showToast]);
+
+  const runOutreachForAgent = useCallback(() => run("outreach", async () => {
+    if (!sel) return;
+    try {
+      await enqueueAndRun(await enqueueOutreachJob({ agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task } }));
+    } finally {
+      refetchDrafts(sel.id);
+    }
+  }), [sel, run, enqueueAndRun, refetchDrafts]);
+
+  const runScrape = useCallback(() => run("scrape", async () => {
     if (!sel) return;
     // The user's instruction drives the scrape. Ask what to look for (there is no stored ICP).
     const instruction = window.prompt("What leads should " + sel.name.split(" ")[0] + " look for?\n(e.g. \"property buyers near Makati\", \"startups hiring SDRs in the US\")");
     if (!instruction || !instruction.trim()) return;
-    setRunningScrape(true);
     setScrapeNote("Finding leads…");
-    const res = await enqueueJob({
-      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
-      kind: "scrape", capabilities: sel.capabilities, target: 10, instruction: instruction.trim(),
-    });
-    if ("error" in res) { setScrapeNote(res.error); setRunningScrape(false); return; }
     try {
+      const res = await enqueueJob({
+        agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+        kind: "scrape", capabilities: sel.capabilities, target: 10, instruction: instruction.trim(),
+      });
+      if ("error" in res) { setScrapeNote(res.error); return; }
       const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: res.jobId }) });
       const data = (await r.json().catch(() => ({}))) as { leadsFound?: number; error?: string; note?: string };
       if (!r.ok || data.error) setScrapeNote(data.error ?? "Scrape failed.");
       else if (data.note === "already running") setScrapeNote("That scrape is already running. Please wait.");
       else setScrapeNote(`Found ${data.leadsFound ?? 0} lead${data.leadsFound === 1 ? "" : "s"}  to review. Open the Pending tab in the Leads module.`);
     } catch { setScrapeNote("The scrape failed. Please try again."); }
-    setRunningScrape(false);
     listWorkbook(sel.id).then(setAgentLeads);
-  }, [sel]);
+  }), [sel, run]);
 
-  const runResearch = useCallback(async () => {
+  // Research, qualify and proposals share one shape: enqueue, nudge, refetch.
+  const runBatch = useCallback((kind: "research" | "qualify" | "proposal") => run(kind, async () => {
     if (!sel) return;
-    setRunningResearch(true);
-    const res = await enqueueJob({
-      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
-      kind: "research", capabilities: sel.capabilities,
-    });
-    if (!("error" in res)) {
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
-    } else { showToast(res.error); }
-    setRunningResearch(false);
-    listWorkbook(sel.id).then(setAgentLeads);
-  }, [sel]);
-
-  const runQualify = useCallback(async () => {
-    if (!sel) return;
-    setRunningQualify(true);
-    const res = await enqueueJob({
-      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
-      kind: "qualify", capabilities: sel.capabilities,
-    });
-    if (!("error" in res)) {
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; leads refetched below */ }
-    } else { showToast(res.error); }
-    setRunningQualify(false);
-    listWorkbook(sel.id).then(setAgentLeads);
-  }, [sel]);
-
-  const runProposals = useCallback(async () => {
-    if (!sel) return;
-    setRunningProposal(true);
-    const res = await enqueueJob({
-      agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
-      kind: "proposal", capabilities: sel.capabilities,
-    });
-    if (!("error" in res)) {
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort; proposals refetched below */ }
-    } else { showToast(res.error); }
-    setRunningProposal(false);
-    listProposalsForAgent(sel.id).then(setProposals);
-  }, [sel]);
+    try {
+      await enqueueAndRun(await enqueueJob({
+        agent: { id: sel.id, name: sel.name, role: sel.role, goal: sel.goal, task: sel.task },
+        kind, capabilities: sel.capabilities,
+      }));
+    } finally {
+      if (kind === "proposal") listProposalsForAgent(sel.id).then(setProposals);
+      else listWorkbook(sel.id).then(setAgentLeads);
+    }
+  }), [sel, run, enqueueAndRun]);
+  const runResearch = useCallback(() => runBatch("research"), [runBatch]);
+  const runQualify = useCallback(() => runBatch("qualify"), [runBatch]);
+  const runProposals = useCallback(() => runBatch("proposal"), [runBatch]);
 
   const sendDraft = useCallback((d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
@@ -207,7 +194,15 @@ export default function AgentDetail() {
     if (selId) refetchDrafts(selId);
   }, [selId, refetchDrafts]);
 
-  if (!sel) return null;
+  if (!sel) return (
+    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+      <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← All agents</Box>
+      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
+        <div style={css("font-size:17px;font-weight:700")}>Agent not found</div>
+        <div style={css("font-size:13px;color:#71717A;margin-top:6px")}>This agent was deleted or the link is wrong.</div>
+      </div>
+    </div>
+  );
   const selM = statusMeta(agentNow(sel.id, live, paused).status);
 
   const caps = sel.capabilities ?? [];
@@ -312,10 +307,10 @@ export default function AgentDetail() {
         <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
           <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>{agentLeads.length} lead{agentLeads.length === 1 ? "" : "s"}</div>
           {sel.capabilities?.includes("scrape") && (
-            <Btn onClick={runScrape} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningScrape ? "opacity:.6" : "")} styleHover="background:#0052CC">{runningScrape ? "Finding…" : "Find leads"}</Btn>
+            <Btn onClick={runScrape} disabled={!!busy.scrape} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (busy.scrape ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.scrape ? "Finding…" : "Find leads"}</Btn>
           )}
           {sel.capabilities?.includes("qualify") && (
-            <Btn onClick={runQualify} style={(sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (runningQualify ? "opacity:.6" : "")} styleHover="background:#0052CC">{runningQualify ? "Qualifying…" : "Qualify leads"}</Btn>
+            <Btn onClick={runQualify} disabled={!!busy.qualify} style={(sel.capabilities?.includes("scrape") ? "margin-left:14px;" : "margin-left:auto;") + "background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (busy.qualify ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.qualify ? "Qualifying…" : "Qualify leads"}</Btn>
           )}
           <Link href="/leads" style={{ ...css((sel.capabilities?.includes("scrape") || sel.capabilities?.includes("qualify") ? "margin-left:14px;" : "margin-left:auto;") + "font-size:12px;font-weight:600;color:#006AFF;text-decoration:none") }}>Open Leads module →</Link>
         </div>
@@ -357,7 +352,7 @@ export default function AgentDetail() {
         <div style={css("display:flex;flex-direction:column;gap:12px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{researchedLeads.length} of {agentLeads.length} researched</div>
-            <Btn onClick={runResearch} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningResearch ? "opacity:.6" : "")} styleHover="background:#0052CC">{runningResearch ? "Researching…" : "Research leads"}</Btn>
+            <Btn onClick={runResearch} disabled={!!busy.research} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (busy.research ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.research ? "Researching…" : "Research leads"}</Btn>
           </div>
           {researchedLeads.length === 0 ? (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No briefs yet.</div>
@@ -384,7 +379,7 @@ export default function AgentDetail() {
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} · {drafts.filter((d) => d.status === "sent").length} sent</div>
             {sel.capabilities?.includes("outreach") && (
-              <Btn onClick={runOutreachForAgent} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningOutreach ? "opacity:.6" : "")} styleHover="background:#0052CC">{runningOutreach ? "Running…" : "Run outreach"}</Btn>
+              <Btn onClick={runOutreachForAgent} disabled={!!busy.outreach} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (busy.outreach ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.outreach ? "Running…" : "Run outreach"}</Btn>
             )}
           </div>
           {drafts.length === 0 ? (
@@ -417,7 +412,7 @@ export default function AgentDetail() {
         <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
             <div style={css("font-size:12.5px;color:#71717A")}>{proposals.length} proposal{proposals.length === 1 ? "" : "s"}</div>
-            <Btn onClick={runProposals} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (runningProposal ? "opacity:.6" : "")} styleHover="background:#0052CC">{runningProposal ? "Drafting…" : "Generate proposals"}</Btn>
+            <Btn onClick={runProposals} disabled={!!busy.proposal} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:8px 16px;font-size:12.5px;font-weight:600;cursor:pointer;" + (busy.proposal ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.proposal ? "Drafting…" : "Generate proposals"}</Btn>
           </div>
           {proposals.length === 0 ? (
             <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No proposals yet.</div>
@@ -468,7 +463,17 @@ export default function AgentDetail() {
       {isVisible("meetings") && (<>
         <SectionTitle id="sec-meetings">Meetings</SectionTitle>
         <div style={css("display:flex;flex-direction:column;gap:10px;animation:fadeUp .25s ease")}>
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No meetings yet.</div>
+          {agentMeetings.length === 0 ? (
+            <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:22px;font-size:12.5px;color:#A1A1AA")}>No meetings yet.</div>
+          ) : agentMeetings.map((m) => (
+            <div key={m.id} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px")}>
+              <div style={css("min-width:0")}>
+                <div style={css("font-size:13px;font-weight:600")}>{m.title}</div>
+                <div style={css("font-size:12px;color:#71717A;margin-top:2px")}>with {m.leadName}</div>
+              </div>
+              <span style={css("margin-left:auto;flex:none;" + chip("#EAF2FF", "#006AFF"))}>{m.whenLabel}</span>
+            </div>
+          ))}
         </div>
       </>)}
 
@@ -550,7 +555,7 @@ export default function AgentDetail() {
                     <div key={cap} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:9px")}>
                       <div style={css("font-size:12.5px;font-weight:600;color:#3F3F46")}>{label}</div>
                       <div style={css("display:flex;gap:8px;flex-wrap:wrap;align-items:center")}>
-                        <input value={String(val("type", "Meeting"))} onChange={(e) => setCapSetting(cap, { type: e.target.value })} placeholder="Meeting type (e.g. Discovery call)" style={css(MSEL + ";flex:1;min-width:150px;cursor:text")} />
+                        <input key={sel.id + ":type"} defaultValue={String(val("type", "Meeting"))} onBlur={(e) => { const v = e.target.value.trim() || "Meeting"; e.target.value = v; if (v !== val("type", "Meeting")) setCapSetting(cap, { type: v }); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} placeholder="Meeting type (e.g. Discovery call)" style={css(MSEL + ";flex:1;min-width:150px;cursor:text")} />
                         <select value={String(val("duration", 30))} onChange={(e) => setCapSetting(cap, { duration: Number(e.target.value) })} style={css(MSEL)}>
                           {[15, 30, 45, 60].map((d) => <option key={d} value={d}>{d} min</option>)}
                         </select>

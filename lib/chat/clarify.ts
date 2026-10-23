@@ -175,17 +175,20 @@ export function scrapeAnswerFrom(text: string): ScrapeBrief | null {
   }
 }
 
-/** The agent's reply when a scrape starts: one line per detail, so nothing repeats. */
-export function scrapeStartText(b: ScrapeBrief, count: number, maxCount: number): string {
+/** The search an agent is about to run, asked before it starts: one line per
+ *  detail. The ⟦approve:…⟧ marker shows the Proceed/Cancel panel under it. */
+export function scrapeAskText(b: ScrapeBrief, count: number, maxCount: number, jobId: string): string {
+  return ["I'm ready to search:", ...briefLines(b, count, maxCount), `Proceed? ⟦approve:${jobId}⟧`].join("\n");
+}
+
+function briefLines(b: ScrapeBrief, count: number, maxCount: number): string[] {
   const what = (b.what ?? "").trim();
   const where = b.where?.trim();
   return [
-    "Understood. I am starting the search:",
     `• Looking for: ${what.length > 160 ? what.slice(0, 157).trimEnd() + "…" : what}`,
     `• Where: ${!where || where.toLowerCase() === "anywhere" ? "Anywhere" : where}`,
     `• How many: ${count} lead${count === 1 ? "" : "s"}${b.count && b.count > maxCount ? ` (${maxCount} is the most per search)` : ""}`,
-    "I will post the results here.",
-  ].join("\n");
+  ];
 }
 
 /** The brief behind a search instruction written by briefInstruction. */

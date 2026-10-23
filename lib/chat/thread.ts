@@ -70,6 +70,38 @@ export function leadIdsFrom(text: string): string[] {
   return m ? m[1].split(",").filter((id) => /^[0-9a-f-]{36}$/i.test(id)) : [];
 }
 
+/** "I'm currently …": what a job of this kind is doing. */
+export function workDoing(kind: string): string {
+  switch (kind) {
+    case "scrape": return "finding leads";
+    case "assess": return "reviewing the new leads";
+    case "research": return "researching the team's leads";
+    case "qualify": return "qualifying the leads";
+    case "match": return "matching leads to listings";
+    case "outreach": return "drafting outreach";
+    case "proposal": return "drafting proposals";
+    default: return kind;
+  }
+}
+
+/** "I've just finished …: <this>": the result of a finished job, by kind. Each
+ *  kind reads its own result count, so a qualify run never says "0 emails". */
+export function workDoneSummary(kind: string, result: unknown): string {
+  const r = (result ?? {}) as Record<string, number | undefined>;
+  const n = (k: string) => r[k] ?? 0;
+  const s = (k: string) => (n(k) === 1 ? "" : "s");
+  switch (kind) {
+    case "scrape": return `found ${n("leadsFound")} lead${s("leadsFound")}, waiting for your review`;
+    case "assess": return `accepted ${n("accepted")} lead${s("accepted")}`;
+    case "research": return `researched ${n("briefed")} lead${s("briefed")}`;
+    case "qualify": return `qualified ${n("qualified")} lead${s("qualified")}`;
+    case "match": return `matched ${n("matched")} lead${s("matched")} to your catalog`;
+    case "outreach": return `drafted ${n("draftsCreated")} email${s("draftsCreated")}, ready for you to review and send`;
+    case "proposal": return `drafted ${n("proposals")} proposal${s("proposals")}, ready for you to review`;
+    default: return "completed my last task";
+  }
+}
+
 /** What the agent says in the thread when a job it started from chat ends.
  *  Null when there is nothing to say: a pod scrape that finished is narrated by
  *  the chain (chainNext), so a second "found N leads" would duplicate it. */

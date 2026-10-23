@@ -48,6 +48,43 @@ describe("enqueuePodStage", () => {
     await enqueuePodStage("u1", "t1", "research", "a1");
     expect(fake.state.inserts).toHaveLength(1);
   });
+
+  it("always asks first, whatever the agent's approval setting", async () => {
+    fake.state.selects = [[], [agentRow], [], [{ settings: { research: { mode: "auto" } } }]];
+    await enqueuePodStage("u1", "t1", "research", "a1");
+    expect(fake.state.inserts[0]).toMatchObject({ status: "needs_approval", params: { teamId: "t1", pod: true } });
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "a1", "@Sam, I'm ready to research 0 leads. Proceed? ⟦approve:new-job⟧"]);
+  });
+});
+
+describe("chainNext after a cancel", () => {
+  const since = new Date("2026-10-23T01:00:00Z");
+
+  it("doesn't hand on when the user cancelled the run while the step ran", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["a1"]);
+    fake.state.selects = [
+      [{ params: { teamId: "t1" } }], // a job of this team dismissed after `since`
+      [agentRow], [], [],            // finisher
+    ];
+    await chainNext("u1", "t1", "research", 5, "a1", undefined, since);
+    expect(fake.state.inserts).toHaveLength(0);
+    expect(vi.mocked(postTeamMessage).mock.calls).toEqual([["u1", "t1", "a1", "I researched 5 leads, but you stopped the run, so I didn't pass it on."]]);
+  });
+
+  it("still hands on when only another team's run was cancelled", async () => {
+    const qualifier = { ...agentRow, id: "q1", name: "Quinn", capabilities: ["qualify"] };
+    vi.mocked(membersOfTeam).mockResolvedValue(["a1", "q1"]);
+    fake.state.selects = [
+      [{ params: { teamId: "t2" } }], // dismissed, but on team t2
+      [agentRow], [], [],             // finisher
+      [agentRow], [], [], [qualifier], [], [], // nextCoverableStage: qualify
+      [qualifier], [], [],            // hand-off line
+      [],                             // enqueuePodStage: no active jobs
+      [qualifier], [], [],            // enqueuePodStage: agentInfo
+    ];
+    await chainNext("u1", "t1", "research", 5, "a1", undefined, since);
+    expect(fake.state.inserts).toHaveLength(1);
+  });
 });
 
 describe("chainNext", () => {
@@ -76,6 +113,21 @@ describe("chainNext", () => {
       [],                         // approvalMode
     ];
     await chainNext("u1", "t1", "scrape", 3);
+    expect(fake.state.inserts).toHaveLength(1);
+  });
+
+  it("doesn't @mention itself when the same agent does the next stage", async () => {
+    const ae = { ...agentRow, id: "ae1", name: "Ivan Torres", capabilities: ["outreach", "proposal"] };
+    vi.mocked(membersOfTeam).mockResolvedValue(["ae1"]);
+    fake.state.selects = [
+      [ae], [], [],               // finisher
+      [ae], [], [],               // nextCoverableStage: proposal
+      [ae], [], [],               // hand-off line
+      [],                         // enqueuePodStage: no active jobs
+      [ae], [], [],               // enqueuePodStage: agentInfo
+    ];
+    await chainNext("u1", "t1", "outreach", 5, "ae1");
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "ae1", "I've drafted 5 emails. Next, I'll do the proposals."]);
     expect(fake.state.inserts).toHaveLength(1);
   });
 

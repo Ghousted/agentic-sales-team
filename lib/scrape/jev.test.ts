@@ -32,7 +32,7 @@ describe("gateResults", () => {
     expect(turns).toHaveLength(1);
     expect(turns[0].text).toContain(seller.url);
     expect(turns[0].text).not.toContain(buyer.url);
-    expect(schema.properties.side.enum).toEqual(["buyer", "seller", "other"]);
+    expect(schema.properties.side.enum).toEqual(["buyer", "seller", "job_seeker", "other"]);
     expect(opts).toMatchObject({ model: GATE_MODEL, temperature: 0 });
     expect(opts.timeoutMs).toBeGreaterThan(0);
   });
@@ -75,8 +75,9 @@ describe("gateResults time budget", () => {
 });
 
 describe("keepByAnswer", () => {
-  it("drops only a seller in intent mode", () => {
+  it("drops only a seller or a job seeker in intent mode", () => {
     expect(keepByAnswer("intent", { side: "seller" })).toBe(false);
+    expect(keepByAnswer("intent", { side: "job_seeker" })).toBe(false);
     expect(keepByAnswer("intent", { side: "buyer" })).toBe(true);
     expect(keepByAnswer("intent", { side: "other" })).toBe(true);
   });
@@ -89,5 +90,24 @@ describe("keepByAnswer", () => {
   it("keeps a result when the answer is missing", () => {
     expect(keepByAnswer("intent", {})).toBe(true);
     expect(keepByAnswer("fit", {})).toBe(true);
+  });
+});
+
+describe("gate rules for job posts and agencies", () => {
+  const systemOf = async (mode: "intent" | "fit") => {
+    ai.aiJSON.mockResolvedValue(mode === "fit" ? { competitor: false } : { side: "buyer" });
+    await gateResults([buyer], { ...ctx, mode });
+    return ai.aiJSON.mock.calls.at(-1)![0] as string;
+  };
+
+  it("counts a business's own job post for the role sold as a buyer, in intent mode", async () => {
+    const system = await systemOf("intent");
+    expect(system).toMatch(/OWN job post for a role that the salesperson's product or service does or replaces counts as a buyer/);
+    expect(system).toMatch(/A person LOOKING FOR a job.* is a job seeker, never a buyer/);
+    expect(system).not.toMatch(/a discussion, a job post, or/);
+  });
+
+  it.each(["intent", "fit"] as const)("treats VA, staffing and outsourcing agencies as sellers in %s mode", async (mode) => {
+    expect(await systemOf(mode)).toMatch(/VA, staffing, recruitment, outsourcing or BPO agency .* is a seller and a competitor/);
   });
 });

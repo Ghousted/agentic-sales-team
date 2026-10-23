@@ -79,4 +79,16 @@ describe("enqueueJob", () => {
     const params = fake.state.inserts[0].params as { agent: unknown };
     expect(params.agent).toEqual({ id: "a1", name: "Sam Scout", role: "Edited role", goal: "Find leads", task: "Scrape" });
   });
+
+  it("parks a job the agent must ask about as needs_approval, so no runner takes it", async () => {
+    fake.state.selects = [[scout], [], []];
+    await enqueueJob({ agent: { id: "a1" }, kind: "scrape", teamId: "t1", ask: true });
+    expect(fake.state.inserts[0]).toMatchObject({ status: "needs_approval", params: { teamId: "t1" } });
+  });
+
+  it("queues at once without ask (the agent page's own buttons)", async () => {
+    fake.state.selects = [[scout], [], []];
+    await enqueueJob({ agent: { id: "a1" }, kind: "scrape" });
+    expect(fake.state.inserts[0]).toMatchObject({ status: "queued" });
+  });
 });

@@ -446,7 +446,10 @@ export async function pickLeadsForRun(userId: string, agentId: string, leadIds: 
   return pool.filter((l) => !draftedIds.has(l.id)).slice(0, batchSize);
 }
 
-/** Persist one engine result: the draft, the lead's new score/stage, and activity.
+/** Persist one engine result: the draft, the lead's new score, and activity.
+ *  The lead's stage is left alone: a draft isn't contact yet, and the engine's
+ *  guess could rewind a lead (e.g. 'meeting' -> 'contacted'). markDraftSent
+ *  advances it when the draft actually goes out.
  *  Returns false, writing nothing, when the lead already has a live draft (a
  *  concurrent run got there first; see outreach_drafts_live_lead_idx).
  *
@@ -457,13 +460,12 @@ export async function applyOutreachResult(userId: string, agentId: string, lead:
   const db = getDb();
   const draftId = randomUUID();
   const ours = eq(outreachDrafts.id, draftId);
-  const stage = LEAD_STAGES.includes(result.stage as (typeof LEAD_STAGES)[number]) ? result.stage : lead.status;
   const [inserted] = await db.batch([
     db.insert(outreachDrafts).values({
       id: draftId, userId, agentId, leadId: lead.id, subject: result.subject, body: result.body, rationale: result.rationale,
     }).onConflictDoNothing().returning({ id: outreachDrafts.id }),
     db.update(leads).set({
-      score: Math.max(0, Math.min(100, Math.round(result.score || 0))), status: stage, updatedAt: new Date(),
+      score: Math.max(0, Math.min(100, Math.round(result.score || 0))), updatedAt: new Date(),
     }).where(and(eq(leads.id, lead.id), eq(leads.userId, userId),
       exists(db.select({ id: outreachDrafts.id }).from(outreachDrafts).where(ours)))),
     activityForDraft(ours, "email_drafted", `Drafted "${result.subject}" for ${lead.name}`),

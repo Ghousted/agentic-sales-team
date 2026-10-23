@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { safeHttpUrl, openExternal } from "./safeUrl";
+import { safeHttpUrl, openExternal, openMailto } from "./safeUrl";
 
 describe("safeHttpUrl", () => {
   it("keeps http and https URLs", () => {
@@ -45,6 +45,25 @@ describe("openExternal", () => {
     const open = vi.fn();
     vi.stubGlobal("window", { open });
     openExternal("javascript:alert(1)");
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe("openMailto", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("opens mailto links with noopener,noreferrer", () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { open });
+    openMailto("mailto:a@b.com?subject=Hi");
+    expect(open).toHaveBeenCalledWith("mailto:a@b.com?subject=Hi", "_blank", "noopener,noreferrer");
+  });
+
+  it("does not open other schemes", () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { open });
+    openMailto("javascript:alert(1)");
+    openMailto("https://example.com");
     expect(open).not.toHaveBeenCalled();
   });
 });

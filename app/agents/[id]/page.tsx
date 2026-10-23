@@ -19,6 +19,7 @@ import { listProposalsForAgent, markProposalSent } from "@/lib/proposals/actions
 import { listMeetings } from "@/lib/meetings/actions";
 import type { MeetingDTO } from "@/lib/meetings/store";
 import { useRunGuard } from "@/lib/useRunGuard";
+import { openExternal, openMailto } from "@/lib/url/safeUrl";
 import { capMode as savedCapMode, type CapMode } from "@/lib/pod/autonomy";
 import type { ProposalDTO } from "@/lib/proposals/store";
 
@@ -182,13 +183,13 @@ export default function AgentDetail() {
   const sendDraft = useCallback((d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
     const url = "mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
-    window.open(url, "_blank");
+    openMailto(url);
   }, []);
 
   const copyMessage = useCallback((d: DraftDTO) => {
     navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"));
   }, [showToast, showError]);
-  const openProfile = useCallback((url: string) => { window.open(url, "_blank"); }, []);
+  const openProfile = useCallback((url: string) => { openExternal(url); }, []);
 
   const confirmSent = useCallback(async (d: DraftDTO) => {
     await markDraftSent(d.id);

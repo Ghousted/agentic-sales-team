@@ -24,3 +24,8 @@ export function openExternal(raw: unknown): void {
   const url = safeHttpUrl(raw);
   if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
+
+/** Open a `mailto:` link the same way. Does nothing for any other scheme. */
+export function openMailto(url: string): void {
+  if (/^mailto:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+}

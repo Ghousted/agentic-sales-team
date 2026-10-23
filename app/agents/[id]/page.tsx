@@ -223,8 +223,8 @@ export default function AgentDetail() {
     const mode = capMode(cap);
     return (
       <div role="group" aria-label={"Autonomy for " + (CAPABILITIES.find((c) => c.id === cap)?.label ?? cap)} style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px;font-weight:400")}>
-        <Box onClick={() => setCapMode(cap, "auto")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
-        <Box onClick={() => setCapMode(cap, "ask")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#006AFF;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
+        <Box onClick={() => setCapMode(cap, "auto")} aria-pressed={mode === "auto"} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
+        <Box onClick={() => setCapMode(cap, "ask")} aria-pressed={mode === "ask"} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#006AFF;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
       </div>
     );
   };

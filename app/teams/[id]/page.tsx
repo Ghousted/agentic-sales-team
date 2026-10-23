@@ -13,6 +13,7 @@ import type { LeadDTO } from "@/lib/leads/types";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
 import type { ApprovalDTO } from "@/lib/pod/types";
 import { settleDecision } from "@/lib/pod/decide";
+import { actionPhrase } from "@/lib/pod/summary";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { WorkedBy, LivePulse } from "@/components/LeadBits";
 import { agentNow, liveAgentCount, teamKpis, teamSubtitle, teamActivity } from "@/lib/agents/derive";
@@ -224,7 +225,7 @@ export default function TeamDetail() {
                   const cur = busy ? "opacity:.6;cursor:default" : "cursor:pointer";
                   return (
                     <div key={ap.id} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:10px 12px")}>
-                      <div style={css("font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>{ap.agentName}</span> wants to {ap.capability} for {ap.leadCount} lead{ap.leadCount === 1 ? "" : "s"}.</div>
+                      <div style={css("font-size:12px;color:#3F3F46")}><span style={css("font-weight:600")}>{ap.agentName}</span> wants to {actionPhrase(ap.capability, ap.leadCount)}.</div>
                       <div style={css("display:flex;gap:8px;margin-top:9px")}>
                         <Btn onClick={() => decide(ap.id, true)} disabled={busy} aria-busy={busy} style={"border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;background:#E7F7EC;color:#1B7A3D;" + cur} styleHover={busy ? undefined : "background:#D6EFDD"}>Approve</Btn>
                         <Btn onClick={() => decide(ap.id, false)} disabled={busy} style={"border:none;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:600;background:#F4F4F5;color:#71717A;" + cur} styleHover={busy ? undefined : "background:#E4E4E7"}>Reject</Btn>

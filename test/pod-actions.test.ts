@@ -16,9 +16,12 @@ const db = drizzle(async (sql, params) => {
 vi.mock("@/lib/db", async (importActual) => ({ ...(await importActual<typeof import("@/lib/db")>()), isDbConfigured: () => true, getDb: () => db }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
 vi.mock("@/lib/chat/teamMessages", () => ({ postTeamMessage: vi.fn(async () => {}) }));
+vi.mock("@/lib/meetings/store", () => ({ bookMeeting: vi.fn(async () => true) }));
 
 const { approveJob, rejectJob } = await import("@/lib/pod/actions");
+const { cancelStep, openApproval } = await import("@/lib/pod/decisions");
 const { postTeamMessage } = await import("@/lib/chat/teamMessages");
+const { bookMeeting } = await import("@/lib/meetings/store");
 
 const JOB = "11111111-1111-4111-8111-111111111111";
 const team = (teamId: string, name = "Tess Aquino") => ({ teamId, pod: true, agent: { name } });
@@ -94,5 +97,68 @@ describe("approveJob (Proceed)", () => {
     state.answer = (sql) => (/^update "jobs"/.test(sql) ? [["a2", "research", { teamId: "t1" }]] : []);
     expect(await approveJob(JOB)).toEqual({ ok: true, kind: "research", pod: false });
     expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toBe("Okay, starting now.");
+  });
+});
+
+describe("meeting asks", () => {
+  const MEET = {
+    teamId: "t1", leadIds: ["l1", "l2"], names: { l1: "Jane Doe", l2: "Ray Cruz" },
+    iso: "2026-10-23T18:00:00.000Z", label: "Fri, Oct 23 · 2:00–2:30 PM", type: "Intro call",
+  };
+
+  it("Proceed books the meeting on the spot and posts what was booked", async () => {
+    let claims = 0;
+    state.answer = (sql) => {
+      if (!/^update "jobs"/.test(sql) || !/returning/.test(sql)) return [];
+      // The first claim (queue a runner step) skips meeting asks; the second claims the meeting.
+      return claims++ === 0 ? [] : [["mtg", MEET]];
+    };
+    vi.mocked(bookMeeting).mockReset().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect(await approveJob(JOB)).toEqual({ ok: true, kind: null, pod: false });
+    expect(bookMeeting).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bookMeeting).mock.calls[0]).toEqual(["00000000-0000-4000-8000-00000000000a", "mtg", "l1", MEET.iso, MEET.label, "Intro call"]);
+    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toBe(
+      "Booked a Intro call with Jane Doe on Fri, Oct 23 · 2:00–2:30 PM. It is on your calendar. I could not book Ray Cruz. I did not find them in your leads.");
+    // The job ends done with the count, so it isn't picked up again.
+    const done = state.queries.find((q) => /^update "jobs"/.test(q.sql) && q.params.includes("done"));
+    expect(done?.params).toContainEqual(JSON.stringify({ booked: 1 }));
+  });
+
+  it("a second Proceed books nothing (the ask is no longer waiting)", async () => {
+    vi.mocked(bookMeeting).mockClear();
+    expect(await approveJob(JOB)).toEqual({ ok: true, kind: null, pod: false });
+    expect(bookMeeting).not.toHaveBeenCalled();
+    expect(postTeamMessage).not.toHaveBeenCalled();
+  });
+
+  it("Cancel says it won't book, with no run summary", async () => {
+    state.answer = (sql) => (/^update "jobs"/.test(sql) && /returning/.test(sql) ? [["mtg", "book-meeting", { ...MEET }, "2026-10-23T01:05:00Z"]] : []);
+    expect(await rejectJob(JOB)).toEqual({ ok: true, kind: "book-meeting", pod: false });
+    expect(vi.mocked(postTeamMessage).mock.calls).toEqual([["00000000-0000-4000-8000-00000000000a", "t1", "mtg", "Okay, I won't book it."]]);
+    expect(state.queries.some((q) => /from "messages"/.test(q.sql))).toBe(false);
+  });
+});
+
+describe("typed answers", () => {
+  it("a typed 'no' sums up the run from before that message", async () => {
+    state.answer = (sql) => (/^update "jobs"/.test(sql) && /returning/.test(sql) ? [["a3", "research", team("t1"), "2026-10-23T01:05:00Z"]] : []);
+    await cancelStep("00000000-0000-4000-8000-00000000000a", JOB, 42);
+    const q = state.queries.find((x) => /from "messages"/.test(x.sql));
+    expect(q?.sql).toMatch(/"messages"\."id" < \$\d/);
+    expect(q?.params).toContain(42);
+  });
+
+  it("openApproval picks the newest ask that is still waiting", async () => {
+    state.answer = (sql) => (/^select "id" from "jobs"/.test(sql) ? [["j1"], ["j3"]] : []);
+    expect(await openApproval("00000000-0000-4000-8000-00000000000a", ["j3", "j2", "j1"])).toBe("j3");
+    state.answer = (sql) => (/^select "id" from "jobs"/.test(sql) ? [["j1"]] : []);
+    expect(await openApproval("00000000-0000-4000-8000-00000000000a", ["j3", "j2", "j1"])).toBe("j1");
+    state.answer = () => [];
+    expect(await openApproval("00000000-0000-4000-8000-00000000000a", ["j3"])).toBeNull();
+  });
+
+  it("openApproval asks nothing when no ask is open", async () => {
+    expect(await openApproval("00000000-0000-4000-8000-00000000000a", [])).toBeNull();
+    expect(state.queries).toHaveLength(0);
   });
 });

@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { actionPhrase, askText, cancelSummary } from "./summary";
+import { actionPhrase, askBookText, askText, cancelSummary, startText, waitingText } from "./summary";
+
+describe("waitingText", () => {
+  it("says what the agent is waiting to do, per job kind", () => {
+    expect(waitingText("proposal", 5)).toBe("I'm waiting for your go-ahead to draft proposals for 5 leads.");
+    expect(waitingText("outreach", null)).toBe("I'm waiting for your go-ahead to draft outreach to all accepted leads.");
+    expect(waitingText("scrape", 20)).toBe("I'm waiting for your go-ahead to search for 20 leads.");
+    expect(waitingText("book-meeting", 1)).toBe("I'm waiting for your go-ahead to book the meeting.");
+  });
+});
+
+describe("startText and askBookText", () => {
+  it("starts a scrape with its live timeline marker, other steps with a short line", () => {
+    expect(startText("scrape", "j1")).toBe("Okay, starting the search now. I will post the results here. ⟦run:j1⟧");
+    expect(startText("research", "j1")).toBe("Okay, starting now.");
+  });
+
+  it("asks before booking, with who, when and the Proceed/Cancel marker", () => {
+    expect(askBookText("Intro call", "Jane Doe", "Fri, Oct 23 · 2:00–2:30 PM", "j9")).toBe("I'm ready to book a Intro call with Jane Doe on Fri, Oct 23 · 2:00–2:30 PM. Proceed? ⟦approve:j9⟧");
+  });
+});
 
 describe("askText", () => {
   it("says what the agent will do and how many leads, with the Proceed/Cancel marker", () => {

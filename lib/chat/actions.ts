@@ -1,7 +1,8 @@
 "use server";
 // The team group-chat orchestration entrypoint: mentions → intent → route →
-// enqueue the real job. Every job starts as needs_approval: the agent asks, and
-// the chat's Proceed button (lib/pod/actions approveJob) starts it.
+// enqueue the real job. A job starts as needs_approval: the agent asks, and the
+// chat's Proceed button (lib/pod/actions approveJob) or a typed "yes" starts it.
+// A capability the agent runs on Auto (agent page) starts at once instead.
 import { getSession } from "@/lib/auth/session";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { agentInfo } from "@/lib/pod/orchestrate";
@@ -12,22 +13,37 @@ import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutco
 import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
+import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
-import { askText } from "@/lib/pod/summary";
+import { askText, askBookText, startText } from "@/lib/pod/summary";
+import { approveStep, cancelStep, openApproval, createMeetingAsk } from "@/lib/pod/decisions";
+import { readDecision } from "./yesNo";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, messages } from "@/lib/db";
 import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET } from "@/lib/jobs/limits";
 
+/** A job the client should follow now (kick the runner, wait for the outcome):
+ *  one that started without an ask (Auto) or that a typed "yes" approved. */
+export interface FollowJob { id: string; kind: string; pod: boolean }
+
 export interface TeamChatResult {
   messages: ChatOutMsg[];
+  follow?: FollowJob;
 }
 
 type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
+
+/** Whether the agent runs this capability without asking (Auto on its page). */
+const runsAuto = (actor: Member, cap: string) => !!actor.auto?.includes(cap);
+
+// The ⟦approve:…⟧ asks agents posted since the user's last message, newest first.
+const APPROVE_RE = /⟦approve:([0-9a-f-]{36})⟧/;
+const openAsks = (history: StoredMsg[]) =>
+  sinceLastUserMessage(history).map((m) => m.text.match(APPROVE_RE)?.[1]).filter((id): id is string => !!id);
 
 // Capabilities whose jobs consume specific leads (so /lead picks apply to them).
 const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal", "match"]);
@@ -40,33 +56,39 @@ async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Pr
   const missing = missingBriefFields(b);
   if (missing.length) return { messages: [{ who: actor.id, text: askScrapeDetailsText(b, missing, MAX_SCRAPE_TARGET) }] };
   const count = Math.min(b.count!, MAX_SCRAPE_TARGET);
+  const auto = runsAuto(actor, "scrape");
   const enq = await enqueueJob({
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
     kind: "scrape", capabilities: actor.capabilities, target: count, instruction: briefInstruction(b),
-    pod: true, teamId, ask: true,
+    pod: true, teamId, ask: !auto,
   });
   if ("error" in enq) return { messages: [{ who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  if (auto) return { messages: [{ who: actor.id, text: startText("scrape", enq.jobId) }], follow: { id: enq.jobId, kind: "scrape", pod: true } };
   return { messages: [{ who: actor.id, text: scrapeAskText(b, count, MAX_SCRAPE_TARGET, enq.jobId) }] };
 }
 
-/** Approve any picked leads, then ask to run an outreach job for the target.
- *  Shared by the fresh-request gate and the pending-answer path. */
-async function askOutreach(actor: Member, teamId: string, target: { leadIds?: string[]; all?: boolean }): Promise<ChatOutMsg> {
+/** Approve any picked leads, then ask to run an outreach job for the target (or
+ *  start it, on Auto). Shared by the fresh-request gate and the pending-answer
+ *  path. `pre` is a hand-off line to say first. */
+async function askOutreach(actor: Member, teamId: string, target: { leadIds?: string[]; all?: boolean }, pre: ChatOutMsg[] = []): Promise<TeamChatResult> {
   const agent = { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task };
   const picks = target.leadIds?.length ? target.leadIds : null;
   if (picks) await setLeadReview(picks, "accepted");
+  const ask = !runsAuto(actor, "outreach");
   const enq = await enqueueJob(picks
-    ? { agent, kind: "outreach", capabilities: actor.capabilities, leadIds: picks, batchSize: picks.length, teamId, ask: true }
-    : { agent, kind: "outreach", capabilities: actor.capabilities, teamId, ask: true });
-  if ("error" in enq) return { who: actor.id, text: "I wasn't able to start that: " + enq.error };
-  return { who: actor.id, text: askText("outreach", picks ? picks.length : null, enq.jobId) };
+    ? { agent, kind: "outreach", capabilities: actor.capabilities, leadIds: picks, batchSize: picks.length, teamId, ask }
+    : { agent, kind: "outreach", capabilities: actor.capabilities, teamId, ask });
+  if ("error" in enq) return { messages: [...pre, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  if (!ask) return { messages: [...pre, { who: actor.id, text: startText("outreach", enq.jobId) }], follow: { id: enq.jobId, kind: "outreach", pod: false } };
+  return { messages: [...pre, { who: actor.id, text: askText("outreach", picks ? picks.length : null, enq.jobId) }] };
 }
 
 /** Resolve `phrase` to a meeting time for `leadIds` and reply with one of three
  *  outcomes, each keeping the flow alive via the ⟦meet:…⟧ marker:
  *   - no usable date        → ask "when?"        (marker carries the lead ids)
  *   - a day but no clock time → ask "what time?" (marker also carries the date)
- *   - a full date + time     → book it.
+ *   - a full date + time     → ask Proceed/Cancel, and book on Proceed
+ *                              (lib/pod/decisions). On Auto, book it now.
  *  Shared by the fresh request, the "who?" answer, and the "when/what time?" answers.
  *  `tz` is the user's IANA timezone: the phrase is read, and the window checked, in it. */
 async function resolveTimeAndBook(userId: string, actor: Member, teamId: string, leadIds: string[], phrase: string, tz: string): Promise<ChatOutMsg[]> {
@@ -82,14 +104,18 @@ async function resolveTimeAndBook(userId: string, actor: Member, teamId: string,
     // Both are taken in the user's timezone: iso is UTC, so its own date can be a day off.
     return [{ who: actor.id, text: askWhatTimeText(names, dayLabel(iso, tz), leadIds, zonedDate(iso, tz)) }];
   }
+  const nameOf = (id: string) => teamLeads.find((l) => l.id === id)?.name ?? "the lead";
+  if (!runsAuto(actor, "book-meeting")) {
+    const jobId = await createMeetingAsk(userId, { id: actor.id, name: actor.name }, {
+      teamId, leadIds, names: Object.fromEntries(leadIds.map((id) => [id, nameOf(id)])), iso, label, type: settings.type,
+    });
+    if (!jobId) return [{ who: actor.id, text: "I wasn't able to set up that meeting. Please try again." }];
+    return [{ who: actor.id, text: askBookText(settings.type, names, label, jobId) }];
+  }
   // Report only what bookMeeting actually booked. It refuses a lead that is not the user's.
   const booked: string[] = [];
   for (const id of leadIds) if (await bookMeeting(userId, actor.id, id, iso, label, settings.type)) booked.push(id);
-  const nameOf = (id: string) => teamLeads.find((l) => l.id === id)?.name ?? "the lead";
-  if (!booked.length) return [{ who: actor.id, text: `I could not book that. I could not find ${names} in your leads.` }];
-  const missed = leadIds.filter((id) => !booked.includes(id));
-  const text = `Booked a ${settings.type} with ${booked.map(nameOf).join(", ")} on ${label}. It is on your calendar.`;
-  return [{ who: actor.id, text: missed.length ? `${text} I could not book ${missed.map(nameOf).join(", ")}. I did not find them in your leads.` : text }];
+  return [{ who: actor.id, text: bookedText(settings.type, label, leadIds.map(nameOf), booked.map(nameOf)) }];
 }
 
 /** Handle one user message in a team thread. Both the user's message and the
@@ -114,7 +140,16 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   // Read the context before storing this message, so "since the user's last
   // message" means since the previous one.
   const history = await _listTeamMessages(userId, teamId);
-  await insertTeamMessages(userId, teamId, [{ who: "me", text }]);
+  // A clear yes/no while an agent's "Proceed?" is open works as the button.
+  const decision = readDecision(text);
+  const asked = decision ? await openApproval(userId, openAsks(history)) : null;
+  const [mine] = await insertTeamMessages(userId, teamId, [{ who: "me", text }]);
+  if (decision && asked) {
+    // The step posts the agent's reply ("starting now", or the cancel summary).
+    const r = decision === "yes" ? await approveStep(userId, asked) : await cancelStep(userId, asked, mine?.id);
+    if ("error" in r) return { messages: await insertTeamMessages(userId, teamId, [{ who: "system", text: r.error }]) };
+    return { messages: [], follow: decision === "yes" && r.kind ? { id: asked, kind: r.kind, pod: r.pod } : undefined };
+  }
   const res = await reply(userId, teamId, text, leadIds, history, safeTimeZone(timeZone));
   if (!res.messages.length) res.messages.push({ who: "system", text: "No one picked that up. Try @mentioning an agent on this team." });
   return { ...res, messages: await insertTeamMessages(userId, teamId, res.messages) };
@@ -224,7 +259,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
       }
     }
     if (!target) return { messages: [{ who: pendingAgent.id, text: askWhoAgainText(pendingAgent.name) }] };
-    return { messages: [await askOutreach(pendingAgent, teamId, target)] };
+    return askOutreach(pendingAgent, teamId, target);
   }
 
   const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
@@ -239,11 +274,11 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
 
   // Fresh outreach request. The ask replaces actWith's "I'm drafting outreach now".
   if (cap === "outreach") {
-    if (picks.length) return { messages: [...pre, await askOutreach(actor, teamId, { leadIds: picks })] };
+    if (picks.length) return askOutreach(actor, teamId, { leadIds: picks }, pre);
     // no picks: ask who, unless "all" with at least one accepted lead.
     if (isAllRequest(message)) {
       const teamLeads = await listTeamLeadsForPicker(teamId);
-      if (teamLeads.some((l) => l.review === "accepted")) return { messages: [...pre, await askOutreach(actor, teamId, { all: true })] };
+      if (teamLeads.some((l) => l.review === "accepted")) return askOutreach(actor, teamId, { all: true }, pre);
     }
     return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
@@ -268,15 +303,17 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   if (LEAD_CAPS.has(cap) && picks.length) {
     await setLeadReview(picks, "accepted");
   }
+  const auto = runsAuto(actor, cap);
   const enq = await enqueueJob({
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
     kind: cap, capabilities: actor.capabilities,
     target: intent.params.target ?? 10,
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
     batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
-    teamId, ask: true,
+    teamId, ask: !auto,
   });
   if ("error" in enq) return { messages: [...pre, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  if (auto) return { messages: [...pre, { who: actor.id, text: startText(cap, enq.jobId) }], follow: { id: enq.jobId, kind: cap, pod: false } };
   return { messages: [...pre, { who: actor.id, text: askText(cap, LEAD_CAPS.has(cap) && picks.length ? picks.length : null, enq.jobId) }] };
 }
 

@@ -85,7 +85,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
         <div style={css("display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap")}>
           {/* list */}
           <div style={css("flex:1 1 320px;max-width:420px;min-width:0;background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-            <div style={css("max-height:calc(100vh - 300px);overflow-y:auto")}>
+            <div style={css("max-height:calc(var(--app-h) - 300px);overflow-y:auto")}>
               {shown.length === 0 ? (
                 <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>No drafts match.</div>
               ) : shown.map((d) => {

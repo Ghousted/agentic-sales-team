@@ -88,7 +88,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
         <Btn onClick={() => set({ showTeamModal: true })} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ New team</Btn>
       </div>
 
-      <div ref={hubRef} style={css("position:relative;background:radial-gradient(900px 520px at 50% 38%,#123A8C,#07183F 75%);border:1px solid #1A3A80;border-radius:24px;height:calc(100vh - 178px);min-height:540px;overflow:hidden;box-shadow:0 20px 50px rgba(7,24,63,.3)")}>
+      <div ref={hubRef} style={css("position:relative;background:radial-gradient(900px 520px at 50% 38%,#123A8C,#07183F 75%);border:1px solid #1A3A80;border-radius:24px;height:calc(var(--app-h) - 178px);min-height:540px;overflow:hidden;box-shadow:0 20px 50px rgba(7,24,63,.3)")}>
         <div style={css("position:absolute;top:16px;left:20px;right:150px;display:flex;gap:8px;z-index:3;flex-wrap:wrap")}>
           {teamPills.map((p) => (
             <Box key={p.id} onClick={() => set({ hubTeam: p.id })} style={"font-size:11.5px;font-weight:600;border-radius:99px;padding:5px 13px;cursor:pointer;transition:all .12s;backdrop-filter:blur(6px);" + (s.hubTeam === p.id ? "background:#fff;color:#0B2A6B;border:1px solid #fff" : "background:rgba(255,255,255,.07);color:#C7D7F5;border:1px solid rgba(255,255,255,.16)")} styleHover="border-color:#CFE0FF">{p.label}</Box>

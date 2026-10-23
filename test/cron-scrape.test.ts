@@ -29,8 +29,10 @@ vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true }));
 vi.mock("@/lib/leads/store", () => ({ addScrapedLeads: vi.fn(async () => ["l1", "l2", "l3"]) }));
 vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a) }));
 
+// chainNext gets the job's creation time, so it can tell a run the user cancelled meanwhile.
+const JOB_CREATED = new Date("2026-10-23T01:00:00Z");
 const scrapeJob = (id: string, userId: string, extra: Record<string, unknown> = {}) => ({
-  id, userId, agentId: "a1", kind: "scrape", status: "queued", params: { target: 5, pod: true, teamId: "t1", ...extra },
+  id, userId, agentId: "a1", kind: "scrape", status: "queued", createdAt: JOB_CREATED, params: { target: 5, pod: true, teamId: "t1", ...extra },
 });
 const cronReq = (auth?: string) => new Request("http://x/api/cron/scrape", { headers: auth ? { authorization: auth } : {} });
 
@@ -70,7 +72,7 @@ describe("GET /api/cron/scrape", () => {
     expect(done.steps.at(-1)).toMatchObject({ id: "save", status: "done", label: "3 new leads saved" });
     // The live timeline: the save step was written while the job still ran.
     expect(fake.state.updates.some((u) => !u.status && (u.result as { steps?: unknown[] })?.steps?.length)).toBe(true);
-    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
+    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"], JOB_CREATED);
   });
 
   it("files a team scrape's leads under the owner the team picks, and still credits the runner", async () => {
@@ -82,7 +84,7 @@ describe("GET /api/cron/scrape", () => {
     await GET(cronReq("Bearer s3cret"));
     expect(vi.mocked(leadOwnerForTeam)).toHaveBeenCalledWith("u2", "t1", "a1");
     expect(vi.mocked(addScrapedLeads).mock.calls[0][1]).toBe("as1");
-    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"]);
+    expect(vi.mocked(chainNext)).toHaveBeenCalledWith("u2", "t1", "scrape", 3, "a1", ["l1", "l2", "l3"], JOB_CREATED);
   });
 
   it("keeps a non-team scrape's leads with the agent that ran it", async () => {

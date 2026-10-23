@@ -1,6 +1,7 @@
 "use server";
 // The team group-chat orchestration entrypoint: mentions → intent → route →
-// enqueue the real job. Returns the messages to post + any job to poll.
+// enqueue the real job. Every job starts as needs_approval: the agent asks, and
+// the chat's Proceed button (lib/pod/actions approveJob) starts it.
 import { getSession } from "@/lib/auth/session";
 import { membersOfTeam } from "@/lib/teams/membership";
 import { agentInfo } from "@/lib/pod/orchestrate";
@@ -11,11 +12,11 @@ import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutco
 import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeStartText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
+import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
-import { runMarker } from "@/lib/scrape/steps";
+import { askText } from "@/lib/pod/summary";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
@@ -24,7 +25,6 @@ import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_
 
 export interface TeamChatResult {
   messages: ChatOutMsg[];
-  job?: { id: string; kind: string; agentId: string };
 }
 
 type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
@@ -32,11 +32,9 @@ type Member = NonNullable<Awaited<ReturnType<typeof agentInfo>>>;
 // Capabilities whose jobs consume specific leads (so /lead picks apply to them).
 const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal", "match"]);
 
-const onItText = (_name: string) => `Understood. I'll begin drafting the outreach now.`;
-
-/** Ask for whatever the scrape brief still misses (who, where, how many), or start
- *  the scrape once it is complete. Shared by a fresh request and the reply to a
- *  question. A team-chat scrape kicks off the autonomous chain (scrape → assess → …). */
+/** Ask for whatever the scrape brief still misses (who, where, how many), or ask
+ *  to run the scrape once it is complete. Shared by a fresh request and the reply
+ *  to a question. A team-chat scrape starts the chain (scrape → assess → …). */
 async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Promise<TeamChatResult> {
   const b = settleBrief(brief);
   const missing = missingBriefFields(b);
@@ -45,22 +43,23 @@ async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Pr
   const enq = await enqueueJob({
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
     kind: "scrape", capabilities: actor.capabilities, target: count, instruction: briefInstruction(b),
-    pod: true, teamId,
+    pod: true, teamId, ask: true,
   });
   if ("error" in enq) return { messages: [{ who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
-  // ⟦run:…⟧ puts the live timeline of this scrape under the message.
-  return { messages: [{ who: actor.id, text: scrapeStartText(b, count, MAX_SCRAPE_TARGET) + runMarker(enq.jobId) }], job: { id: enq.jobId, kind: "scrape", agentId: actor.id } };
+  return { messages: [{ who: actor.id, text: scrapeAskText(b, count, MAX_SCRAPE_TARGET, enq.jobId) }] };
 }
 
-/** Approve any picked leads, then enqueue an outreach job for the target. Shared
- *  by the fresh-request gate and the pending-answer path. */
-async function startOutreach(actor: Member, target: { leadIds?: string[]; all?: boolean }): Promise<{ jobId: string } | { error: string }> {
+/** Approve any picked leads, then ask to run an outreach job for the target.
+ *  Shared by the fresh-request gate and the pending-answer path. */
+async function askOutreach(actor: Member, teamId: string, target: { leadIds?: string[]; all?: boolean }): Promise<ChatOutMsg> {
   const agent = { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task };
-  if (target.leadIds && target.leadIds.length) {
-    await setLeadReview(target.leadIds, "accepted");
-    return enqueueJob({ agent, kind: "outreach", capabilities: actor.capabilities, leadIds: target.leadIds, batchSize: target.leadIds.length });
-  }
-  return enqueueJob({ agent, kind: "outreach", capabilities: actor.capabilities });
+  const picks = target.leadIds?.length ? target.leadIds : null;
+  if (picks) await setLeadReview(picks, "accepted");
+  const enq = await enqueueJob(picks
+    ? { agent, kind: "outreach", capabilities: actor.capabilities, leadIds: picks, batchSize: picks.length, teamId, ask: true }
+    : { agent, kind: "outreach", capabilities: actor.capabilities, teamId, ask: true });
+  if ("error" in enq) return { who: actor.id, text: "I wasn't able to start that: " + enq.error };
+  return { who: actor.id, text: askText("outreach", picks ? picks.length : null, enq.jobId) };
 }
 
 /** Resolve `phrase` to a meeting time for `leadIds` and reply with one of three
@@ -117,7 +116,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   const history = await _listTeamMessages(userId, teamId);
   await insertTeamMessages(userId, teamId, [{ who: "me", text }]);
   const res = await reply(userId, teamId, text, leadIds, history, safeTimeZone(timeZone));
-  if (!res.messages.length && !res.job) res.messages.push({ who: "system", text: "No one picked that up. Try @mentioning an agent on this team." });
+  if (!res.messages.length) res.messages.push({ who: "system", text: "No one picked that up. Try @mentioning an agent on this team." });
   return { ...res, messages: await insertTeamMessages(userId, teamId, res.messages) };
 }
 
@@ -225,9 +224,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
       }
     }
     if (!target) return { messages: [{ who: pendingAgent.id, text: askWhoAgainText(pendingAgent.name) }] };
-    const enq = await startOutreach(pendingAgent, target);
-    if ("error" in enq) return { messages: [{ who: pendingAgent.id, text: "I wasn't able to start that: " + enq.error }] };
-    return { messages: [{ who: pendingAgent.id, text: onItText(pendingAgent.name) }], job: { id: enq.jobId, kind: "outreach", agentId: pendingAgent.id } };
+    return { messages: [await askOutreach(pendingAgent, teamId, target)] };
   }
 
   const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
@@ -240,21 +237,13 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   const cap = res.capability;
   const picks = (leadIds ?? []).filter(Boolean);
 
-  // Fresh outreach request.
+  // Fresh outreach request. The ask replaces actWith's "I'm drafting outreach now".
   if (cap === "outreach") {
-    if (picks.length) {
-      const enq = await startOutreach(actor, { leadIds: picks });
-      if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
-      return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
-    }
+    if (picks.length) return { messages: [...pre, await askOutreach(actor, teamId, { leadIds: picks })] };
     // no picks: ask who, unless "all" with at least one accepted lead.
     if (isAllRequest(message)) {
       const teamLeads = await listTeamLeadsForPicker(teamId);
-      if (teamLeads.some((l) => l.review === "accepted")) {
-        const enq = await startOutreach(actor, { all: true });
-        if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
-        return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: "outreach", agentId: actor.id } };
-      }
+      if (teamLeads.some((l) => l.review === "accepted")) return { messages: [...pre, await askOutreach(actor, teamId, { all: true })] };
     }
     return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
@@ -285,9 +274,10 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     target: intent.params.target ?? 10,
     leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
     batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
+    teamId, ask: true,
   });
-  if ("error" in enq) return { messages: [...pre, ...res.messages, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
-  return { messages: [...pre, ...res.messages], job: { id: enq.jobId, kind: cap, agentId: actor.id } };
+  if ("error" in enq) return { messages: [...pre, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
+  return { messages: [...pre, { who: actor.id, text: askText(cap, LEAD_CAPS.has(cap) && picks.length ? picks.length : null, enq.jobId) }] };
 }
 
 /** The thread rows after `afterId` (all of them for 0), oldest first. */

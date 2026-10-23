@@ -1,8 +1,8 @@
 import "server-only";
-// Pod orchestration: resolve a team's members/capabilities/approval-modes and
-// enqueue or chain pod-stage jobs. Server-only. No engine work here. It wires
-// the existing capability jobs into an auto-handed-off pipeline.
-import { and, eq, inArray } from "drizzle-orm";
+// Pod orchestration: resolve a team's members/capabilities and enqueue or chain
+// pod-stage jobs. Server-only. No engine work here. It wires the existing
+// capability jobs into a handed-off pipeline; every stage asks the user first.
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
@@ -10,6 +10,7 @@ import { pickLeadsForResearch, pickLeadsForRun, pickLeadsForQualify, pickLeadsFo
 import { pickLeadsForMatch } from "@/lib/matches/store";
 import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
+import { askText } from "./summary";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
@@ -17,8 +18,6 @@ import { isStale } from "@/lib/jobs/runtime";
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
 
 // Per-stage phrasing for the hand-off narration.
-const DOING: Record<string, string> = { scrape: "finding leads", assess: "reviewing the new leads", research: "researching the book", qualify: "qualifying the leads", match: "matching leads to listings", outreach: "drafting outreach", proposal: "drafting proposals" };
-const VERB: Record<string, string> = { assess: "review these leads", research: "research these leads", qualify: "qualify the leads", match: "match these leads", outreach: "draft outreach", proposal: "draft proposals" };
 const NOUN: Record<string, string> = { assess: "the review", research: "research", qualify: "qualification", match: "matching", outreach: "outreach", proposal: "proposals" };
 // What the finisher says when its stage moved no leads forward.
 const NOTHING: Record<string, string> = {
@@ -89,13 +88,6 @@ export async function leadOwnerForTeam(userId: string, teamId: string, actorId: 
   return (await memberWithCapability(userId, teamId, "assess")) ?? members[0];
 }
 
-export async function approvalMode(userId: string, agentId: string, capability: string): Promise<"auto" | "ask"> {
-  if (!isDbConfigured()) return "auto";
-  const [row] = await getDb().select().from(agentConfig).where(and(eq(agentConfig.userId, userId), eq(agentConfig.agentId, agentId))).limit(1);
-  const settings = row?.settings as Record<string, { mode?: string }> | null | undefined;
-  return settings?.[capability]?.mode === "ask" ? "ask" : "auto";
-}
-
 /** How many book/pending leads the stage would process now (for the approval count). */
 export async function countPending(userId: string, agentId: string, capability: string): Promise<number> {
   const pick = capability === "research" ? pickLeadsForResearch
@@ -117,23 +109,25 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return;
   const info = await agentInfo(userId, agentId);
   if (!info) return;
-  const mode = await approvalMode(userId, agentId, capability);
   const leadCount = await countPending(userId, agentId, capability);
+  // Every stage waits for the user: the ask shows Proceed/Cancel in the chat.
   const [row] = await getDb().insert(jobs).values({
-    userId, agentId, kind: capability,
-    status: mode === "ask" ? "needs_approval" : "queued",
+    userId, agentId, kind: capability, status: "needs_approval",
     params: {
       agent: { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task },
       teamId, pod: true, leadCount, batchSize: POD_BATCH, leadIds: null,
     },
   }).returning({ id: jobs.id });
+  await postTeamMessage(userId, teamId, info.id, askText(capability, leadCount, row.id, await userFirstName(userId)));
+}
 
-  if (mode === "ask") {
-    const first = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, info.id, `@${first}, ${leadCount} lead${leadCount === 1 ? "" : "s"} ready to ${VERB[capability] ?? capability}. Approve and I'll begin. ⟦approve:${row.id}⟧`);
-  } else {
-    await postTeamMessage(userId, teamId, info.id, `Understood. I'm ${DOING[capability] ?? capability} now.`);
-  }
+/** Whether the user cancelled this team's run after `since` (when the finished
+ *  job was created). Cancel dismisses the waiting steps, but a step that was
+ *  already running still finishes, and its hand-off must not restart the chain. */
+export async function runCancelledSince(userId: string, teamId: string, since: Date): Promise<boolean> {
+  const rows = await getDb().select({ params: jobs.params }).from(jobs)
+    .where(and(eq(jobs.userId, userId), eq(jobs.status, "dismissed"), gte(jobs.finishedAt, since)));
+  return rows.some((r) => (r.params as { teamId?: string } | null)?.teamId === teamId);
 }
 
 /** The next book stage after `completedKind` that this team can cover. Skips
@@ -152,13 +146,21 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
 
 /** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
-export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[]): Promise<void> {
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[], since?: Date): Promise<void> {
+  // `since` is when the finished job was created. A run cancelled after that stops here.
+  const cancelled = since ? await runCancelledSince(userId, teamId, since) : false;
   // ranBy is the agent that ran the job. It can be an agent from another team (a
   // cross-team hand-off), so do not look for it among this team's members only.
   const finisherId = ranBy ?? await memberWithCapability(userId, teamId, completedKind);
   const finisher = finisherId ? await agentInfo(userId, finisherId) : null;
   if (!finisher) return;
   const first = (info: AgentInfo) => info.name.split(" ")[0];
+
+  if (cancelled) {
+    const did = count > 0 ? `I ${donePhrase(completedKind, count)}` : "I finished";
+    await postTeamMessage(userId, teamId, finisher.id, `${did}, but you stopped the run, so I didn't pass it on.${completedKind === "scrape" ? leadsMarker(leadIds) : ""}`);
+    return;
+  }
 
   // A stage that moved no leads forward ends the chain. The next stage has no
   // new work, so tell the user instead of running each later stage on 0 leads.
@@ -188,7 +190,12 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
   if (next) {
     const info = await agentInfo(userId, next.agentId);
     if (info) {
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${first(info)}, please do the ${NOUN[next.capability] ?? next.capability}.`);
+      // An agent that also covers the next stage says what it does next instead
+      // of @mentioning itself.
+      const handoff = info.id === finisher.id
+        ? `Next, I'll do the ${NOUN[next.capability] ?? next.capability}.`
+        : `@${first(info)}, please do the ${NOUN[next.capability] ?? next.capability}.`;
+      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. ${handoff}`);
       await enqueuePodStage(userId, teamId, next.capability, next.agentId);
     }
   } else {

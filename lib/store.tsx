@@ -8,6 +8,7 @@ import { typeById, templateById } from "./agentTypes";
 import { signOut as signOutAction } from "./auth/actions";
 import { teamChat, reportTeamJob } from "./chat/actions";
 import type { ThreadMsg } from "./chat/thread";
+import { markSent } from "./chat/pace";
 import { saveAgent, saveTeam, saveTeamMeta as saveTeamMetaAction, deleteTeam as deleteTeamAction, setAgentRemoved, setAgentPaused, clearMessages, saveAgentConfig as saveAgentConfigAction, saveTeamMembers as saveTeamMembersAction, type WorkspaceData, type AgentConfig } from "./workspace/actions";
 
 // Ticked ids in the create-team modal that are still real agents. A stale id
@@ -117,6 +118,10 @@ interface Ctx {
   updateTeam: (teamId: string, patch: { name?: string; icon?: string; goal?: string }) => void;
   removeTeamMember: (teamId: string, agentId: string) => void;
   sendTeamChat: (teamId: string, text: string, leadIds?: string[]) => void;
+  // After the user presses Proceed on an agent's ask: start the job and follow it.
+  followJob: (teamId: string, job: { id: string; kind: string; pod: boolean }) => Promise<void>;
+  // Fetch the open thread's new rows now instead of on the next poll tick.
+  pullThread: (teamId: string) => Promise<void>;
   clearChat: (convId: string) => Promise<number>;
   // The open chat page registers its thread fetch here so a send can pull the
   // stored replies right away instead of waiting for the next poll tick.
@@ -401,20 +406,24 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     try { await threadPolls.current.get(teamId)?.(); } catch { /* the next poll tick retries */ }
   }, []);
 
+  // A notice the server never stored (a failed request), shown in the thread only here.
+  const addLocalMsg = useCallback((teamId: string, who: string, text: string) => {
+    const m: ThreadMsg = { who, text, local: true };
+    set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
+  }, [set]);
+
   // Team chat. The server stores the user's message and every agent reply
   // (teamChat, the pod chain, reportTeamJob); the chat page renders the stored
   // thread in id order. Here the message shows at once as a local row until its
   // stored copy arrives, and only a notice the server never saw (a failed
-  // request) stays local-only.
+  // request) stays local-only. Agents ask before they act, so a send starts no
+  // job: the chat's Proceed button calls followJob.
   const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
     const t = (text || "").trim();
     if (!t) return;
-    const addLocal = (who: string, text: string) => {
-      const m: ThreadMsg = { who, text, local: true };
-      set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
-    };
     const awaiting = (d: number) => set((prev) => ({ chatAwaiting: { ...prev.chatAwaiting, [teamId]: Math.max(0, (prev.chatAwaiting[teamId] ?? 0) + d) } }));
-    addLocal("me", t);
+    addLocalMsg(teamId, "me", t);
+    markSent(teamId);
     set({ chatInput: "", chatLeadPicks: [] });
     awaiting(1);
 
@@ -424,47 +433,54 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       await pullThread(teamId);
       awaiting(-1);
       // A reply with no id wasn't stored (for example, "Not signed in."). Show it locally.
-      for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocal(m.who, m.text);
-      if (!res.job) return;
-      const job = res.job;
-      if (job.kind === "scrape") {
-        // The scrape route runs it now (the cron runs it if this tab closes); a
-        // finished pod scrape is narrated by the chain, a failed one by reportTeamJob.
-        try { await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) }); } catch { /* the cron picks it up */ }
-        try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
-        try { await reportTeamJob(teamId, job.id); } catch { /* best-effort */ }
-        await pullThread(teamId);
-        return;
-      }
-      // research / outreach / …: the per-minute cron (/api/cron/jobs) runs the job
-      // even if this tab closes; kicking the runner here only starts it sooner.
-      // reportTeamJob posts the outcome once the job ends, then the thread shows it.
-      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
-      let waited = 0;
-      let slow = 0; // polls after "still working": the cron may take a few minutes
-      const poll = async (): Promise<void> => {
-        let status: string | null;
-        try { status = await reportTeamJob(teamId, job.id); }
-        catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { addLocal("system", "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
-        if (!status) return;
-        if (status === "done" || status === "failed") { await pullThread(teamId); return; }
-        if (waited >= 40) {
-          if (slow === 0) addLocal("system", "Still working on it in the background. The result will appear here when it's done.");
-          if (++slow > 40) return; // ~10 more minutes; the agent's page shows the result after that
-          setTimeout(poll, 15_000);
-          return;
-        }
-        waited++;
-        setTimeout(poll, 2500);
-      };
-      poll();
+      for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocalMsg(teamId, m.who, m.text);
     }).catch(async () => {
       // The message may or may not have been stored; the thread fetch shows what was.
       await pullThread(teamId);
       awaiting(-1);
-      addLocal("system", "I'm sorry. I could not process that now.");
+      addLocalMsg(teamId, "system", "I'm sorry. I could not process that now.");
     });
-  }, [set, pullThread]);
+  }, [set, pullThread, addLocalMsg]);
+
+  // After Proceed: start the approved job now and follow it until its outcome is
+  // in the thread. The per-minute crons run it anyway if this tab closes.
+  const followJob = useCallback(async (teamId: string, job: { id: string; kind: string; pod: boolean }) => {
+    const addLocal = (who: string, text: string) => addLocalMsg(teamId, who, text);
+    await pullThread(teamId); // the agent's "starting now" reply
+    if (job.kind === "scrape") {
+      // The scrape route runs it now (the cron runs it if this tab closes); a
+      // finished pod scrape is narrated by the chain, a failed one by reportTeamJob.
+      try { await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: job.id }) }); } catch { /* the cron picks it up */ }
+      try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
+      try { await reportTeamJob(teamId, job.id); } catch { /* best-effort */ }
+      await pullThread(teamId);
+      return;
+    }
+    // research / outreach / …: the per-minute cron (/api/cron/jobs) runs the job
+    // even if this tab closes; kicking the runner here only starts it sooner.
+    try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort */ }
+    // A pod stage's outcome is narrated by the chain (and the thread poll shows it).
+    if (job.pod) { await pullThread(teamId); return; }
+    // Otherwise reportTeamJob posts the outcome once the job ends.
+    let waited = 0;
+    let slow = 0; // polls after "still working": the cron may take a few minutes
+    const poll = async (): Promise<void> => {
+      let status: string | null;
+      try { status = await reportTeamJob(teamId, job.id); }
+      catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { addLocal("system", "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
+      if (!status) return;
+      if (status === "done" || status === "failed") { await pullThread(teamId); return; }
+      if (waited >= 40) {
+        if (slow === 0) addLocal("system", "Still working on it in the background. The result will appear here when it's done.");
+        if (++slow > 40) return; // ~10 more minutes; the agent's page shows the result after that
+        setTimeout(poll, 15_000);
+        return;
+      }
+      waited++;
+      setTimeout(poll, 2500);
+    };
+    poll();
+  }, [pullThread, addLocalMsg]);
 
   // Creates wait for the server to store the row before the agent/team appears:
   // chat and jobs look agents and teams up server-side, so one the server never
@@ -578,7 +594,7 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
 
   const value: Ctx = {
     s, set, agents, teams, byId,
-    showToast, showError, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent, animateCount,
+    showToast, showError, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, followJob, pullThread, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent, animateCount,
   };
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

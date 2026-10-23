@@ -8,6 +8,7 @@ import { aiJSON, isAIConfigured, type Turn } from "@/lib/ai/openrouter";
 import { cleanField, LEAD_FIELD_LIMITS, untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
 import { gateResults } from "./jev";
+import { AGENCY_RULE, JOB_AD_RULE } from "./rules";
 import { cleanTitle, domainOf, trunc, type StepLog } from "./steps";
 
 export interface Prospect {
@@ -198,6 +199,8 @@ function fitRules(targetDesc: string, sells: string, target: number): string[] {
     FIT_RULE,
     UNTRUSTED_RULE,
     "Use ONLY facts in the TITLE and SNIPPET. NEVER fabricate a name, title or company. If the result does not show who or which company it is, skip it.",
+    `A person is a lead ONLY when their employer is shown and is a company in the target. Skip a person whose employer is not shown. A selling platform or marketplace (${PLATFORM_LIST}) is NOT an employer: 'Shop Owner at Shopify' runs their own store, so set company to the store or brand name when it is shown, and skip the person when it is not.`,
+    AGENCY_RULE,
     "EXCLUDE: companies or people that do not match the target (wrong industry, wrong location when one is given, wrong role); recruiters and staffing agencies (unless they are the target); job postings; LinkedIn posts, articles, 'pulse' pages, groups and school pages; LinkedIn's own pages.",
     "Return ONLY JSON.",
   ];
@@ -239,7 +242,9 @@ async function extractProspects(targetDesc: string, sells: string, results: Sear
     UNTRUSTED_RULE,
     "INCLUDE a lead even when the name is not shown. The post link is the contact path.",
     "RECENCY: only include posts from the PAST MONTH. If a post visibly shows its age and it is older than ~1 month (e.g. '2mo', '3 months ago', '1y', or a date more than ~30 days back), SKIP it. An old buying-intent post is a dead lead.",
-    "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and job postings. A lead is someone to PITCH to. A lead is never a seller or an article about the topic.",
+    JOB_AD_RULE + " For such a post: name = the business, title = the role it is hiring for.",
+    AGENCY_RULE,
+    "EXCLUDE: posts by sellers/agents/vendors ADVERTISING their own services (competitors, not buyers); the platform/group/page itself; directories, marketplaces, news/blog/'best of' articles, and any other job postings. A lead is someone to PITCH to. A lead is never a seller or an article about the topic.",
     "Return ONLY JSON.",
   ]).filter(Boolean).join("\n");
   const turns: Turn[] = [{ role: "user", text: corpus }];
@@ -306,12 +311,39 @@ export async function runFirecrawlScrape(
     more: Math.max(0, dropped.length - DROPPED_SHOWN),
   });
   log?.put({ id: "extract", status: "active", label: "Picking out the leads" });
-  const prospects = normalizeProspects(
+  const extracted = normalizeProspects(
     await extractProspects(targetDesc, sells, gated, target, plan.mode === "fit" ? "linkedin" : plan.platform, plan.mode),
     gated.map((r) => r.url),
   );
-  log?.put({ id: "extract", status: "done", label: `Picked out ${prospects.length} lead${prospects.length === 1 ? "" : "s"}` });
+  // The prompt says to skip these too; this check holds when the model doesn't.
+  const prospects = extracted.filter((p) => !lacksEmployer(p));
+  const noEmployer = extracted.length - prospects.length;
+  log?.put({
+    id: "extract", status: "done", label: `Picked out ${prospects.length} lead${prospects.length === 1 ? "" : "s"}`,
+    detail: noEmployer ? `Skipped ${noEmployer} ${noEmployer === 1 ? "person" : "people"} with no employer shown.` : undefined,
+  });
   return prospects;
+}
+
+/** Selling platforms and marketplaces, plus placeholders that name no business.
+ *  A profile listing one as the employer ('Shop Owner at Shopify') says nothing
+ *  about which business the person runs or works for. */
+export const PLATFORM_EMPLOYERS = [
+  "Shopify", "Shopify Plus", "Amazon", "Amazon Seller", "Amazon FBA", "Etsy", "eBay", "WooCommerce", "BigCommerce",
+  "Lazada", "Shopee", "TikTok Shop", "Walmart Marketplace", "Wix", "Squarespace", "Upwork", "Fiverr", "LinkedIn",
+  "Self-employed", "Freelance", "Freelancer", "Confidential",
+];
+const PLATFORM_LIST = PLATFORM_EMPLOYERS.slice(0, 13).join(", ");
+const platformKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const PLATFORM_KEYS = new Set(PLATFORM_EMPLOYERS.map(platformKey));
+
+/** True for a LinkedIn profile lead with no usable employer: none shown, or only a
+ *  selling platform. It can't be checked against the target or pitched as a
+ *  business. Company pages and leads from other sites are kept. */
+export function lacksEmployer(p: Pick<Prospect, "company" | "profileUrl">): boolean {
+  if (!/linkedin\.com\/in\//i.test(p.profileUrl)) return false;
+  const key = platformKey(p.company);
+  return !key || PLATFORM_KEYS.has(key);
 }
 
 /** The model sometimes turns the subreddit in the URL into a fake handle

@@ -7,6 +7,7 @@ import "server-only";
 // Fails open: when a call fails or the time budget runs out, the result is kept.
 import { aiJSON, isAIConfigured } from "@/lib/ai/openrouter";
 import { untrusted, UNTRUSTED_RULE } from "@/lib/ai/untrusted";
+import { AGENCY_RULE, JOB_AD_RULE } from "./rules";
 
 export interface GateResult { title?: string; description?: string; url?: string }
 
@@ -24,7 +25,7 @@ export interface GateAnswer { side?: string; competitor?: boolean }
 const SCHEMAS: Record<Mode, Record<string, unknown>> = {
   intent: {
     type: "object",
-    properties: { side: { type: "string", enum: ["buyer", "seller", "other"] } },
+    properties: { side: { type: "string", enum: ["buyer", "seller", "job_seeker", "other"] } },
     required: ["side"],
   },
   fit: {
@@ -44,6 +45,7 @@ function systemFor(mode: Mode, sells: string, wants: string): string {
       context,
       "You get ONE LinkedIn search result (a company page or a person's profile).",
       "competitor: true if this company or person offers, advertises or delivers the same kind of product or service as the salesperson (a competitor, agency, consultant or vendor of it). false if they would buy or use it, or are in a different business.",
+      AGENCY_RULE,
       "Return JSON { competitor }.",
       UNTRUSTED_RULE,
     ].join("\n");
@@ -54,16 +56,21 @@ function systemFor(mode: Mode, sells: string, wants: string): string {
     "side:",
     "- buyer: the author wants to buy, hire or find this kind of product or service, or asks for a recommendation for it.",
     "- seller: the author offers, promotes or advertises their own product or service of this kind, or describes what their company provides ('At <company>, we build ...', 'DM me', 'we help teams ...').",
-    "- other: news, an article, an opinion, a discussion, a job post, or a question with no wish to buy.",
+    "- job_seeker: the author is looking for a job, asks where the jobs are, or shares job openings they don't hire for.",
+    "- other: news, an article, an opinion, a discussion, any other job post, or a question with no wish to buy.",
+    JOB_AD_RULE,
+    AGENCY_RULE,
     "Return JSON { side }.",
     UNTRUSTED_RULE,
   ].join("\n");
 }
 
-/** True to keep the result. Only a clear seller or competitor is dropped. An
- *  'other' post goes on to extraction, which has its own rules for articles. */
+/** True to keep the result. Only a clear seller, job seeker or competitor is
+ *  dropped. An 'other' post goes on to extraction, which has its own rules for
+ *  articles. Job seekers are dropped here because extraction let them through
+ *  as hiring businesses. */
 export function keepByAnswer(mode: Mode, a: GateAnswer): boolean {
-  return mode === "fit" ? a.competitor !== true : a.side !== "seller";
+  return mode === "fit" ? a.competitor !== true : a.side !== "seller" && a.side !== "job_seeker";
 }
 
 /** Drop the results the gate judges to be on the wrong side: sellers in intent

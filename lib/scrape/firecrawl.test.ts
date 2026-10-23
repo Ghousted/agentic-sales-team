@@ -7,7 +7,7 @@ vi.mock("@/lib/ai/openrouter", () => ({
 }));
 vi.mock("./jev", () => ({ gateResults: async (r: unknown[]) => r }));
 
-import { runFirecrawlScrape } from "./firecrawl";
+import { lacksEmployer, runFirecrawlScrape } from "./firecrawl";
 
 const agent = { id: "a1", name: "Ava", role: "Realtor", goal: "home buyers", task: "" };
 const POST = "https://www.reddit.com/r/RealEstate/comments/abc/looking_to_buy/";
@@ -94,6 +94,52 @@ describe("runFirecrawlScrape untrusted content", () => {
     aiJSON.mockResolvedValue({ prospects: [{ ...prospect(POST), email: " maria@example.com " }] });
     const [lead] = await runFirecrawlScrape(agent, 10);
     expect(lead.email).toBe("maria@example.com");
+  });
+});
+
+describe("fit leads with no real employer", () => {
+  const IN = (s: string) => `https://www.linkedin.com/in/${s}`;
+  const CO = "https://www.linkedin.com/company/acme-goods";
+  const lead = (profileUrl: string, company: string) => ({ name: "Lead " + company, title: "Owner", company, profileUrl, platform: "LinkedIn", email: "", fit: "" });
+
+  async function fitScrape(prospects: ReturnType<typeof lead>[]) {
+    const urls = prospects.map((p) => p.profileUrl);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: { web: urls.map((url) => ({ url, title: url })) } }))));
+    aiJSON.mockResolvedValueOnce({ mode: "fit", queries: ["shopify store us"], roles: ["Owner"], platform: "linkedin" });
+    aiJSON.mockResolvedValueOnce({ prospects });
+    return runFirecrawlScrape(agent, 10, "Shopify brands in the US");
+  }
+
+  it("drops a profile whose employer is missing or only a selling platform", async () => {
+    const got = await fitScrape([
+      lead(IN("a"), "Shopify"), lead(IN("b"), ""), lead(IN("c"), "Amazon FBA"), lead(IN("d"), "Self-employed"), lead(IN("e"), "Acme Goods"),
+    ]);
+    expect(got.map((p) => p.company)).toEqual(["Acme Goods"]);
+  });
+
+  it("keeps company pages", async () => {
+    const got = await fitScrape([lead(CO, "Acme Goods")]);
+    expect(got).toHaveLength(1);
+  });
+
+  it("tells the model a platform is not an employer", async () => {
+    await fitScrape([lead(CO, "Acme Goods")]);
+    const [system] = aiJSON.mock.calls.at(-1)!;
+    expect(system).toMatch(/Skip a person whose employer is not shown/);
+    expect(system).toMatch(/Shopify, .*Etsy/);
+  });
+});
+
+describe("lacksEmployer", () => {
+  it.each([
+    ["https://www.linkedin.com/in/x", "", true],
+    ["https://www.linkedin.com/in/x", "shopify", true],
+    ["https://www.linkedin.com/in/x", "TikTok Shop", true],
+    ["https://www.linkedin.com/in/x", "Acme Shop", false],
+    ["https://www.linkedin.com/company/x", "", false],
+    ["https://www.reddit.com/r/x/1", "", false],
+  ])("%s with company %j -> %s", (profileUrl, company, want) => {
+    expect(lacksEmployer({ profileUrl, company })).toBe(want);
   });
 });
 

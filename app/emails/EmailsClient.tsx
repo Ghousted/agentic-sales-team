@@ -21,7 +21,7 @@ const TABS: { id: DraftFilter; label: string }[] = [
 ];
 
 export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDTO[] }) {
-  const { agents, byId, showToast } = useApp();
+  const { agents, byId, showToast, showError } = useApp();
   const [drafts, setDrafts] = useState<DraftDTO[]>(initialDrafts);
   const [tab, setTab] = useState<DraftFilter>("unsent");
   const [fAgent, setFAgent] = useState("");
@@ -35,7 +35,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
   const agentsWithDrafts = agents.filter((a) => drafts.some((d) => d.agentId === a.id));
 
   const copyMessage = (d: DraftDTO) => {
-    navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"));
+    navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"));
   };
   const markSent = async (d: DraftDTO) => {
     setDrafts((prev) => prev.map((x) => (x.id === d.id ? { ...x, status: "sent", sentAt: new Date().toISOString() } : x)));

@@ -67,6 +67,29 @@ describe("listMeetings", () => {
     const select = sent.find((s) => /from "meetings"/.test(s));
     expect(select).toMatch(/inner join "leads" on \(.*"leads"\."user_id" = \$\d+.*\)/);
   });
+
+  it("without an agentId, lists the whole workspace", async () => {
+    sessionUser = USER_A;
+    await listMeetings();
+    const select = sent.find((s) => /from "meetings"/.test(s));
+    expect(select).toMatch(/where \(?"meetings"\."user_id" = \$\d+\)? order by/);
+    expect(select).not.toMatch(/"meetings"\."agent_id" =/);
+  });
+
+  it("with an agentId, filters by agent inside the workspace", async () => {
+    sessionUser = USER_A;
+    await listMeetings("agent-1");
+    const select = sent.find((s) => /from "meetings"/.test(s));
+    expect(select).toMatch(/where \("meetings"\."user_id" = \$\d+ and "meetings"\."agent_id" = \$\d+\)/);
+  });
+
+  it("returns nothing, without querying, for a malformed agentId", async () => {
+    sessionUser = USER_A;
+    for (const bad of ["", 42, null, { id: "agent-1" }, "x".repeat(101)]) {
+      expect(await listMeetings(bad)).toEqual([]);
+    }
+    expect(sent).toEqual([]);
+  });
 });
 
 describe("bookMeetingForLead", () => {

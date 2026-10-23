@@ -247,3 +247,12 @@ export function askMeetingWhoText(): string {
 export function isAskMeetingWhoPrompt(text: string): boolean {
   return text === askMeetingWhoText();
 }
+
+/** The reply after a meeting booking: who was booked, and who wasn't (bookMeeting
+ *  refuses a lead that isn't the user's). `asked` and `booked` are lead names. */
+export function bookedText(type: string, label: string, asked: string[], booked: string[]): string {
+  if (!booked.length) return `I could not book that. I could not find ${asked.join(", ")} in your leads.`;
+  const missed = asked.filter((n) => !booked.includes(n));
+  const text = `Booked a ${type} with ${booked.join(", ")} on ${label}. It is on your calendar.`;
+  return missed.length ? `${text} I could not book ${missed.join(", ")}. I did not find them in your leads.` : text;
+}

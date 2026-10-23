@@ -68,7 +68,6 @@ export interface AgentSnapshot {
 
 export interface OutreachResult {
   score: number;
-  stage: string;
   subject: string;
   body: string;
   rationale: string;

@@ -40,7 +40,7 @@ const lead = {
   status: "new", score: 0, source: "manual", review: "accepted", profileUrl: null, platform: null, research: null,
   fitReason: "", qualifiedAt: null, matchedAt: null, createdAt: new Date(), updatedAt: new Date(),
 };
-const result = { subject: "Hi", body: "Hello", rationale: "", score: 60, stage: "contacted" };
+const result = { subject: "Hi", body: "Hello", rationale: "", score: 60 };
 
 beforeEach(() => {
   hasLiveDraft = false; draftStatus = "draft"; sessionUser = null;

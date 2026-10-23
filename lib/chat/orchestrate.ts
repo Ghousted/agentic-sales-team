@@ -9,6 +9,7 @@ import { agentInfo } from "@/lib/pod/orchestrate";
 import { CAPABILITIES } from "@/lib/agentTypes";
 import { converse } from "./converse";
 import { workDoing, workDoneSummary } from "./thread";
+import { waitingText } from "@/lib/pod/summary";
 import type { Intent } from "@/lib/ai/intent";
 
 export interface ChatOutMsg { who: string; text: string } // who = speaker agentId
@@ -63,7 +64,12 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
     const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? `. ${r.leadsFound} found so far` : "";
     return `I'm currently ${doing}${prog}. I'll post the results here once it's complete.`;
   }
-  if (job.status === "needs_approval") return `A ${doing} run is queued and awaiting your approval.`;
+  if (job.status === "needs_approval") {
+    // How many leads the step would work on: a scrape's target, else the leads it was given.
+    const p = (job.params ?? {}) as { target?: number; leadCount?: number; leadIds?: string[] | null };
+    const n = job.kind === "scrape" ? p.target ?? null : p.leadCount ?? p.leadIds?.length ?? null;
+    return waitingText(job.kind, n);
+  }
   if (job.status === "failed") return `My last ${doing} run encountered an error. Would you like me to try it again?`;
   if (job.status === "done") return `I've just finished ${doing}: ${workDoneSummary(job.kind, job.result)}.`;
   return `My last ${doing} task is ${job.status}.`;

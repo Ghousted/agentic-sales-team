@@ -1,6 +1,6 @@
 import "server-only";
 // The outreach engine: one structured LLM call per lead that qualifies
-// (score + stage) and drafts personalized outreach: a formal email when the
+// (score) and drafts personalized outreach: a formal email when the
 // lead has an email, or a short platform DM when it only has a profile. Uses
 // the lead's research brief when present. Pure (no DB).
 import { aiJSON, isAIConfigured, type Turn } from "./openrouter";
@@ -12,19 +12,18 @@ const SCHEMA = {
   type: "object",
   properties: {
     score: { type: "integer" },
-    stage: { type: "string", enum: ["new", "contacted", "engaged", "replied", "meeting"] },
     subject: { type: "string" },
     body: { type: "string" },
     rationale: { type: "string" },
   },
-  required: ["score", "stage", "subject", "body", "rationale"],
+  required: ["score", "subject", "body", "rationale"],
 } as const;
 
 function systemPrompt(a: AgentSnapshot, channel: "email" | "dm", platform?: string | null): string {
   const lines = [
     `You are ${a.name}, an AI ${a.role} on a B2B sales team.`,
     `Your objective: ${a.goal}. Current focus: ${a.task}.`,
-    `Given ONE prospect, do two things: (1) score their fit for your objective from 0 to 100 and pick the best pipeline stage, (2) write personalized outreach.`,
+    `Given ONE prospect, do two things: (1) score their fit for your objective from 0 to 100, (2) write personalized outreach.`,
   ];
   if (channel === "email") {
     lines.push(`Write a FORMAL, professional cold EMAIL specific to the prospect's title and company, with a plausible business reason to reach out, aligned with your objective. Tone: courteous, polished business English written as a real person. Use complete sentences, no slang, no emojis, no exclamation marks, no hype. 90-140 words, plain text, first person as ${a.name}. Open with a courteous salutation using the prospect's actual first name (for example, "Dear Maria,"), and close with a professional sign-off on its own line followed by your name, ${a.name}. Never leave placeholder tokens like [Company] or [First Name]. Use the real values or leave them out. End with a clear but low-pressure call to action. Put a concise, specific subject line in "subject" and the email body in "body".`);
@@ -46,9 +45,9 @@ export async function draftOutreach(
 
   if (!isAIConfigured()) {
     if (hasEmail) {
-      return { score: 60, stage: "contacted", subject: `An idea for ${lead.company || "your team"}`, body: `Dear ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title ? lead.title + "s" : "leaders"} on ${agent.goal}, and I believe there may be a worthwhile opportunity for ${lead.company || "your team"}. Would you be open to a brief 15-minute call next week to explore it?\n\nKind regards,\n${agent.name}`, rationale: "Fallback draft (AI not configured)." };
+      return { score: 60, subject: `An idea for ${lead.company || "your team"}`, body: `Dear ${first},\n\nI'm ${agent.name}, ${agent.role}. I work with ${lead.title ? lead.title + "s" : "leaders"} on ${agent.goal}, and I believe there may be a worthwhile opportunity for ${lead.company || "your team"}. Would you be open to a brief 15-minute call next week to explore it?\n\nKind regards,\n${agent.name}`, rationale: "Fallback draft (AI not configured)." };
     }
-    return { score: 55, stage: "contacted", subject: `Message to ${first}`, body: `Hello ${first}, I'm ${agent.name}. I work on ${agent.goal}, and I came across your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""}. I'd welcome the chance to have a brief conversation if you're open to it.`, rationale: "Fallback DM (AI not configured)." };
+    return { score: 55, subject: `Message to ${first}`, body: `Hello ${first}, I'm ${agent.name}. I work on ${agent.goal}, and I came across your ${lead.title || "work"}${lead.company ? " at " + lead.company : ""}. I'd welcome the chance to have a brief conversation if you're open to it.`, rationale: "Fallback DM (AI not configured)." };
   }
 
   const researchBlock = lead.research
@@ -65,7 +64,6 @@ export async function draftOutreach(
   const r = await aiJSON<OutreachResult>(systemPrompt(agent, channel, lead.platform), turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 700, temperature: 0.6 });
   return {
     score: typeof r.score === "number" ? r.score : 50,
-    stage: r.stage || "contacted",
     subject: (r.subject || (hasEmail ? `Quick note for ${lead.company || "you"}` : `Message to ${first}`)).trim(),
     body: (r.body || "").trim(),
     rationale: (r.rationale || "").trim(),

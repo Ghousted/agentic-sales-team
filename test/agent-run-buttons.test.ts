@@ -25,7 +25,9 @@ describe("agent page run buttons (T28)", () => {
   });
 
   it("Meetings lists the agent's own booked meetings", () => {
-    expect(src).toMatch(/listMeetings\(\)\.then\(\(ms\) => setAgentMeetings\(ms\.filter\(\(m\) => m\.agentId === selId\)\)\)/);
+    // Filtered on the server, not by downloading every meeting in the workspace.
+    expect(src).toMatch(/listMeetings\(selId\)\.then\(setAgentMeetings\)/);
+    expect(src).not.toMatch(/ms\.filter\(\(m\) => m\.agentId === selId\)/);
     expect(src).toMatch(/agentMeetings\.map\(/);
   });
 });

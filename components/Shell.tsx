@@ -173,11 +173,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const bg = (on: boolean) => (on ? "background:#eceef1;font-weight:500" : "background:transparent");
 
   return (
-    <div style={css("display:flex;height:100vh;overflow:hidden;background:#ffffff;color:#101418;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased")}>
+    <div style={css("display:flex;height:var(--app-h);overflow:hidden;background:#ffffff;color:#101418;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased")}>
       {drawer && <div aria-hidden="true" onClick={() => setDrawer(false)} style={css("position:fixed;inset:0;z-index:59;background:rgba(16,20,24,.35);animation:cFade .2s ease-out backwards")} />}
       {/* Docked (hidden on small screens) or, when the menu button opened it, a drawer over the page. */}
       {(open || drawer) && (
-        <aside aria-label="Sidebar" className={drawer ? undefined : "m-hide"} ref={asideRef} role={drawer ? "dialog" : undefined} aria-modal={drawer || undefined} style={css("width:272px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;" + (drawer ? "position:fixed;left:0;top:0;bottom:0;max-width:85vw;z-index:60;box-shadow:0 16px 40px rgba(16,20,24,.2)" : "position:relative;z-index:5"))}>
+        <aside aria-label="Sidebar" className={drawer ? undefined : "m-hide"} ref={asideRef} role={drawer ? "dialog" : undefined} aria-modal={drawer || undefined} style={css("width:272px;flex:none;height:var(--app-h);background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;" + (drawer ? "position:fixed;left:0;top:0;bottom:0;max-width:85vw;z-index:60;box-shadow:0 16px 40px rgba(16,20,24,.2)" : "position:relative;z-index:5"))}>
           <div style={css("height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:14px 12px 0 15px")}>
             <Box onClick={() => router.push("/")} aria-label="New chat" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">
               <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
@@ -252,7 +252,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </aside>
       )}
       {!open && (
-        <nav aria-label="Main" className="m-hide" style={css("width:64px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0")}>
+        <nav aria-label="Main" className="m-hide" style={css("width:64px;flex:none;height:var(--app-h);background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0")}>
           <Btn onClick={() => set({ sidebarOpen: true })} aria-label="Expand sidebar" title="Expand sidebar" style="width:34px;height:34px;margin-bottom:14px;padding:0;border:0;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat;cursor:pointer;transition:transform .12s" styleHover="transform:scale(1.06)" />
           <Btn onClick={() => router.push("/")} aria-label="New chat" title="New chat" style={RAIL_BTN + ";background:" + (path === "/" ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="square-pen" size={18} /></Btn>
           <Btn onClick={() => { setFocusSearch(true); set({ sidebarOpen: true }); }} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>

@@ -19,6 +19,8 @@ import { listProposalsForAgent, markProposalSent } from "@/lib/proposals/actions
 import { listMeetings } from "@/lib/meetings/actions";
 import type { MeetingDTO } from "@/lib/meetings/store";
 import { useRunGuard } from "@/lib/useRunGuard";
+import { openExternal, openMailto } from "@/lib/url/safeUrl";
+import { capMode as savedCapMode, type CapMode } from "@/lib/pod/autonomy";
 import type { ProposalDTO } from "@/lib/proposals/store";
 
 // [key, label, requiredCapability?]. A tab with no capability always shows.
@@ -120,7 +122,7 @@ export default function AgentDetail() {
 
   const [agentMeetings, setAgentMeetings] = useState<MeetingDTO[]>([]);
   useEffect(() => {
-    if (selId) listMeetings().then((ms) => setAgentMeetings(ms.filter((m) => m.agentId === selId)));
+    if (selId) listMeetings(selId).then(setAgentMeetings);
   }, [selId]);
 
   // Nudge the runner after an enqueue. A refused enqueue shows its error and
@@ -181,13 +183,13 @@ export default function AgentDetail() {
   const sendDraft = useCallback((d: DraftDTO) => {
     // Recipient stays literal (RFC 6068 addr-spec); only the query params are encoded.
     const url = "mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body);
-    window.open(url, "_blank");
+    openMailto(url);
   }, []);
 
   const copyMessage = useCallback((d: DraftDTO) => {
     navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"));
   }, [showToast, showError]);
-  const openProfile = useCallback((url: string) => { window.open(url, "_blank"); }, []);
+  const openProfile = useCallback((url: string) => { openExternal(url); }, []);
 
   const confirmSent = useCallback(async (d: DraftDTO) => {
     await markDraftSent(d.id);
@@ -210,11 +212,21 @@ export default function AgentDetail() {
   const isVisible = (key: string) => visibleSections.some(([k]) => k === key);
   const researchedLeads = agentLeads.filter((l) => l.research);
 
-  const capMode = (cap: string): "auto" | "ask" =>
-    ((s.agentConfig[sel.id]?.settings?.[cap] as { mode?: string } | undefined)?.mode === "ask" ? "ask" : "auto");
-  const setCapMode = (cap: string, mode: "auto" | "ask") => {
+  // Ask (the default) shows Proceed/Cancel in the team chat before the step runs;
+  // Auto starts it at once. The server reads the same setting (lib/pod/autonomy).
+  const capMode = (cap: string): CapMode => savedCapMode(s.agentConfig[sel.id]?.settings, cap);
+  const setCapMode = (cap: string, mode: CapMode) => {
     const cur = s.agentConfig[sel.id]?.settings ?? {};
     saveConfig(sel.id, { settings: { ...cur, [cap]: { ...(cur[cap] ?? {}), mode } } });
+  };
+  const modeToggle = (cap: string) => {
+    const mode = capMode(cap);
+    return (
+      <div role="group" aria-label={"Autonomy for " + (CAPABILITIES.find((c) => c.id === cap)?.label ?? cap)} style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px;font-weight:400")}>
+        <Box onClick={() => setCapMode(cap, "auto")} aria-pressed={mode === "auto"} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
+        <Box onClick={() => setCapMode(cap, "ask")} aria-pressed={mode === "ask"} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#006AFF;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
+      </div>
+    );
   };
   const capSetting = (cap: string) => (s.agentConfig[sel.id]?.settings?.[cap] ?? {}) as Record<string, unknown>;
   const setCapSetting = (cap: string, patch: Record<string, unknown>) => {
@@ -546,7 +558,7 @@ export default function AgentDetail() {
         {sel.capabilities && sel.capabilities.length > 0 && (
           <div>
             <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Autonomy</div>
-            <div style={css("font-size:11px;color:var(--text-muted);margin-bottom:8px")}>How this agent runs each capability. Batch stages run Auto or Ask; meeting booking has its own settings.</div>
+            <div style={css("font-size:11px;color:var(--text-muted);margin-bottom:8px")}>How this agent runs each capability in team chat. Ask: it asks you to Proceed or Cancel first. Auto: it starts right away.</div>
             <div style={css("display:flex;flex-direction:column;gap:8px")}>
               {sel.capabilities.map((cap) => {
                 const label = CAPABILITIES.find((c) => c.id === cap)?.label ?? cap;
@@ -555,7 +567,7 @@ export default function AgentDetail() {
                   const val = <T,>(k: string, d: T): T => (cs[k] === undefined ? d : (cs[k] as T));
                   return (
                     <div key={cap} style={css("border:1px solid #F0F0F3;border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:9px")}>
-                      <div style={css("font-size:12.5px;font-weight:600;color:#3F3F46")}>{label}</div>
+                      <div style={css("display:flex;align-items:center;font-size:12.5px;font-weight:600;color:#3F3F46")}>{label}{modeToggle(cap)}</div>
                       <div style={css("display:flex;gap:8px;flex-wrap:wrap;align-items:center")}>
                         <input key={sel.id + ":type"} aria-label="Meeting type" defaultValue={String(val("type", "Meeting"))} onBlur={(e) => { const v = e.target.value.trim() || "Meeting"; e.target.value = v; if (v !== val("type", "Meeting")) setCapSetting(cap, { type: v }); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} placeholder="Meeting type (e.g. Discovery call)" style={css(MSEL + ";flex:1;min-width:150px;cursor:text")} />
                         <select aria-label="Meeting length" value={String(val("duration", 30))} onChange={(e) => setCapSetting(cap, { duration: Number(e.target.value) })} style={css(MSEL)}>
@@ -574,13 +586,9 @@ export default function AgentDetail() {
                     </div>
                   );
                 }
-                const mode = capMode(cap);
                 return (
                   <div key={cap} style={css("display:flex;align-items:center;font-size:12.5px;color:#3F3F46")}>{label}
-                    <div style={css("margin-left:auto;display:flex;background:#F4F4F5;border-radius:99px;padding:2px")}>
-                      <Box onClick={() => setCapMode(cap, "auto")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "auto" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Auto</Box>
-                      <Box onClick={() => setCapMode(cap, "ask")} style={"padding:4px 13px;font-size:11.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (mode === "ask" ? "background:#fff;color:#006AFF;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Ask</Box>
-                    </div>
+                    {modeToggle(cap)}
                   </div>
                 );
               })}

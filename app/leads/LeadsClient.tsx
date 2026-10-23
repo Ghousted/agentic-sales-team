@@ -12,7 +12,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import Modal from "@/components/Modal";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { LivePulse, FitReason } from "@/components/LeadBits";
-import { safeHttpUrl, openExternal } from "@/lib/url/safeUrl";
+import { safeHttpUrl, openExternal, openMailto } from "@/lib/url/safeUrl";
 
 const STAGE_COLORS: Record<string, [string, string]> = {
   new: ["#F4F4F5", "#71717A"], contacted: ["#FEF6E8", "#B45309"], engaged: ["#E9F5FE", "#0369A1"],
@@ -416,7 +416,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                         <div style={css("font-size:12px;color:#52525B;line-height:1.5;margin-top:4px;white-space:pre-wrap")}>{d.body.length > 200 ? d.body.slice(0, 200) + "…" : d.body}</div>
                         <div style={css("display:flex;gap:6px;margin-top:8px")}>
                           {d.leadEmail
-                            ? <Btn onClick={() => window.open("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body), "_blank")} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Open in mail</Btn>
+                            ? <Btn onClick={() => openMailto("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body))} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Open in mail</Btn>
                             : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"))} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Copy message</Btn>}
                         </div>
                       </div>

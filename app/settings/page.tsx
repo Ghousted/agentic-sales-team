@@ -15,7 +15,7 @@ export default function SettingsPage() {
     updateSettings(patch).catch((e) => console.error("[settings] persist failed:", e));
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;max-width:680px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;max-width:680px;animation:fadeUp .3s ease")}>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;display:flex;flex-direction:column;gap:16px")}>
         <div style={css("font-size:13.5px;font-weight:700")}>Workspace</div>
         <div>

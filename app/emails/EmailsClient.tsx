@@ -55,7 +55,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
   };
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
           {TABS.map((t) => {

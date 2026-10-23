@@ -195,7 +195,7 @@ export default function AgentDetail() {
   }, [selId, refetchDrafts]);
 
   if (!sel) return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
       <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← All agents</Box>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
         <div style={css("font-size:17px;font-weight:700")}>Agent not found</div>
@@ -232,11 +232,11 @@ export default function AgentDetail() {
   };
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer;display:flex;align-items:center;gap:6px" styleHover="color:#006AFF">← All agents</Box>
 
       {/* header card */}
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;box-shadow:0 1px 3px rgba(24,24,27,.04);display:flex;align-items:center;gap:18px")}>
+      <div className="m-wrap" style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;box-shadow:0 1px 3px rgba(24,24,27,.04);display:flex;align-items:center;gap:18px")}>
         <div style={css(av(sel, 64))}>{sel.initials}</div>
         <div style={css("min-width:0")}>
           <div style={css("display:flex;align-items:center;gap:10px")}>
@@ -249,7 +249,7 @@ export default function AgentDetail() {
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{sel.role}</div>
           <div style={css("font-size:12px;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>🎯 {sel.goal}</div>
         </div>
-        <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
+        <div className="m-wrap m-fluid" style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={() => togglePause(sel.id)} style="background:#FEF6E8;color:#B45309;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FDEBCB">{paused ? "Resume" : "Pause"}</Btn>
           <Btn onClick={() => gotoTab("settings")} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Edit</Btn>
           <Btn onClick={() => { deleteAgent(sel.id); router.push("/agents"); }} style="background:#FEECEC;color:#B91C1C;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FDD8D8">Delete</Btn>
@@ -264,7 +264,7 @@ export default function AgentDetail() {
       </div>
 
       {/* Overview */}
-      <div id="sec-overview" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;animation:fadeUp .25s ease")}>
+      <div id="sec-overview" className="m-stack" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;animation:fadeUp .25s ease")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
           <div style={css("background:linear-gradient(135deg,#EAF2FF,#FDEEF6);border-radius:16px;padding:18px")}>
             <div style={css("font-size:11px;font-weight:700;color:#006AFF;text-transform:uppercase;letter-spacing:.06em")}>✦ Summary</div>
@@ -304,7 +304,7 @@ export default function AgentDetail() {
       {/* Leads */}
       <SectionTitle id="sec-leads">Leads</SectionTitle>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden;animation:fadeUp .25s ease")}>
-        <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
+        <div className="m-wrap" style={css("display:flex;align-items:center;row-gap:8px;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB")}>
           <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>{agentLeads.length} lead{agentLeads.length === 1 ? "" : "s"}</div>
           {sel.capabilities?.includes("scrape") && (
             <Btn onClick={runScrape} disabled={!!busy.scrape} style={"margin-left:auto;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (busy.scrape ? "opacity:.6;cursor:default" : "")} styleHover="background:#0052CC">{busy.scrape ? "Finding…" : "Find leads"}</Btn>
@@ -318,7 +318,7 @@ export default function AgentDetail() {
         {agentLeads.length === 0 ? (
           <div style={css("padding:18px;font-size:12.5px;color:#A1A1AA")}>No leads in {sel.name}’s team book yet.</div>
         ) : (
-          <>
+          <div className="m-scroll"><div className="m-table">
             <div style={css("display:grid;grid-template-columns:.9fr 1.4fr 1.2fr .9fr .6fr .9fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;gap:10px")}>
               <div>Agent</div><div>Name</div><div>Company</div><div>Status</div><div>Score</div><div>Added</div>
             </div>
@@ -342,7 +342,7 @@ export default function AgentDetail() {
                 </div>
               );
             })}
-          </>
+          </div></div>
         )}
       </div>
 
@@ -497,7 +497,7 @@ export default function AgentDetail() {
       {/* Performance */}
       <SectionTitle id="sec-analytics">Performance</SectionTitle>
       <div style={css("display:flex;flex-direction:column;gap:14px;animation:fadeUp .25s ease")}>
-        <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
+        <div className="m-2col" style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
           {([["Leads worked", String(stats?.leadsWorked ?? 0)], ["Drafts sent", String(stats?.sent ?? 0)], ["Reply rate", (stats?.replyRate ?? 0) + "%"], ["Researched", String(stats?.researched ?? 0)]] as [string, string][]).map(([l, v]) => (
             <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:14px 16px")}>
               <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>

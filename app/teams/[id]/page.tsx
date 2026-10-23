@@ -51,7 +51,7 @@ export default function TeamDetail() {
   }, [memberIds.join(","), team?.id]);
 
   if (!team) return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
       <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
         <div style={css("font-size:17px;font-weight:700")}>Team not found</div>
@@ -99,17 +99,17 @@ export default function TeamDetail() {
   ];
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
 
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
+      <div className="m-wrap" style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:" + team.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:24px;flex:none")}>{team.icon}</div>
         <div style={css("min-width:0")}>
           <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{teamSubtitle(team)}</div>
           <div style={css("font-size:12px;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
-        <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
+        <div className="m-wrap m-fluid" style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={openEdit} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Edit</Btn>
           <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
           {!isSeedTeam && (confirmDel ? (<>
@@ -122,7 +122,7 @@ export default function TeamDetail() {
       </div>
 
       {/* KPIs */}
-      <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
+      <div className="m-2col" style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
         {kpis.map(([l, v]) => (
           <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:16px 18px")}>
             <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>
@@ -161,7 +161,7 @@ export default function TeamDetail() {
         );
       })()}
 
-      <div style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Members</div>

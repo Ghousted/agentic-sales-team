@@ -81,8 +81,8 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
   const teamPills = [{ id: "all", label: "Everyone" }].concat(teams.map((t) => ({ id: t.id, label: t.name })));
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("display:flex;align-items:baseline;gap:12px")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+      <div className="m-wrap" style={css("display:flex;align-items:baseline;gap:12px")}>
         <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:24px;font-weight:400;letter-spacing:-.01em;white-space:nowrap;transition:opacity .2s;" + (clock ? "" : "opacity:0"))}>{clock?.greeting ?? "Hello"}, {userFirst}!</div>
         <Btn onClick={() => router.push("/agents")} style="margin-left:auto;background:#fff;color:#344054;border:1px solid #D0D5DD;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#F9FAFB">All agents</Btn>
         <Btn onClick={() => set({ showTeamModal: true })} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ New team</Btn>
@@ -168,7 +168,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
           <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first team</Btn>
         </div>
       ) : (
-      <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
         {teams.map((t) => {
           const avatars = t.members.slice(0, 3).map((id) => byId(id)).filter(Boolean);
           return (

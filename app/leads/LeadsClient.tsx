@@ -24,7 +24,7 @@ const SEC = "font-size:11px;font-weight:700;color:#A1A1AA;text-transform:upperca
 const MUTED = "font-size:12.5px;color:#A1A1AA";
 
 export default function LeadsClient({ initialLeads, initialCandidates }: { initialLeads: LeadDTO[]; initialCandidates: LeadDTO[] }) {
-  const { agents, byId, showToast } = useApp();
+  const { agents, byId, showToast, showError } = useApp();
   const { byLead } = useLiveWork();
   const [leads, setLeads] = useState<LeadDTO[]>(initialLeads);
   const [candidates, setCandidates] = useState<LeadDTO[]>(initialCandidates);
@@ -50,11 +50,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     setBooking(true);
     try {
       const res = await bookMeetingForLead(openLead.id, bookingWhen.trim(), Intl.DateTimeFormat().resolvedOptions().timeZone);
-      if (res.error || !res.ok) { showToast(res.error || "Couldn't book the meeting"); return; }
+      if (res.error || !res.ok) { showError(res.error || "Couldn't book the meeting"); return; }
       showToast(`Meeting booked${res.label ? " · " + res.label : ""}`);
       setBookingWhen("");
     } catch {
-      showToast("Couldn't book the meeting");
+      showError("Couldn't book the meeting");
     } finally {
       setBooking(false);
     }
@@ -73,10 +73,10 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       const n = await clearDraftsForLead(leadId);
       if (n > 0) showToast(`Cleared ${n} draft${n === 1 ? "" : "s"}`);
     } catch {
-      showToast("Couldn't clear drafts");
+      showError("Couldn't clear drafts");
       setLeadDrafts(await listDraftsForLead(leadId).catch(() => []));
     }
-  }, [showToast]);
+  }, [showToast, showError]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -85,11 +85,11 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       setLeads(rows);
       setCandidates(cands);
     } catch {
-      showToast("Couldn't refresh leads");
+      showError("Couldn't refresh leads");
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showError]);
 
   const filtered = useMemo(
     () => leads.filter((l) => (!fAgent || l.agentId === fAgent) && (!fStage || l.status === fStage)),
@@ -101,7 +101,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     if (!file) return;
     const agentId = fAgent || agents[0]?.id;
     const a = agentId ? byId(agentId) : undefined;
-    if (!agentId) { showToast("Create an agent first, then import."); return; }
+    if (!agentId) { showError("Create an agent first, then import."); return; }
     showToast("Importing…");
     let res: Awaited<ReturnType<typeof importLeadsCsv>>;
     try {
@@ -110,16 +110,16 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       res = { added: 0, error: "Import failed" };
     }
     if (fileRef.current) fileRef.current.value = "";
-    if (res.error) { showToast(res.error); return; }
+    if (res.error) { showError(res.error); return; }
     showToast(`Imported ${res.added} lead${res.added === 1 ? "" : "s"}${a ? " for " + a.name.split(" ")[0] : ""}`);
     refetch();
   };
 
   const submitAdd = async () => {
     const agentId = form.agentId || agents[0]?.id;
-    if (!form.name.trim() || !form.email.trim() || !agentId) { showToast("Name, email, and agent are required"); return; }
+    if (!form.name.trim() || !form.email.trim() || !agentId) { showError("Name, email, and agent are required"); return; }
     const added = await addLeadAction({ agentId, name: form.name, title: form.title, company: form.company, email: form.email }).catch(() => null);
-    if (!added) { showToast("Couldn't add the lead"); return; }
+    if (!added) { showError("Couldn't add the lead"); return; }
     setForm({ name: "", title: "", company: "", email: "", agentId: "" });
     setShowAdd(false);
     showToast("Lead added");
@@ -132,7 +132,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       if (accept) await acceptLeads(ids); else await dismissLeads(ids);
       showToast(accept ? ids.length + " accepted" : ids.length + " dismissed");
     } catch {
-      showToast(accept ? "Couldn't accept leads" : "Couldn't dismiss leads");
+      showError(accept ? "Couldn't accept leads" : "Couldn't dismiss leads");
     }
     refetch();
   };
@@ -162,13 +162,13 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
         agent: { id: a.id, name: a.name, role: a.role, goal: a.goal, task: a.task },
         leadIds,
       });
-      if ("error" in res) { showToast(res.error); return; }
+      if ("error" in res) { showError(res.error); return; }
       const r = await fetch("/api/jobs/run", { method: "POST" });
       if (!r.ok) throw new Error("run " + r.status);
       const j = await r.json();
       showToast(j.drafts ? j.drafts + " draft" + (j.drafts === 1 ? "" : "s") + " created" : "No new drafts");
     } catch {
-      showToast("Run failed");
+      showError("Run failed");
     } finally {
       setRunning(null);
     }
@@ -182,7 +182,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     try {
       await setStageAction(l.id, next);
     } catch {
-      showToast("Couldn't change the stage");
+      showError("Couldn't change the stage");
     }
     refetch();
   };
@@ -200,7 +200,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
     try {
       await deleteLeads([l.id]);
     } catch {
-      showToast("Couldn't delete the lead");
+      showError("Couldn't delete the lead");
       return;
     }
     if (openLead?.id === l.id) setOpenLead(null);
@@ -419,7 +419,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
                         <div style={css("display:flex;gap:6px;margin-top:8px")}>
                           {d.leadEmail
                             ? <Btn onClick={() => window.open("mailto:" + d.leadEmail + "?subject=" + encodeURIComponent(d.subject) + "&body=" + encodeURIComponent(d.body), "_blank")} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Open in mail</Btn>
-                            : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"))} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Copy message</Btn>}
+                            : <Btn onClick={() => navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"))} style="background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:5px 13px;font-size:11.5px;font-weight:600;cursor:pointer" styleHover="background:#D6E6FF">Copy message</Btn>}
                         </div>
                       </div>
                     ))}</div>

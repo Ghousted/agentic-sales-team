@@ -16,7 +16,7 @@ const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
 const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
 
 export default function ProductsClient({ initialProducts, initialFolders }: { initialProducts: ProductDTO[]; initialFolders: FolderDTO[] }) {
-  const { showToast } = useApp();
+  const { showToast, showError } = useApp();
   const [items, setItems] = useState<ProductDTO[]>(initialProducts);
   const [folders, setFolders] = useState<FolderDTO[]>(initialFolders);
   const [folder, setFolder] = useState<string | null>(null); // null = All products
@@ -48,21 +48,21 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
     showToast("Importing…");
     try {
       const res = await importProductsCsv(await file.text(), targetFolder);
-      showToast(res.error ? res.error : `Imported ${res.added} product${res.added === 1 ? "" : "s"}`);
-    } catch { showToast("The import failed. Please try again."); }
+      if (res.error) showError(res.error); else showToast(`Imported ${res.added} product${res.added === 1 ? "" : "s"}`);
+    } catch { showError("The import failed. Please try again."); }
     if (fileRef.current) fileRef.current.value = "";
     refresh();
   };
 
   const submitAdd = async () => {
-    if (!form.name.trim()) { showToast("A product name is required"); return; }
+    if (!form.name.trim()) { showError("A product name is required"); return; }
     await addProduct({ ...form, folderId: targetFolder });
     setForm({ name: "", category: "", price: "", description: "" });
     setShowAdd(false); showToast("Product added"); refresh();
   };
 
   const submitFolder = async () => {
-    if (!folderName.trim()) { showToast("A folder name is required"); return; }
+    if (!folderName.trim()) { showError("A folder name is required"); return; }
     const f = await addFolder(folderName);
     setFolderName(""); setShowFolder(false); showToast("Folder created");
     if (f) setFolder(f.id); else refresh();

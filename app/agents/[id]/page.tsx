@@ -65,7 +65,7 @@ function SectionTitle({ id, children }: { id: string; children: React.ReactNode 
 }
 
 export default function AgentDetail() {
-  const { s, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
+  const { s, byId, togglePause, deleteAgent, saveConfig, showToast, showError } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
@@ -103,7 +103,7 @@ export default function AgentDetail() {
   const [scrapeNote, setScrapeNote] = useState("");
   // One guard for every run button: disabled while in flight, a double click
   // starts nothing, and a throw shows a toast instead of a stuck spinner.
-  const onRunError = useCallback(() => showToast("Something went wrong. Please try again."), [showToast]);
+  const onRunError = useCallback(() => showError("Something went wrong. Please try again."), [showError]);
   const { busy, run } = useRunGuard(onRunError);
 
   const refetchDrafts = useCallback(async (id: string) => {
@@ -126,10 +126,10 @@ export default function AgentDetail() {
   // Nudge the runner after an enqueue. A refused enqueue shows its error and
   // returns false.
   const enqueueAndRun = useCallback(async (res: { jobId: string } | { error: string }): Promise<boolean> => {
-    if ("error" in res) { showToast(res.error); return false; }
+    if ("error" in res) { showError(res.error); return false; }
     try { await fetch("/api/jobs/run", { method: "POST" }); } catch { /* best-effort trigger; results are refetched by the caller */ }
     return true;
-  }, [showToast]);
+  }, [showError]);
 
   const runOutreachForAgent = useCallback(() => run("outreach", async () => {
     if (!sel) return;
@@ -185,8 +185,8 @@ export default function AgentDetail() {
   }, []);
 
   const copyMessage = useCallback((d: DraftDTO) => {
-    navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showToast("Copy failed"));
-  }, [showToast]);
+    navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"));
+  }, [showToast, showError]);
   const openProfile = useCallback((url: string) => { window.open(url, "_blank"); }, []);
 
   const confirmSent = useCallback(async (d: DraftDTO) => {

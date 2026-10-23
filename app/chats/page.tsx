@@ -14,6 +14,7 @@ import { runIdFrom } from "@/lib/scrape/steps";
 import { isNearBottom, shouldStick } from "@/lib/chat/scroll";
 import { lastAgent, revealWait, takeSinceSent, thinkPause } from "@/lib/chat/pace";
 import { listPendingApprovals, approveJob, rejectJob } from "@/lib/pod/actions";
+import { settleDecision } from "@/lib/pod/decide";
 import { listTeamLeads } from "@/lib/leads/actions";
 import type { TeamLeadPick } from "@/lib/leads/types";
 
@@ -133,9 +134,7 @@ function ChatsInner() {
     if (!activeTeam || deciding.has(jobId)) return;
     const teamId = activeTeam.id;
     setDeciding((d) => new Set(d).add(jobId));
-    let res: Awaited<ReturnType<typeof approveJob>>;
-    try { res = await (proceed ? approveJob(jobId) : rejectJob(jobId)); }
-    catch { res = { error: proceed ? "I couldn't start that. Please try again." : "I couldn't cancel that. Please try again." }; }
+    const res = await settleDecision(() => (proceed ? approveJob(jobId) : rejectJob(jobId)), proceed);
     setDeciding((d) => { const n = new Set(d); n.delete(jobId); return n; });
     if ("error" in res) { showError(res.error); return; }
     setHandled((h) => new Set(h).add(jobId));

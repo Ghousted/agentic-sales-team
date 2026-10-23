@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobOutcomeText, mergeThread, sinceLastUserMessage, stripMarkers, threadCursor, type ThreadMsg } from "./thread";
+import { jobOutcomeText, mergeThread, sinceLastUserMessage, stripMarkers, threadCursor, workDoing, workDoneSummary, type ThreadMsg } from "./thread";
 
 describe("mergeThread", () => {
   it("keeps stored rows in id order however they arrive", () => {
@@ -83,5 +83,29 @@ describe("scrape results marker", () => {
     const { jobOutcomeText, leadIdsFrom } = await import("./thread");
     expect(leadIdsFrom(jobOutcomeText("scrape", "done", { leadsFound: 2, leadIds: ids }, false) ?? "")).toEqual(ids);
     expect(jobOutcomeText("scrape", "done", { leadsFound: 0 }, false)).toBe("I found 0 leads.");
+  });
+});
+
+describe("workDoneSummary", () => {
+  // T31: every kind but outreach used to fall through to "completed my last
+  // task" (or, before that, "drafted 0 emails").
+  it("reports each kind's own count", () => {
+    expect(workDoneSummary("qualify", { qualified: 3, failed: 0 })).toBe("qualified 3 leads");
+    expect(workDoneSummary("proposal", { proposals: 1 })).toBe("drafted 1 proposal, ready for you to review");
+    expect(workDoneSummary("assess", { assessed: 5, accepted: 2, dismissed: 3 })).toBe("accepted 2 leads");
+    expect(workDoneSummary("research", { briefed: 1 })).toBe("researched 1 lead");
+    expect(workDoneSummary("outreach", { draftsCreated: 2 })).toBe("drafted 2 emails, ready for you to review and send");
+  });
+
+  it("never mentions emails for a non-outreach kind", () => {
+    for (const k of ["scrape", "assess", "research", "qualify", "match", "proposal"]) {
+      expect(workDoneSummary(k, {})).not.toMatch(/email/);
+    }
+  });
+
+  it("has a doing phrase for every pod kind", () => {
+    for (const k of ["scrape", "assess", "research", "qualify", "match", "outreach", "proposal"]) {
+      expect(workDoing(k)).not.toBe(k);
+    }
   });
 });

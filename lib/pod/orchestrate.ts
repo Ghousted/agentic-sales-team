@@ -1,7 +1,8 @@
 import "server-only";
 // Pod orchestration: resolve a team's members/capabilities and enqueue or chain
 // pod-stage jobs. Server-only. No engine work here. It wires the existing
-// capability jobs into a handed-off pipeline; every stage asks the user first.
+// capability jobs into a handed-off pipeline; a stage asks the user first unless
+// the agent runs it on Auto.
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
@@ -10,12 +11,14 @@ import { pickLeadsForResearch, pickLeadsForRun, pickLeadsForQualify, pickLeadsFo
 import { pickLeadsForMatch } from "@/lib/matches/store";
 import { pickLeadsForProposal } from "@/lib/proposals/store";
 import { POD_ORDER, POD_BATCH } from "./types";
-import { askText } from "./summary";
+import { askText, startText } from "./summary";
+import { autoCaps } from "./autonomy";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 
-interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[] }
+// `auto`: the capabilities the user set to Auto on the agent page (no Proceed/Cancel ask).
+interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[]; auto?: string[] }
 
 // Per-stage phrasing for the hand-off narration.
 const NOUN: Record<string, string> = { assess: "the review", research: "research", qualify: "qualification", match: "matching", outreach: "outreach", proposal: "proposals" };
@@ -66,7 +69,7 @@ export async function agentInfo(userId: string, agentId: string): Promise<AgentI
   ]);
   const base = seed ?? created[0];
   if (!base || state?.removed || state?.paused) return null;
-  return { id: base.id, name: base.name, role: cfg?.role ?? base.role, goal: cfg?.goal ?? base.goal, task: base.task, capabilities: base.capabilities };
+  return { id: base.id, name: base.name, role: cfg?.role ?? base.role, goal: cfg?.goal ?? base.goal, task: base.task, capabilities: base.capabilities, auto: autoCaps(cfg?.settings) };
 }
 
 export async function memberWithCapability(userId: string, teamId: string, capability: string): Promise<string | null> {
@@ -110,15 +113,17 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   const info = await agentInfo(userId, agentId);
   if (!info) return;
   const leadCount = await countPending(userId, agentId, capability);
-  // Every stage waits for the user: the ask shows Proceed/Cancel in the chat.
+  // A stage waits for the user (the ask shows Proceed/Cancel in the chat), unless
+  // the agent runs it on Auto: then it is queued now and the runner picks it up.
+  const auto = !!info.auto?.includes(capability);
   const [row] = await getDb().insert(jobs).values({
-    userId, agentId, kind: capability, status: "needs_approval",
+    userId, agentId, kind: capability, status: auto ? "queued" : "needs_approval",
     params: {
       agent: { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task },
       teamId, pod: true, leadCount, batchSize: POD_BATCH, leadIds: null,
     },
   }).returning({ id: jobs.id });
-  await postTeamMessage(userId, teamId, info.id, askText(capability, leadCount, row.id, await userFirstName(userId)));
+  await postTeamMessage(userId, teamId, info.id, auto ? startText(capability, row.id) : askText(capability, leadCount, row.id, await userFirstName(userId)));
 }
 
 /** Whether the user cancelled this team's run after `since` (when the finished

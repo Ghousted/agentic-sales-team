@@ -394,38 +394,9 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     set((prev) => ({ chats: { ...prev.chats, [teamId]: (prev.chats[teamId] || []).concat([m]) } }));
   }, [set]);
 
-  // Team chat. The server stores the user's message and every agent reply
-  // (teamChat, the pod chain, reportTeamJob); the chat page renders the stored
-  // thread in id order. Here the message shows at once as a local row until its
-  // stored copy arrives, and only a notice the server never saw (a failed
-  // request) stays local-only. Agents ask before they act, so a send starts no
-  // job: the chat's Proceed button calls followJob.
-  const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
-    const t = (text || "").trim();
-    if (!t) return;
-    const awaiting = (d: number) => set((prev) => ({ chatAwaiting: { ...prev.chatAwaiting, [teamId]: Math.max(0, (prev.chatAwaiting[teamId] ?? 0) + d) } }));
-    addLocalMsg(teamId, "me", t);
-    markSent(teamId);
-    set({ chatInput: "", chatLeadPicks: [] });
-    awaiting(1);
-
-    teamChat(teamId, t, leadIds, Intl.DateTimeFormat().resolvedOptions().timeZone).then(async (res) => {
-      // Fetch the stored replies before dropping the dots, so the typing
-      // indicator hands straight over to the reveal.
-      await pullThread(teamId);
-      awaiting(-1);
-      // A reply with no id wasn't stored (for example, "Not signed in."). Show it locally.
-      for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocalMsg(teamId, m.who, m.text);
-    }).catch(async () => {
-      // The message may or may not have been stored; the thread fetch shows what was.
-      await pullThread(teamId);
-      awaiting(-1);
-      addLocalMsg(teamId, "system", "I'm sorry. I could not process that now.");
-    });
-  }, [set, pullThread, addLocalMsg]);
-
-  // After Proceed: start the approved job now and follow it until its outcome is
-  // in the thread. The per-minute crons run it anyway if this tab closes.
+  // After Proceed (or a typed "yes", or an Auto step): start the job now and
+  // follow it until its outcome is in the thread. The per-minute crons run it
+  // anyway if this tab closes.
   const followJob = useCallback(async (teamId: string, job: { id: string; kind: string; pod: boolean }) => {
     const addLocal = (who: string, text: string) => addLocalMsg(teamId, who, text);
     await pullThread(teamId); // the agent's "starting now" reply
@@ -463,6 +434,39 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     };
     poll();
   }, [pullThread, addLocalMsg]);
+
+  // Team chat. The server stores the user's message and every agent reply
+  // (teamChat, the pod chain, reportTeamJob); the chat page renders the stored
+  // thread in id order. Here the message shows at once as a local row until its
+  // stored copy arrives, and only a notice the server never saw (a failed
+  // request) stays local-only. Agents ask before they act, so a send usually
+  // starts no job: the chat's Proceed button calls followJob. A send that starts
+  // one (an Auto step, or "yes" to an open ask) returns it to follow here.
+  const sendTeamChat = useCallback((teamId: string, text: string, leadIds?: string[]) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    const awaiting = (d: number) => set((prev) => ({ chatAwaiting: { ...prev.chatAwaiting, [teamId]: Math.max(0, (prev.chatAwaiting[teamId] ?? 0) + d) } }));
+    addLocalMsg(teamId, "me", t);
+    markSent(teamId);
+    set({ chatInput: "", chatLeadPicks: [] });
+    awaiting(1);
+
+    teamChat(teamId, t, leadIds, Intl.DateTimeFormat().resolvedOptions().timeZone).then(async (res) => {
+      // Fetch the stored replies before dropping the dots, so the typing
+      // indicator hands straight over to the reveal.
+      await pullThread(teamId);
+      awaiting(-1);
+      // A reply with no id wasn't stored (for example, "Not signed in."). Show it locally.
+      for (const m of res.messages as ThreadMsg[]) if (m.id === undefined) addLocalMsg(teamId, m.who, m.text);
+      // Not part of this send: a follow-up hiccup must not show "could not process".
+      if (res.follow) followJob(teamId, res.follow).catch(() => { /* the per-minute crons run it */ });
+    }).catch(async () => {
+      // The message may or may not have been stored; the thread fetch shows what was.
+      await pullThread(teamId);
+      awaiting(-1);
+      addLocalMsg(teamId, "system", "I'm sorry. I could not process that now.");
+    });
+  }, [set, pullThread, addLocalMsg, followJob]);
 
   // Creates wait for the server to store the row before the agent/team appears:
   // chat and jobs look agents and teams up server-side, so one the server never

@@ -49,11 +49,30 @@ describe("enqueuePodStage", () => {
     expect(fake.state.inserts).toHaveLength(1);
   });
 
-  it("always asks first, whatever the agent's approval setting", async () => {
-    fake.state.selects = [[], [agentRow], [], [{ settings: { research: { mode: "auto" } } }]];
+  it("asks first when the agent has no saved mode (Ask is the default)", async () => {
+    fake.state.selects = [[], [agentRow], [], []];
     await enqueuePodStage("u1", "t1", "research", "a1");
     expect(fake.state.inserts[0]).toMatchObject({ status: "needs_approval", params: { teamId: "t1", pod: true } });
     expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "a1", "@Sam, I'm ready to research 0 leads. Proceed? ⟦approve:new-job⟧"]);
+  });
+
+  it("asks first when the stage is saved as Ask", async () => {
+    fake.state.selects = [[], [agentRow], [], [{ settings: { research: { mode: "ask" } } }]];
+    await enqueuePodStage("u1", "t1", "research", "a1");
+    expect(fake.state.inserts[0]).toMatchObject({ status: "needs_approval" });
+  });
+
+  it("starts at once, with no ask, when the agent runs the stage on Auto", async () => {
+    fake.state.selects = [[], [agentRow], [], [{ settings: { research: { mode: "auto" }, qualify: { mode: "ask" } } }]];
+    await enqueuePodStage("u1", "t1", "research", "a1");
+    expect(fake.state.inserts[0]).toMatchObject({ status: "queued", params: { teamId: "t1", pod: true } });
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "a1", "Okay, starting now."]);
+  });
+
+  it("still asks for a stage the agent runs on Auto only for another capability", async () => {
+    fake.state.selects = [[], [agentRow], [], [{ settings: { qualify: { mode: "auto" } } }]];
+    await enqueuePodStage("u1", "t1", "research", "a1");
+    expect(fake.state.inserts[0]).toMatchObject({ status: "needs_approval" });
   });
 });
 

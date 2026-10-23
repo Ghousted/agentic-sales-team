@@ -80,6 +80,7 @@ export function workDoing(kind: string): string {
     case "match": return "matching leads to listings";
     case "outreach": return "drafting outreach";
     case "proposal": return "drafting proposals";
+    case "book-meeting": return "booking a meeting";
     default: return kind;
   }
 }
@@ -98,6 +99,7 @@ export function workDoneSummary(kind: string, result: unknown): string {
     case "match": return `matched ${n("matched")} lead${s("matched")} to your catalog`;
     case "outreach": return `drafted ${n("draftsCreated")} email${s("draftsCreated")}, ready for you to review and send`;
     case "proposal": return `drafted ${n("proposals")} proposal${s("proposals")}, ready for you to review`;
+    case "book-meeting": return `booked ${n("booked")} meeting${s("booked")}, on your calendar`;
     default: return "completed my last task";
   }
 }

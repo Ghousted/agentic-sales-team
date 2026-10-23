@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
+import Modal from "@/components/Modal";
 import { chip } from "@/lib/visuals";
 import { useConfirmClick } from "@/lib/useConfirmClick";
 import {
@@ -12,7 +13,7 @@ import type { ProductDTO, FolderDTO } from "@/lib/products/store";
 
 const UNFILED = "__unfiled__"; // virtual folder for products not in any real folder
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
-const LABEL = "font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
+const LABEL = "display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px";
 const FIELD = "width:100%;border:1px solid #E4E4E7;border-radius:10px;padding:9px 13px;font-size:13px;color:#18181B;outline:none";
 
 export default function ProductsClient({ initialProducts, initialFolders }: { initialProducts: ProductDTO[]; initialFolders: FolderDTO[] }) {
@@ -98,7 +99,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
             <Box onClick={() => setFolder(null)} style="color:#006AFF;font-weight:600;cursor:pointer" styleHover="text-decoration:underline">← All products</Box>
             <span style={css("color:#D4D4D8")}>/</span>
             <span style={css("font-weight:700")}>{crumbName}</span>
-            <span style={css("color:#A1A1AA")}>· {shown.length} product{shown.length === 1 ? "" : "s"}</span>
+            <span style={css("color:var(--text-muted)")}>· {shown.length} product{shown.length === 1 ? "" : "s"}</span>
           </div>
         )}
         <div className="m-wrap" style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
@@ -113,7 +114,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
       {/* TOP LEVEL: folder tiles only (click a folder to open it) */}
       {!inFolderView && (
         loading ? (
-          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+          <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px;font-size:12.5px;color:var(--text-muted)")}>Loading…</div>
         ) : folders.length === 0 && rootProducts.length === 0 ? (
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
             <div style={css("width:52px;height:52px;border-radius:14px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>📦</div>
@@ -126,7 +127,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
                 <div style={css("width:38px;height:38px;border-radius:10px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none")}>📁</div>
                 <div style={css("min-width:0")}>
                   <div style={css("font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{f.name}</div>
-                  <div style={css("font-size:11.5px;color:#A1A1AA")}>{f.count} item{f.count === 1 ? "" : "s"}</div>
+                  <div style={css("font-size:11.5px;color:var(--text-muted)")}>{f.count} item{f.count === 1 ? "" : "s"}</div>
                 </div>
               </Box>
             ))}
@@ -135,7 +136,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
                 <div style={css("width:38px;height:38px;border-radius:10px;background:#F4F4F5;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none")}>🗂</div>
                 <div style={css("min-width:0")}>
                   <div style={css("font-size:13.5px;font-weight:700")}>Unfiled</div>
-                  <div style={css("font-size:11.5px;color:#A1A1AA")}>{rootProducts.length} item{rootProducts.length === 1 ? "" : "s"}</div>
+                  <div style={css("font-size:11.5px;color:var(--text-muted)")}>{rootProducts.length} item{rootProducts.length === 1 ? "" : "s"}</div>
                 </div>
               </Box>
             )}
@@ -150,21 +151,21 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
             <div>Product</div><div>Category</div><div>Price</div><div>Actions</div>
           </div>
           {loading ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>Loading…</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>Loading…</div>
           ) : shown.length === 0 ? (
-            <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>This folder is empty. Use “Import CSV” or “+ Add product”, or move products in from the Folder column.</div>
+            <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>This folder is empty. Use “Import CSV” or “+ Add product”, or move products in from the Folder column.</div>
           ) : shown.map((p) => (
             <div key={p.id} className="m-table" style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
-              <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div>
+              <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:var(--text-muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div>
                 {Object.keys(p.attributes || {}).length > 0 && (
                   <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:5px")}>
                     {Object.entries(p.attributes).slice(0, 4).map(([k, v]) => (
-                      <span key={k} style={css("font-size:10px;font-weight:500;color:#52525B;background:#F4F4F5;border-radius:6px;padding:2px 7px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}><span style={css("color:#A1A1AA")}>{k}:</span> {v}</span>
+                      <span key={k} style={css("font-size:10px;font-weight:500;color:#52525B;background:#F4F4F5;border-radius:6px;padding:2px 7px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}><span style={css("color:var(--text-muted)")}>{k}:</span> {v}</span>
                     ))}
                   </div>
                 )}
               </div>
-              <div>{p.category ? <span style={css(chip("#EAF2FF", "#006AFF"))}>{p.category}</span> : <span style={css("color:#A1A1AA")}>-</span>}</div>
+              <div>{p.category ? <span style={css(chip("#EAF2FF", "#006AFF"))}>{p.category}</span> : <span style={css("color:var(--text-muted)")}>-</span>}</div>
               <div style={css("font-weight:600;color:#3F3F46")}>{p.price || "-"}</div>
               <div style={css("display:flex;gap:8px;align-items:center")}>
                 <select aria-label="Move to folder" value={p.folderId ?? ""} onChange={(e) => onMove(p.id, e.target.value)} title="Move to folder" style={css(INPUT + ";cursor:pointer;padding:6px 9px;font-size:12px;max-width:150px")}>
@@ -180,58 +181,54 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
 
       {/* new-folder modal */}
       {showFolder && (
-        <div onClick={() => setShowFolder(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:420px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+        <Modal onClose={() => setShowFolder(false)} labelledBy="new-folder-title" style="background:#fff;border-radius:18px;width:100%;max-width:420px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
             <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
-              <div style={css("font-size:15px;font-weight:700")}>New folder</div>
+              <h2 id="new-folder-title" style={css("margin:0;font-size:15px;font-weight:700")}>New folder</h2>
               <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Group products (e.g. Subscriptions, Services).</div>
             </div>
             <div style={css("padding:18px 20px")}>
-              <div style={css(LABEL)}>Folder name</div>
-              <input autoFocus value={folderName} onChange={(e) => setFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitFolder(); }} placeholder="e.g. Subscriptions" style={css(FIELD)} />
+              <label htmlFor="new-folder-name" style={css(LABEL)}>Folder name</label>
+              <input id="new-folder-name" autoFocus value={folderName} onChange={(e) => setFolderName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitFolder(); }} placeholder="e.g. Subscriptions" style={css(FIELD)} />
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;justify-content:flex-end;gap:8px")}>
               <Btn onClick={() => setShowFolder(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
               <Btn onClick={submitFolder} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#006AFF;" + (folderName.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={folderName.trim() ? "background:#0052CC" : ""}>Create folder</Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* add-product modal */}
       {showAdd && (
-        <div onClick={() => setShowAdd(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+        <Modal onClose={() => setShowAdd(false)} labelledBy="add-product-title" style="background:#fff;border-radius:18px;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
             <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
-              <div style={css("font-size:15px;font-weight:700")}>Add a product</div>
+              <h2 id="add-product-title" style={css("margin:0;font-size:15px;font-weight:700")}>Add a product</h2>
               <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Add an offering your agents can reference{activeFolder ? " · " + activeFolder.name : ""}.</div>
             </div>
             <div style={css("padding:18px 20px;display:flex;flex-direction:column;gap:14px")}>
               <div>
-                <div style={css(LABEL)}>Name</div>
-                <input autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Pro Plan" style={css(FIELD)} />
+                <label htmlFor="add-product-name" style={css(LABEL)}>Name</label>
+                <input id="add-product-name" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Pro Plan" style={css(FIELD)} />
               </div>
               <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:12px")}>
                 <div>
-                  <div style={css(LABEL)}>Category</div>
-                  <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Subscription" style={css(FIELD)} />
+                  <label htmlFor="add-product-category" style={css(LABEL)}>Category</label>
+                  <input id="add-product-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. Subscription" style={css(FIELD)} />
                 </div>
                 <div>
-                  <div style={css(LABEL)}>Price</div>
-                  <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. $99/mo" style={css(FIELD)} />
+                  <label htmlFor="add-product-price" style={css(LABEL)}>Price</label>
+                  <input id="add-product-price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="e.g. $99/mo" style={css(FIELD)} />
                 </div>
               </div>
               <div>
-                <div style={css(LABEL)}>Description</div>
-                <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="What it is / who it's for" style={css(FIELD)} />
+                <label htmlFor="add-product-description" style={css(LABEL)}>Description</label>
+                <input id="add-product-description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") submitAdd(); }} placeholder="What it is / who it's for" style={css(FIELD)} />
               </div>
             </div>
             <div style={css("padding:14px 20px;border-top:1px solid #F0F0F3;display:flex;justify-content:flex-end;gap:8px")}>
               <Btn onClick={() => setShowAdd(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
               <Btn onClick={submitAdd} style={"color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:600;background:#006AFF;" + (form.name.trim() ? "cursor:pointer" : "opacity:.5;cursor:default")} styleHover={form.name.trim() ? "background:#0052CC" : ""}>Add product</Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

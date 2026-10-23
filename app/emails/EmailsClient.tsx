@@ -62,7 +62,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
             const n = t.id === "unsent" ? counts.unsent : t.id === "sent" ? counts.sent : counts.total;
             return (
               <Box key={t.id} onClick={() => setTab(t.id)} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;" + (tab === t.id ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>
-                {t.label}<span style={css("font-size:10.5px;color:#A1A1AA")}>{n}</span>
+                {t.label}<span style={css("font-size:10.5px;color:var(--text-muted)")}>{n}</span>
               </Box>
             );
           })}
@@ -78,7 +78,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
       </div>
 
       {drafts.length === 0 ? (
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:40px;text-align:center;font-size:13px;color:#A1A1AA")}>
+        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:40px;text-align:center;font-size:13px;color:var(--text-muted)")}>
           No drafts yet. Ask an agent to draft outreach and the emails show here.
         </div>
       ) : (
@@ -87,7 +87,7 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
           <div style={css("flex:1 1 320px;max-width:420px;min-width:0;background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
             <div style={css("max-height:calc(100vh - 300px);overflow-y:auto")}>
               {shown.length === 0 ? (
-                <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>No drafts match.</div>
+                <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted)")}>No drafts match.</div>
               ) : shown.map((d) => {
                 const a = byId(d.agentId);
                 const active = sel?.id === d.id;
@@ -95,8 +95,8 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
                   <Box key={d.id} onClick={() => setSelId(d.id)} style={"padding:12px 16px;border-bottom:1px solid #F4F4F6;cursor:pointer;border-left:3px solid " + (active ? "#006AFF" : "transparent") + ";background:" + (active ? "#F7FAFF" : "#fff")} styleHover={active ? undefined : "background:#FAFAFB"}>
                     <div style={css("display:flex;align-items:center;gap:8px;min-width:0")}>
                       <span style={css("font-size:13px;font-weight:600;color:#18181B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}>{d.leadName}</span>
-                      {d.leadCompany && <span style={css("font-size:11.5px;color:#A1A1AA;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}>{d.leadCompany}</span>}
-                      <span style={css("margin-left:auto;flex:none;font-size:10.5px;color:#A1A1AA")}>{relTime(d.createdAt)}</span>
+                      {d.leadCompany && <span style={css("font-size:11.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}>{d.leadCompany}</span>}
+                      <span style={css("margin-left:auto;flex:none;font-size:10.5px;color:var(--text-muted)")}>{relTime(d.createdAt)}</span>
                     </div>
                     <div style={css("font-size:12.5px;color:#3F3F46;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}>{d.subject}</div>
                     <div style={css("display:flex;align-items:center;gap:6px;margin-top:6px")}>
@@ -132,7 +132,7 @@ function DraftView({ d, agentName, onCopy, onMarkSent, onDiscard }: {
           <div style={css("font-size:12px;color:#71717A;margin-top:6px;overflow-wrap:anywhere")}>
             To <b style={css("color:#18181B;font-weight:600")}>{d.leadName}</b>{d.leadCompany ? " · " + d.leadCompany : ""} · {to}
           </div>
-          <div style={css("font-size:11.5px;color:#A1A1AA;margin-top:3px")}>
+          <div style={css("font-size:11.5px;color:var(--text-muted);margin-top:3px")}>
             Drafted by {agentName} · {new Date(d.createdAt).toLocaleString()}{sent && d.sentAt ? " · sent " + new Date(d.sentAt).toLocaleString() : ""}
           </div>
         </div>
@@ -155,7 +155,7 @@ function DraftView({ d, agentName, onCopy, onMarkSent, onDiscard }: {
         {d.leadEmail && <Btn onClick={() => onCopy(d)} style={SECONDARY} styleHover="background:#E4E4E7">Copy message</Btn>}
         {d.leadProfileUrl && <Btn onClick={() => window.open(d.leadProfileUrl!, "_blank")} style={SECONDARY} styleHover="background:#E4E4E7">Open profile</Btn>}
         {!sent && <Btn onClick={() => onMarkSent(d)} style={SECONDARY} styleHover="background:#E4E4E7">Mark sent</Btn>}
-        {!sent && <Btn onClick={() => onDiscard(d)} style="background:transparent;color:#A1A1AA;border:none;border-radius:99px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECF2;color:#F43F7E">Discard</Btn>}
+        {!sent && <Btn onClick={() => onDiscard(d)} style="background:transparent;color:var(--text-muted);border:none;border-radius:99px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECF2;color:#F43F7E">Discard</Btn>}
       </div>
     </div>
   );

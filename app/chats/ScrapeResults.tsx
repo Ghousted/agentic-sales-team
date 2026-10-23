@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { css, Box, Btn } from "@/components/primitives";
+import Modal from "@/components/Modal";
 import { chip } from "@/lib/visuals";
 import { safeHttpUrl, openExternal } from "@/lib/url/safeUrl";
 import { listLeadsByIds, acceptLeads, dismissLeads } from "@/lib/leads/actions";
@@ -12,7 +13,7 @@ import type { LeadDTO } from "@/lib/leads/types";
 import { FitReason } from "@/components/LeadBits";
 
 const SHOWN = 5;
-const SEC = "font-size:11px;font-weight:700;color:#A1A1AA;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
+const SEC = "font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px";
 
 const REVIEW: Record<string, [string, string, string]> = {
   pending: ["#FEF3E7", "#B7791F", "To review"],
@@ -108,8 +109,7 @@ function LeadOverview({ lead: l, onClose, onReview }: { lead: LeadDTO; onClose: 
   };
 
   return (
-    <div onClick={onClose} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeUp .2s ease")}>
-      <div role="dialog" aria-modal="true" aria-label={l.name} onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:520px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+    <Modal onClose={onClose} label={l.name} focusField={false} overlayStyle="position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeUp .2s ease" style="background:#fff;border-radius:18px;width:100%;max-width:520px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
         <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3;display:flex;align-items:flex-start;gap:10px")}>
           <div style={css("flex:1;min-width:0")}>
             <div style={css("font-size:16px;font-weight:700;overflow-wrap:anywhere")}>{l.name}</div>
@@ -119,7 +119,7 @@ function LeadOverview({ lead: l, onClose, onReview }: { lead: LeadDTO; onClose: 
               {l.company && l.company !== l.name && <span>{l.company}</span>}
             </div>
           </div>
-          <Box onClick={onClose} aria-label="Close" style="font-size:18px;color:#A1A1AA;cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
+          <Box onClick={onClose} aria-label="Close" style="font-size:18px;color:var(--text-muted);cursor:pointer;line-height:1;padding:2px 4px;flex:none" styleHover="color:#3F3F46">✕</Box>
         </div>
         <div style={css("padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px")}>
           <div>
@@ -141,7 +141,7 @@ function LeadOverview({ lead: l, onClose, onReview }: { lead: LeadDTO; onClose: 
               {rb.angle && <div style={css("font-size:12.5px;color:#52525B;margin-top:6px")}><b>Angle:</b> {rb.angle}</div>}
             </div>
           )}
-          <div style={css("font-size:11.5px;color:#A1A1AA")}>Found {new Date(l.createdAt).toLocaleString()}</div>
+          <div style={css("font-size:11.5px;color:var(--text-muted)")}>Found {new Date(l.createdAt).toLocaleString()}</div>
         </div>
         <div style={css("padding:12px 20px;border-top:1px solid #F0F0F3;display:flex;gap:8px;align-items:center;flex-wrap:wrap")}>
           {l.review !== "accepted" && (
@@ -152,7 +152,6 @@ function LeadOverview({ lead: l, onClose, onReview }: { lead: LeadDTO; onClose: 
           )}
           <Btn onClick={() => router.push("/leads")} style="margin-left:auto;height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#006aff;font-size:13.5px;cursor:pointer" styleHover="background:#eaf2ff">Open in Leads →</Btn>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

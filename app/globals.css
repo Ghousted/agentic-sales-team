@@ -1,4 +1,7 @@
 /* Base + keyframes ported from the v5 prototype's <style> block. */
+/* --text-muted: tertiary text (timestamps, hints, empty states). #71717A is 4.8:1 on white and 4.6:1 on
+   #FAFAFB, so it passes WCAG AA; the old #A1A1AA was 2.6:1. */
+:root { --text-muted: #71717A; }
 html, body { margin: 0; padding: 0; background: #FAFAFB; font-family: Inter, system-ui, sans-serif; color: #18181B; }
 * { box-sizing: border-box; }
 input, textarea, select, button { font-family: Inter, system-ui, sans-serif; }
@@ -61,7 +64,7 @@ button { transition: transform .12s ease, background .15s ease, box-shadow .15s 
 button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
-button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
+button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible, a:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
 
 /* ---- Redesign: icon font (Lucide subset from the Claude Design file) ---- */
 @font-face { font-family: "lucide"; src: url("/fonts/lucide.woff2") format("woff2"); font-display: block; }

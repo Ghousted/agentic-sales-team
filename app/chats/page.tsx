@@ -348,7 +348,7 @@ function ChatsInner() {
                 {hits.map((a) => (
                   <Box key={a!.id} onClick={() => set({ chatInput: s.chatInput.replace(/@([\w'-]*)$/, "@" + a!.name.split(" ")[0] + " ") })} style="display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer" styleHover="background:#F4F4F5">
                     <div style={css(av(a!, 24))}>{a!.initials}</div>
-                    <div style={css("font-size:12.5px;font-weight:600")}>{a!.name}<span style={css("font-size:10.5px;color:#A1A1AA;font-weight:400")}> · {a!.capabilities.join(", ") || "no capabilities"}</span></div>
+                    <div style={css("font-size:12.5px;font-weight:600")}>{a!.name}<span style={css("font-size:10.5px;color:var(--text-muted);font-weight:400")}> · {a!.capabilities.join(", ") || "no capabilities"}</span></div>
                   </Box>
                 ))}
               </div>
@@ -360,7 +360,7 @@ function ChatsInner() {
             const q = m[1].toLowerCase();
             const hits = teamLeads.filter((l) => (l.name + " " + l.title + " " + l.company).toLowerCase().includes(q)).slice(0, 6);
             if (hits.length === 0) return (
-              <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);padding:11px 14px;z-index:20;font-size:12px;color:#A1A1AA")}>
+              <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);padding:11px 14px;z-index:20;font-size:12px;color:var(--text-muted)")}>
                 {leadsLoaded ? "No leads yet. Scrape some leads first." : "Loading leads…"}
               </div>
             );
@@ -368,7 +368,7 @@ function ChatsInner() {
               <div style={css("position:absolute;bottom:64px;left:20px;background:#fff;border:1px solid #ECECF1;border-radius:12px;box-shadow:0 12px 32px rgba(24,24,27,.14);overflow:hidden;z-index:20;min-width:280px;max-height:280px;overflow-y:auto")}>
                 {hits.map((l) => (
                   <Box key={l.id} onClick={() => addPick(l)} style="display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer" styleHover="background:#F4F4F5">
-                    <div style={css("flex:1;font-size:12.5px;font-weight:600;color:#18181B")}>{l.name}<span style={css("font-size:10.5px;color:#A1A1AA;font-weight:400")}> · {l.title || l.company || l.platform || "lead"}</span></div>
+                    <div style={css("flex:1;font-size:12.5px;font-weight:600;color:#18181B")}>{l.name}<span style={css("font-size:10.5px;color:var(--text-muted);font-weight:400")}> · {l.title || l.company || l.platform || "lead"}</span></div>
                     <div style={css("font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-radius:99px;padding:2px 7px;" + (l.review === "accepted" ? "background:#E7F7EC;color:#1B7A3D" : "background:#FEF3E7;color:#B7791F"))}>{l.review}</div>
                   </Box>
                 ))}

@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "./primitives";
 import GlobalSearch from "./GlobalSearch";
+import { focusablesIn, wrapTarget } from "./Modal";
 import NotificationsBell from "./NotificationsBell";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type SeenIds } from "./unread";
@@ -72,11 +73,25 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const mobile = useIsMobile();
   useEffect(() => { setDrawer(false); }, [path]);
   useEffect(() => { if (!mobile) setDrawer(false); }, [mobile]);
+  // While the drawer is open it acts as a modal: focus moves into it, Tab stays inside,
+  // Escape closes it, and focus goes back to the menu button afterwards.
+  const asideRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!drawer) return;
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawer(false); };
-    document.addEventListener("keydown", esc);
-    return () => document.removeEventListener("keydown", esc);
+    const aside = asideRef.current;
+    if (aside) focusablesIn(aside)[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setDrawer(false); return; }
+      if (e.key !== "Tab" || !aside) return;
+      const active = document.activeElement as HTMLElement | null;
+      const target = wrapTarget(focusablesIn(aside), active && aside.contains(active) ? active : null, e.shiftKey);
+      if (target) { e.preventDefault(); target.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.getElementById("drawer-menu-btn")?.focus();
+    };
   }, [drawer]);
   // Last message id seen per conversation (from storage) and the server's unread
   // counts. Agents post into closed chats (pod hand-offs, job results), so the
@@ -162,7 +177,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       {drawer && <div aria-hidden="true" onClick={() => setDrawer(false)} style={css("position:fixed;inset:0;z-index:59;background:rgba(16,20,24,.35);animation:cFade .2s ease-out backwards")} />}
       {/* Docked (hidden on small screens) or, when the menu button opened it, a drawer over the page. */}
       {(open || drawer) && (
-        <aside aria-label="Sidebar" className={drawer ? undefined : "m-hide"} style={css("width:272px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;" + (drawer ? "position:fixed;left:0;top:0;bottom:0;max-width:85vw;z-index:60;box-shadow:0 16px 40px rgba(16,20,24,.2)" : "position:relative;z-index:5"))}>
+        <aside aria-label="Sidebar" className={drawer ? undefined : "m-hide"} ref={asideRef} role={drawer ? "dialog" : undefined} aria-modal={drawer || undefined} style={css("width:272px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;" + (drawer ? "position:fixed;left:0;top:0;bottom:0;max-width:85vw;z-index:60;box-shadow:0 16px 40px rgba(16,20,24,.2)" : "position:relative;z-index:5"))}>
           <div style={css("height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:14px 12px 0 15px")}>
             <Box onClick={() => router.push("/")} aria-label="New chat" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">
               <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
@@ -253,7 +268,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       <div style={css("flex:1;min-width:0;display:flex;flex-direction:column")}>
         <header className="m-header" style={css("height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px 0 24px;" + (title ? "border-bottom:1px solid #eceef1" : ""))}>
-          <Btn className="m-only" onClick={() => setDrawer(true)} aria-label="Open menu" aria-expanded={drawer} title="Menu" style="width:36px;height:36px;flex:none;border:0;border-radius:10px;background:transparent;color:#4a5565;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eceef1"><i className="icon-panel-left" style={{ fontSize: 18 }} /></Btn>
+          <Btn className="m-only" onClick={() => setDrawer(true)} aria-label="Open menu" id="drawer-menu-btn" aria-expanded={drawer} title="Menu" style="width:36px;height:36px;flex:none;border:0;border-radius:10px;background:transparent;color:#4a5565;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eceef1"><i className="icon-panel-left" style={{ fontSize: 18 }} /></Btn>
           {title && <h1 key={title} style={css("margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:'General Sans',system-ui,sans-serif;font-size:20px;font-weight:500;letter-spacing:-.02em;white-space:nowrap;animation:cSwapA .2s ease-out backwards")}>{title}</h1>}
           <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}>
             <NotificationsBell />

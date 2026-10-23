@@ -181,9 +181,9 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
                 </div>
               </div>
               <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px")}>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{liveAgentCount(live, t.members)}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{liveAgentCount(live, t.members)}</div></div>
               </div>
             </Box>
           );

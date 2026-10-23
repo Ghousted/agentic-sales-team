@@ -69,6 +69,10 @@ button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
 button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible, a:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
+/* Keyboard focus ring for form fields. Most fields set outline:none inline so a mouse click shows no
+   ring, and only !important beats an inline style. html[data-kbd] is set while the user moves focus
+   with Tab (lib/useKeyboardModality.ts), so a click still looks the same as before. */
+html[data-kbd] input:focus, html[data-kbd] textarea:focus, html[data-kbd] select:focus { outline: 2px solid #006AFF !important; outline-offset: 2px !important; }
 
 /* ---- Redesign: icon font (Lucide subset from the Claude Design file) ---- */
 @font-face { font-family: "lucide"; src: url("/fonts/lucide.woff2") format("woff2"); font-display: block; }

@@ -8,6 +8,7 @@ import Login from "./Login";
 import Landing from "./Landing";
 import Toast from "./Toast";
 import TeamModal from "./TeamModal";
+import { useKeyboardModality } from "@/lib/useKeyboardModality";
 
 // Routes that render full-screen, bypassing the sidebar shell (e.g. the
 // onboarding wizard, which is its own full-page takeover in the design).
@@ -20,6 +21,7 @@ const PUBLIC = ["/reset"];
 export default function AppFrame({ children }: { children: React.ReactNode }) {
   const { s } = useApp();
   const path = usePathname();
+  useKeyboardModality(); // field focus ring for keyboard users (app/globals.css)
   if (!s.authed) {
     if (PUBLIC.includes(path)) {
       return (

@@ -39,6 +39,7 @@ const none = () => Promise.resolve([]);
 vi.mock("@/lib/leads/actions", () => ({ listWorkbook: none, listDraftsForAgent: none, markDraftSent: none, listLeadsForAgents: none }));
 vi.mock("@/lib/jobs/actions", () => ({ enqueueOutreachJob: none, enqueueJob: none }));
 vi.mock("@/lib/agents/actions", () => ({ getAgentStats: none }));
+vi.mock("@/lib/meetings/actions", () => ({ listMeetings: none }));
 vi.mock("@/lib/proposals/actions", () => ({ listProposalsForAgent: none, markProposalSent: none }));
 vi.mock("@/lib/pod/actions", () => ({ listPendingApprovals: none, approveJob: none, rejectJob: none }));
 vi.mock("@/lib/workspace/statsActions", () => ({ listActivity: none }));

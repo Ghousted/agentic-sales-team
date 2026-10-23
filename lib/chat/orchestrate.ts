@@ -8,6 +8,7 @@ import { membersOfTeam } from "@/lib/teams/membership";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import { CAPABILITIES } from "@/lib/agentTypes";
 import { converse } from "./converse";
+import { workDoing, workDoneSummary } from "./thread";
 import type { Intent } from "@/lib/ai/intent";
 
 export interface ChatOutMsg { who: string; text: string } // who = speaker agentId
@@ -56,22 +57,15 @@ async function describeWork(userId: string, agentId: string): Promise<string> {
     .where(and(eq(jobs.userId, userId), eq(jobs.agentId, agentId)))
     .orderBy(desc(jobs.createdAt)).limit(1);
   if (!job) return `I'm not working on anything at the moment. I can find leads, run research, or draft outreach whenever you'd like.`;
-  const r = (job.result ?? {}) as { leadsFound?: number; briefed?: number; draftsCreated?: number; matched?: number };
-  const doing = job.kind === "scrape" ? "finding leads" : job.kind === "research" ? "researching the team's leads" : job.kind === "outreach" ? "drafting outreach" : job.kind === "qualify" ? "qualifying the leads" : job.kind === "proposal" ? "drafting a proposal" : job.kind === "match" ? "matching leads to listings" : job.kind;
+  const r = (job.result ?? {}) as { leadsFound?: number };
+  const doing = workDoing(job.kind);
   if (job.status === "running" || job.status === "queued") {
     const prog = job.kind === "scrape" && typeof r.leadsFound === "number" ? `. ${r.leadsFound} found so far` : "";
     return `I'm currently ${doing}${prog}. I'll post the results here once it's complete.`;
   }
   if (job.status === "needs_approval") return `A ${doing} run is queued and awaiting your approval.`;
   if (job.status === "failed") return `My last ${doing} run encountered an error. Would you like me to try it again?`;
-  if (job.status === "done") {
-    const summary = job.kind === "scrape" ? `found ${r.leadsFound ?? 0} lead${r.leadsFound === 1 ? "" : "s"}, waiting for your review`
-      : job.kind === "research" ? `researched ${r.briefed ?? 0} lead${r.briefed === 1 ? "" : "s"}`
-      : job.kind === "outreach" ? `drafted ${r.draftsCreated ?? 0} email${r.draftsCreated === 1 ? "" : "s"}, ready for you to review and send`
-      : job.kind === "match" ? `matched ${r.matched ?? 0} lead${r.matched === 1 ? "" : "s"} to your catalog`
-      : "completed my last task";
-    return `I've just finished ${doing}: ${summary}.`;
-  }
+  if (job.status === "done") return `I've just finished ${doing}: ${workDoneSummary(job.kind, job.result)}.`;
   return `My last ${doing} task is ${job.status}.`;
 }
 

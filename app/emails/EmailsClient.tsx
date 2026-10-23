@@ -9,6 +9,7 @@ import { av, chip } from "@/lib/visuals";
 import { markDraftSent, discardDraft, clearSentDrafts } from "@/lib/leads/actions";
 import { draftCounts, filterDrafts, isSent, mailtoUrl, relTime, type DraftFilter } from "@/lib/leads/drafts";
 import type { DraftDTO } from "@/lib/leads/types";
+import { openExternal, openMailto } from "@/lib/url/safeUrl";
 
 const INPUT = "border:1px solid #E4E4E7;background:#fff;border-radius:10px;padding:9px 12px;font-size:13px;color:#18181B;outline:none";
 const PRIMARY = "background:#E6F0FF;color:#006AFF;border:none;border-radius:99px;padding:7px 15px;font-size:12.5px;font-weight:600;cursor:pointer";
@@ -150,10 +151,10 @@ function DraftView({ d, agentName, onCopy, onMarkSent, onDiscard }: {
 
       <div style={css("display:flex;gap:8px;margin-top:18px;flex-wrap:wrap")}>
         {d.leadEmail
-          ? <Btn onClick={() => window.open(mailtoUrl(d), "_blank")} style={PRIMARY} styleHover="background:#D6E6FF">Open in mail</Btn>
+          ? <Btn onClick={() => openMailto(mailtoUrl(d))} style={PRIMARY} styleHover="background:#D6E6FF">Open in mail</Btn>
           : <Btn onClick={() => onCopy(d)} style={PRIMARY} styleHover="background:#D6E6FF">Copy message</Btn>}
         {d.leadEmail && <Btn onClick={() => onCopy(d)} style={SECONDARY} styleHover="background:#E4E4E7">Copy message</Btn>}
-        {d.leadProfileUrl && <Btn onClick={() => window.open(d.leadProfileUrl!, "_blank")} style={SECONDARY} styleHover="background:#E4E4E7">Open profile</Btn>}
+        {d.leadProfileUrl && <Btn onClick={() => openExternal(d.leadProfileUrl)} style={SECONDARY} styleHover="background:#E4E4E7">Open profile</Btn>}
         {!sent && <Btn onClick={() => onMarkSent(d)} style={SECONDARY} styleHover="background:#E4E4E7">Mark sent</Btn>}
         {!sent && <Btn onClick={() => onDiscard(d)} style="background:transparent;color:var(--text-muted);border:none;border-radius:99px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECF2;color:#F43F7E">Discard</Btn>}
       </div>

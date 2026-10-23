@@ -66,8 +66,9 @@ describe("teamChat", () => {
       { id: 3, who: "asr", text: "I've accepted 2 leads. @Sam, they're in your book now." },
     ];
     const res = await teamChat("t1", "Jane");
-    expect(enqueueJob).toHaveBeenCalledWith(expect.objectContaining({ kind: "outreach", leadIds: ["l1"] }));
-    expect(res.job).toEqual({ id: "j1", kind: "outreach", agentId: "out" });
+    expect(enqueueJob).toHaveBeenCalledWith(expect.objectContaining({ kind: "outreach", leadIds: ["l1"], teamId: "t1", ask: true }));
+    // The agent asks first; Proceed starts the job.
+    expect(res.messages.at(-1)?.text).toBe("I'm ready to draft outreach to 1 lead. Proceed? ⟦approve:j1⟧");
     expect(resolve).not.toHaveBeenCalled();
   });
 

@@ -55,7 +55,6 @@ describe("scrape clarifying questions", () => {
     intent("scrape");
     const res = await teamChat("t1", "Look for business in linkedin looking for an ai training provider");
     expect(enqueueJob).not.toHaveBeenCalled();
-    expect(res.job).toBeUndefined();
     expect(res.messages).toHaveLength(1);
     expect(res.messages[0].text).toMatch(/1\. Where\?.*\n2\. How many leads/);
   });
@@ -68,25 +67,27 @@ describe("scrape clarifying questions", () => {
     const res = await teamChat("t1", "Austin, 15");
     expect(enqueueJob).toHaveBeenCalledOnce();
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({
-      kind: "scrape", target: 15, pod: true, teamId: "t1",
+      kind: "scrape", target: 15, pod: true, teamId: "t1", ask: true,
       instruction: "Look for business in linkedin looking for an ai training provider. Location: Austin.",
     });
-    expect(res.job).toEqual({ id: JOB_ID, kind: "scrape", agentId: "s1" });
-    expect(runIdFrom(res.messages[0].text)).toBe(JOB_ID); // the live timeline
+    // The agent asks first: the Proceed/Cancel panel sits under this message, and
+    // the live timeline only appears once the user proceeds.
+    expect(res.messages[0].text).toContain(`⟦approve:${JOB_ID}⟧`);
+    expect(runIdFrom(res.messages[0].text)).toBeNull();
     expect(stripMarkers(res.messages[0].text)).toBe([
-      "Understood. I am starting the search:",
+      "I'm ready to search:",
       "• Looking for: Look for business in linkedin looking for an ai training provider",
       "• Where: Austin",
       "• How many: 15 leads",
-      "I will post the results here.",
+      "Proceed?",
     ].join("\n"));
   });
 
   it("starts at once when the request says who, where and how many", async () => {
     intent("scrape", { geo: "Texas", target: 20 });
     const res = await teamChat("t1", "find 20 dentists in Texas");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 20, instruction: "find 20 dentists in Texas. Location: Texas." });
-    expect(res.job?.kind).toBe("scrape");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 20, instruction: "find 20 dentists in Texas. Location: Texas.", ask: true });
+    expect(res.messages[0].text).toMatch(/^I'm ready to search:[\s\S]*Proceed\?/);
   });
 
   it("asks all three for a bare 'find leads'", async () => {

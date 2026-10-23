@@ -1,5 +1,5 @@
 "use client";
-// Live timeline of a scrape under the agent's "I am starting the search" message
+// Live timeline of a scrape under the agent's "starting the search now" message
 // (the ⟦run:…⟧ marker): plan, sources found, seller check, leads picked, saved.
 // Polls the job while it runs, then folds into a one-line summary.
 import { useEffect, useState } from "react";

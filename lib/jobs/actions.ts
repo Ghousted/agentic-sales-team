@@ -20,8 +20,9 @@ async function uid(): Promise<string | null> {
 
 // A server action is callable with any arguments, so only `agent.id` is taken
 // from the caller. The agent's prompt fields and capabilities are loaded here,
-// and a paused, removed or unknown agent gets no job.
-export async function enqueueJob(input: { agent: AgentRef; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number; target?: number; instruction?: string; pod?: boolean; teamId?: string }): Promise<{ jobId: string } | { error: string }> {
+// and a paused, removed or unknown agent gets no job. With `ask`, the job waits
+// as needs_approval until the user presses Proceed (lib/pod/actions approveJob).
+export async function enqueueJob(input: { agent: AgentRef; kind: string; capabilities?: string[]; leadIds?: string[]; batchSize?: number; target?: number; instruction?: string; pod?: boolean; teamId?: string; ask?: boolean }): Promise<{ jobId: string } | { error: string }> {
   if (!isDbConfigured()) return { error: "Server not configured." };
   const session = await getSession();
   const userId = session?.userId;
@@ -46,7 +47,7 @@ export async function enqueueJob(input: { agent: AgentRef; kind: string; capabil
   if (quota) return { error: quota };
   const agent = { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task };
   const [row] = await db.insert(jobs).values({
-    userId, agentId: agent.id, kind: input.kind, status: "queued",
+    userId, agentId: agent.id, kind: input.kind, status: input.ask === true ? "needs_approval" : "queued",
     params: { agent, leadIds: size.leadIds, batchSize: size.batchSize, target: size.target, instruction: size.instruction, pod: input.pod === true, teamId: typeof input.teamId === "string" ? input.teamId : null },
   }).returning({ id: jobs.id });
   return { jobId: row.id };

@@ -74,7 +74,7 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
   // Autonomous chain: hand off to the Assessor (or ask the user to review).
   // Its own try: a failed hand-off must not turn the finished scrape into 'failed'.
   if (params.pod && params.teamId) {
-    try { await chainNext(job.userId, params.teamId, "scrape", leadsFound, job.agentId, leadIds); } catch (e) { console.error("[scrape] chainNext failed:", e); }
+    try { await chainNext(job.userId, params.teamId, "scrape", leadsFound, job.agentId, leadIds, job.createdAt); } catch (e) { console.error("[scrape] chainNext failed:", e); }
   }
   return { leadsFound };
 }

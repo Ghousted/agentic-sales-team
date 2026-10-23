@@ -50,8 +50,6 @@ interface State extends WizardState {
   chatInput: string;
   chatAwaiting: Record<string, number>; // teamId → sends still waiting on teamChat (shows typing dots)
   chatLeadPicks: { id: string; name: string }[];
-  hubTick: number;
-  countT: number;
   hubTeam: string;
   toast: string;
   toastError: boolean; // the toast reports a failure (shown with ✕, not ✓)
@@ -89,7 +87,7 @@ const initialState: State = {
   ...initialWizard,
   authed: false, showAuth: false, authMode: "login", sidebarOpen: true,
   chats: chatsInit(), convId: "sk", chatInput: "", chatAwaiting: {}, chatLeadPicks: [],
-  hubTick: 0, countT: 1, hubTeam: "all",
+  hubTeam: "all",
   toast: "", toastError: false, paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
   showTeamModal: false, tName: "", tIcon: "🚀", tGoal: "", tSel: {}, tTemplate: "custom", tGapName: {},
@@ -131,7 +129,6 @@ interface Ctx {
   createTeam: () => Promise<string | null>;
   createAgent: () => Promise<void>;
   quickCreateAgent: (typeId: string, name: string) => Promise<string | null>;
-  animateCount: () => void;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -200,7 +197,6 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
   const sRef = useRef(s);
   sRef.current = s;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rafRef = useRef<number | null>(null);
 
   const set = useCallback((patch: Partial<State> | ((prev: State) => Partial<State>)) => {
     setS((prev) => ({ ...prev, ...(typeof patch === "function" ? patch(prev) : patch) }));
@@ -240,28 +236,14 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     [showError],
   );
 
-  const animateCount = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const t0 = performance.now();
-    const step = (now: number) => {
-      const p = Math.min(1, (now - t0) / 900);
-      const e = 1 - Math.pow(1 - p, 3);
-      set({ countT: e });
-      if (p < 1) rafRef.current = requestAnimationFrame(step);
-    };
-    set({ countT: 0 });
-    rafRef.current = requestAnimationFrame(step);
-  }, [set]);
-
   // Apply a successful sign-in/sign-up (the session cookie is set server-side).
   const signedIn = useCallback((user: AuthedUser) => {
     set((prev) => ({
       authed: true, userName: user.name, userEmail: user.email, workspaceName: user.workspaceName,
       toggles: { ...prev.toggles, ...(user.notifications ?? {}) },
     }));
-    animateCount();
     showToast("Welcome, " + user.name.split(" ")[0] + "!");
-  }, [set, animateCount, showToast]);
+  }, [set, showToast]);
 
   const logout = useCallback(async () => {
     await signOutAction();
@@ -580,21 +562,15 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
     return id;
   }, [set, showError]);
 
-  // Lifecycle: count-up + hub tick, running once authenticated.
-  useEffect(() => {
-    if (!s.authed) return;
-    const hub = setInterval(() => set((prev) => ({ hubTick: prev.hubTick + 1 })), 3200);
-    return () => { clearInterval(hub); };
-  }, [s.authed, set]);
-
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const value: Ctx = {
+  // Memoized so a re-render of the provider's parent doesn't re-render every
+  // consumer; it changes whenever state or any action changes.
+  const value = useMemo<Ctx>(() => ({
     s, set, agents, teams, byId,
-    showToast, showError, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, followJob, pullThread, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent, animateCount,
-  };
+    showToast, showError, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, followJob, pullThread, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent,
+  }), [s, set, agents, teams, byId, showToast, showError, signedIn, logout, deleteAgent, deleteTeam, togglePause, saveConfig, addTeamMembers, updateTeam, removeTeamMember, sendTeamChat, followJob, pullThread, clearChat, registerThreadPoll, createTeam, createAgent, quickCreateAgent]);
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

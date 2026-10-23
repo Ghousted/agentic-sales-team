@@ -2,6 +2,8 @@
 // App chrome, styled after the redesign: a 272px light sidebar (collapses to a
 // 64px icon rail) with Search, New chat, the main pages, recent team chats and
 // workspace/account rows; a slim header with the notification bell.
+// On small screens the docked sidebar and rail are hidden by CSS (m-hide), and
+// the header's menu button opens the same sidebar as a drawer over the page.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
@@ -13,6 +15,7 @@ import { badgeText, loadSeen, saveSeen, sameSeen, syncSeen, unreadCounts, type S
 import { listChatUnread } from "@/lib/chat/actions";
 import { navCounts } from "@/lib/leads/actions";
 import { setFaviconDot } from "./faviconBadge";
+import { useIsMobile } from "@/lib/useMediaQuery";
 
 // Lucide "calendar" (not in the design's icon-font subset).
 const CalendarIcon = ({ size = 17 }: { size?: number }) => (
@@ -64,6 +67,17 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [pm, setPm] = useState(false);
   const pmRef = useRef<HTMLDivElement>(null);
   const [focusSearch, setFocusSearch] = useState(false);
+  // Small-screen drawer. Separate from s.sidebarOpen so the desktop choice is kept.
+  const [drawer, setDrawer] = useState(false);
+  const mobile = useIsMobile();
+  useEffect(() => { setDrawer(false); }, [path]);
+  useEffect(() => { if (!mobile) setDrawer(false); }, [mobile]);
+  useEffect(() => {
+    if (!drawer) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawer(false); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [drawer]);
   // Last message id seen per conversation (from storage) and the server's unread
   // counts. Agents post into closed chats (pod hand-offs, job results), so the
   // counts come from a poll, not from the chats already in the store.
@@ -140,19 +154,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const wsInitial = (s.workspaceName.trim()[0] || "W").toUpperCase();
   const title = headerTitle(path);
   const doLogout = async () => { await logout(); router.replace("/"); router.refresh(); };
-  const openChat = (id: string) => { set({ convId: id }); router.push("/chats"); };
+  const openChat = (id: string) => { setDrawer(false); set({ convId: id }); router.push("/chats"); };
   const bg = (on: boolean) => (on ? "background:#eceef1;font-weight:500" : "background:transparent");
 
   return (
     <div style={css("display:flex;height:100vh;overflow:hidden;background:#ffffff;color:#101418;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased")}>
-      {open ? (
-        <aside aria-label="Sidebar" style={css("width:272px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;position:relative;z-index:5")}>
+      {drawer && <div aria-hidden="true" onClick={() => setDrawer(false)} style={css("position:fixed;inset:0;z-index:59;background:rgba(16,20,24,.35);animation:cFade .2s ease-out backwards")} />}
+      {/* Docked (hidden on small screens) or, when the menu button opened it, a drawer over the page. */}
+      {(open || drawer) && (
+        <aside aria-label="Sidebar" className={drawer ? undefined : "m-hide"} style={css("width:272px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;animation:cSide .22s ease-out backwards;" + (drawer ? "position:fixed;left:0;top:0;bottom:0;max-width:85vw;z-index:60;box-shadow:0 16px 40px rgba(16,20,24,.2)" : "position:relative;z-index:5"))}>
           <div style={css("height:62px;flex:none;display:flex;align-items:center;gap:10px;padding:14px 12px 0 15px")}>
             <Box onClick={() => router.push("/")} aria-label="New chat" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">
               <span style={css("width:34px;height:34px;flex:none;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat")} />
               <span style={css("flex:1;font-size:15px;font-weight:500;letter-spacing:-.01em;white-space:nowrap")}>Agentic Sales Team</span>
             </Box>
-            <Btn onClick={() => { setFocusSearch(false); set({ sidebarOpen: false }); }} aria-label="Collapse sidebar" title="Collapse sidebar" style="width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eef0f3;color:#101418"><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></Btn>
+            <Btn onClick={() => { setFocusSearch(false); if (drawer) setDrawer(false); else set({ sidebarOpen: false }); }} aria-label={drawer ? "Close menu" : "Collapse sidebar"} title={drawer ? "Close menu" : "Collapse sidebar"} style="width:34px;height:34px;border:0;border-radius:8px;background:transparent;color:#6b7686;display:flex;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eef0f3;color:#101418"><i className="icon-chevrons-left" style={{ fontSize: 18 }} /></Btn>
           </div>
           <div style={css("padding:4px 10px 0;display:flex;flex-direction:column;gap:2px")}>
             <GlobalSearch compact autoFocus={focusSearch} />
@@ -219,8 +235,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </aside>
-      ) : (
-        <nav aria-label="Main" style={css("width:64px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0")}>
+      )}
+      {!open && (
+        <nav aria-label="Main" className="m-hide" style={css("width:64px;flex:none;height:100vh;background:#f6f7f9;border-right:1px solid #eceef1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0")}>
           <Btn onClick={() => set({ sidebarOpen: true })} aria-label="Expand sidebar" title="Expand sidebar" style="width:34px;height:34px;margin-bottom:14px;padding:0;border:0;border-radius:10px;background:url('/logo-mark.png') center/cover no-repeat;cursor:pointer;transition:transform .12s" styleHover="transform:scale(1.06)" />
           <Btn onClick={() => router.push("/")} aria-label="New chat" title="New chat" style={RAIL_BTN + ";background:" + (path === "/" ? "#eceef1" : "transparent")} styleHover="background:#eceef1"><Ico name="square-pen" size={18} /></Btn>
           <Btn onClick={() => { setFocusSearch(true); set({ sidebarOpen: true }); }} aria-label="Search" title="Search" style={RAIL_BTN + ";background:transparent"} styleHover="background:#eceef1"><Ico name="search" size={18} /></Btn>
@@ -235,12 +252,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       <div style={css("flex:1;min-width:0;display:flex;flex-direction:column")}>
-        <header style={css("height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px 0 24px;" + (title ? "border-bottom:1px solid #eceef1" : ""))}>
-          {title && <h1 key={title} style={css("margin:0;font-family:'General Sans',system-ui,sans-serif;font-size:20px;font-weight:500;letter-spacing:-.02em;white-space:nowrap;animation:cSwapA .2s ease-out backwards")}>{title}</h1>}
+        <header className="m-header" style={css("height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px 0 24px;" + (title ? "border-bottom:1px solid #eceef1" : ""))}>
+          <Btn className="m-only" onClick={() => setDrawer(true)} aria-label="Open menu" aria-expanded={drawer} title="Menu" style="width:36px;height:36px;flex:none;border:0;border-radius:10px;background:transparent;color:#4a5565;align-items:center;justify-content:center;cursor:pointer" styleHover="background:#eceef1"><i className="icon-panel-left" style={{ fontSize: 18 }} /></Btn>
+          {title && <h1 key={title} style={css("margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:'General Sans',system-ui,sans-serif;font-size:20px;font-weight:500;letter-spacing:-.02em;white-space:nowrap;animation:cSwapA .2s ease-out backwards")}>{title}</h1>}
           <div style={css("margin-left:auto;display:flex;align-items:center;gap:8px;flex:none")}>
             <NotificationsBell />
-            <Btn onClick={() => router.push("/create")} style="height:36px;background:#101418;color:#fff;border:none;border-radius:999px;padding:0 16px 0 12px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s" styleHover="background:#2a313b">
-              <i className="icon-plus" style={{ fontSize: 16 }} />Add agent
+            <Btn onClick={() => router.push("/create")} aria-label="Add agent" className="m-icon-btn" style="height:36px;background:#101418;color:#fff;border:none;border-radius:999px;padding:0 16px 0 12px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .12s,transform .1s" styleHover="background:#2a313b">
+              <i className="icon-plus" style={{ fontSize: 16 }} /><span className="m-hide">Add agent</span>
             </Btn>
           </div>
         </header>

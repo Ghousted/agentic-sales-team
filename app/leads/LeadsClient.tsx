@@ -209,14 +209,14 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
   };
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
           <Box onClick={() => setView("active")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;" + (view === "active" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Active</Box>
           <Box onClick={() => setView("pending")} style={"padding:6px 14px;font-size:12.5px;font-weight:600;border-radius:99px;cursor:pointer;display:flex;align-items:center;gap:6px;" + (view === "pending" ? "background:#fff;color:#18181B;box-shadow:0 1px 2px rgba(0,0,0,.08)" : "color:#71717A")}>Pending{candidates.length > 0 && <span style={css("background:#006AFF;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px")}>{candidates.length}</span>}</Box>
         </div>
         <div style={css("font-size:13px;color:#71717A")}>{view === "active" ? leads.length + " lead" + (leads.length === 1 ? "" : "s") : candidates.length + " to review"}</div>
-        <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
+        <div className="m-wrap" style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           {view === "active" && (
             <>
               <select value={fAgent} onChange={(e) => setFAgent(e.target.value)} style={css(INPUT + ";cursor:pointer")}>
@@ -278,8 +278,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
       )}
 
       {view === "active" ? (
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-          <div style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+        <div className="m-scroll" style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+          <div className="m-table" style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
             <div>Lead</div><div>Company</div><div>Agent</div><div>Stage</div><div>Score</div><div>Actions</div>
           </div>
           {loading ? (
@@ -290,7 +290,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
             const a = byId(l.agentId);
             const sc = STAGE_COLORS[l.status] || STAGE_COLORS.new;
             return (
-              <div key={l.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+              <div key={l.id} className="m-table" style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr .7fr .6fr 1.1fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                 <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(l)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{l.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.title || l.email}</div>
                   {safeHttpUrl(l.profileUrl) && <Box onClick={() => openExternal(l.profileUrl)} style="font-size:11px;font-weight:600;color:#006AFF;cursor:pointer;margin-top:2px;display:inline-block" styleHover="text-decoration:underline">View post ↗</Box>}
                   {/* The Agent column already shows who owns the lead; only show live work here. */}
@@ -314,8 +314,8 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           })}
         </div>
       ) : (
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-          <div style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+        <div className="m-scroll" style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+          <div className="m-wrap" style={css("display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
             <div style={css("font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em")}>Scraped candidates. Accept the good ones.</div>
             {candidates.length > 0 && (<>
               <Btn onClick={() => reviewAll(true)} style={"margin-left:auto;color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;" + (confirmBulk === "accept" ? "background:#0052CC" : "background:#006AFF")} styleHover="background:#0052CC">{confirmBulk === "accept" ? `Accept ${candidates.length}?` : "Accept all"}</Btn>
@@ -329,7 +329,7 @@ export default function LeadsClient({ initialLeads, initialCandidates }: { initi
           ) : candidates.map((c) => {
             const a = byId(c.agentId);
             return (
-              <div key={c.id} style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+              <div key={c.id} className="m-table" style={css("display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1.2fr;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
                 <div style={css("font-weight:600")}><Box onClick={() => openLeadDetail(c)} style="font-weight:600;cursor:pointer;display:inline-block" styleHover="color:#006AFF">{c.name}</Box><div style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{c.title || (c.platform ? c.platform : "-")}</div></div>
                 <div style={css("color:#3F3F46")}>{c.company || "-"}</div>
                 <div style={css("display:flex;align-items:center;gap:7px;min-width:0")}>{a && <div style={css(av(a, 20))}>{a.initials}</div>}<span style={css("white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{a ? a.name : c.agentId}</span></div>

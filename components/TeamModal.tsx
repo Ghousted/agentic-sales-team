@@ -24,6 +24,7 @@ export default function TeamModal() {
         aria-modal="true"
         aria-label="Create a team"
         onClick={(e) => e.stopPropagation()}
+        className="m-modal"
         style={css("background:#fff;border-radius:20px;width:540px;max-height:84vh;overflow-y:auto;padding:24px 26px;box-shadow:0 24px 60px rgba(24,24,27,.25);animation:fadeUp .25s ease")}
       >
         <div style={css("display:flex;align-items:center")}>
@@ -53,7 +54,7 @@ export default function TeamModal() {
 
           <div>
             <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Template</div>
-            <div style={css("display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px")}>
+            <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px")}>
               {TEAM_TEMPLATES.map((t) => {
                 const on = s.tTemplate === t.id;
                 return (
@@ -71,7 +72,7 @@ export default function TeamModal() {
               <div style={css("font-size:12px;font-weight:600;color:#3F3F46")}>Members</div>
               <div style={css("margin-left:auto;font-size:11px;color:#006AFF;font-weight:600")}>{selCount} selected</div>
             </div>
-            <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:8px")}>
+            <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 1fr;gap:8px")}>
               {agents.map((a) => {
                 const on = !!s.tSel[a.id];
                 return (

@@ -90,7 +90,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
   const shown = isUnfiled ? rootProducts : items; // real folder → its items; Unfiled → loose
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:16px;animation:fadeUp .3s ease")}>
       {/* toolbar: breadcrumb + actions */}
       <div style={css("display:flex;align-items:center;gap:12px;flex-wrap:wrap")}>
         {inFolderView && (
@@ -101,7 +101,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
             <span style={css("color:#A1A1AA")}>· {shown.length} product{shown.length === 1 ? "" : "s"}</span>
           </div>
         )}
-        <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
+        <div className="m-wrap" style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
           {isRealFolder && <Btn onClick={removeFolder} style={"color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;" + (del.armed === "f:" + folder ? "background:#FDE8E8" : "background:#fff")} styleHover={del.armed === "f:" + folder ? "background:#F9D4D4" : "background:#FEECEC"}>{del.armed === "f:" + folder ? "Delete folder?" : "Delete folder"}</Btn>}
           {!inFolderView && <Btn onClick={() => setShowFolder(true)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">New folder</Btn>}
           <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label="Import CSV" onChange={(e) => onCsv(e.target.files?.[0])} style={css("display:none")} />
@@ -145,8 +145,8 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
 
       {/* FOLDER VIEW: the open folder's (or Unfiled's) products */}
       {inFolderView && (
-        <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
-          <div style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
+        <div className="m-scroll" style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;overflow:hidden")}>
+          <div className="m-table" style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:11px 18px;font-size:11px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #ECECF1;background:#FAFAFB;gap:10px")}>
             <div>Product</div><div>Category</div><div>Price</div><div>Actions</div>
           </div>
           {loading ? (
@@ -154,7 +154,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
           ) : shown.length === 0 ? (
             <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA")}>This folder is empty. Use “Import CSV” or “+ Add product”, or move products in from the Folder column.</div>
           ) : shown.map((p) => (
-            <div key={p.id} style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
+            <div key={p.id} className="m-table" style={css("display:grid;grid-template-columns:2.4fr 1fr .8fr auto;padding:12px 18px;font-size:12.5px;border-bottom:1px solid #F4F4F6;align-items:center;gap:10px")}>
               <div style={css("font-weight:600;min-width:0")}>{p.name}<div style={css("font-size:11px;color:#A1A1AA;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{p.description || "No description"}</div>
                 {Object.keys(p.attributes || {}).length > 0 && (
                   <div style={css("display:flex;gap:5px;flex-wrap:wrap;margin-top:5px")}>

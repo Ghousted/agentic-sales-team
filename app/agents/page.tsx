@@ -20,7 +20,7 @@ export default function AgentsPage() {
   useEffect(() => { getWorkspaceStats().then((w) => setPerAgent(w.perAgent), () => {}); }, []);
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       {agents.length === 0 && (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
           <div style={css("width:52px;height:52px;border-radius:14px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>🤖</div>
@@ -28,7 +28,7 @@ export default function AgentsPage() {
           <Btn onClick={() => router.push("/create")} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first agent</Btn>
         </div>
       )}
-      <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
         {agents.map((a) => {
           const now = agentNow(a.id, live, !!s.paused[a.id]);
           const m = statusMeta(now.status);

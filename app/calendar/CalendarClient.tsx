@@ -39,9 +39,9 @@ export default function CalendarClient({ initialEvents }: { initialEvents: Meeti
   const navBtn = "width:32px;height:32px;border-radius:8px;background:#F4F4F5;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:#52525B";
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       {/* summary cards */}
-      <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
+      <div className="m-2col" style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
         {cal.summary.map((cs) => (
           <div key={cs.label} style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:18px;display:flex;align-items:center;gap:14px")}>
             <div style={css("width:40px;height:40px;border-radius:12px;background:" + cs.bg + ";display:flex;align-items:center;justify-content:center;flex:none;font-size:19px")}>{cs.emoji}</div>
@@ -52,7 +52,7 @@ export default function CalendarClient({ initialEvents }: { initialEvents: Meeti
 
       {/* schedule card */}
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px;overflow-x:auto")}>
-        <div style={css("display:flex;align-items:center;gap:14px;margin-bottom:18px")}>
+        <div className="m-wrap" style={css("display:flex;align-items:center;gap:14px;margin-bottom:18px")}>
           <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:18px;font-weight:400")}>Schedule</div>
           <div style={css("display:flex;background:#F4F4F5;border-radius:99px;padding:3px")}>
             <Box onClick={() => setView("week")} style={segBtn(isWeek)}>Week</Box>

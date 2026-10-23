@@ -62,13 +62,14 @@ function SectionTitle({ id, children }: { id: string; children: React.ReactNode 
 }
 
 export default function AgentDetail() {
-  const { s, agents, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
+  const { s, byId, togglePause, deleteAgent, saveConfig, showToast } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("overview");
   const { live, byLead } = useLiveWork();
 
-  const sel = byId(params.id) || agents[0];
+  // No fallback to another agent: Edit/Delete would act on the wrong record.
+  const sel = byId(params.id);
 
   // Editable Configuration state (role + goal), seeded from the config-applied
   // agent. Reset whenever the viewed agent changes (route stays mounted).
@@ -207,7 +208,15 @@ export default function AgentDetail() {
     if (selId) refetchDrafts(selId);
   }, [selId, refetchDrafts]);
 
-  if (!sel) return null;
+  if (!sel) return (
+    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+      <Box onClick={() => router.push("/agents")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← All agents</Box>
+      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
+        <div style={css("font-size:17px;font-weight:700")}>Agent not found</div>
+        <div style={css("font-size:13px;color:#71717A;margin-top:6px")}>This agent was deleted or the link is wrong.</div>
+      </div>
+    </div>
+  );
   const selM = statusMeta(agentNow(sel.id, live, paused).status);
 
   const caps = sel.capabilities ?? [];

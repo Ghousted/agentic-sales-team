@@ -17,6 +17,7 @@ import { matchLead } from "@/lib/ai/match";
 import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import { chainNext } from "@/lib/pod/orchestrate";
+import { jobErrorMessage } from "@/lib/jobs/errors";
 import { reapStaleJobs, withDeadline, LEAD_TIMEOUT_MS, RUN_CLAIM_BUDGET_MS, RUN_LEAD_BUDGET_MS } from "@/lib/jobs/runtime";
 
 const RUNNER_KINDS = ["outreach", "research", "qualify", "proposal", "match", "assess"];
@@ -135,7 +136,9 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
       }
     } catch (e) {
-      await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: String(e).slice(0, 500) })
+      // The error column reaches the browser: log the details, store a safe line.
+      console.error(`[jobs] ${candidate.kind} job ${candidate.id} failed:`, e);
+      await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: jobErrorMessage(candidate.kind, e) })
         .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
     }
 

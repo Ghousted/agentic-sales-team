@@ -2,6 +2,10 @@
 /* --text-muted: tertiary text (timestamps, hints, empty states). #71717A is 4.8:1 on white and 4.6:1 on
    #FAFAFB, so it passes WCAG AA; the old #A1A1AA was 2.6:1. */
 :root { --text-muted: #71717A; }
+/* --app-h: the visible viewport height. On iOS Safari 100vh is taller than the visible area, so the
+   bottom of the app (the chat composer) sat under the browser toolbar; 100dvh follows the toolbar. */
+:root { --app-h: 100vh; }
+@supports (height: 100dvh) { :root { --app-h: 100dvh; } }
 html, body { margin: 0; padding: 0; background: #FAFAFB; font-family: Inter, system-ui, sans-serif; color: #18181B; }
 * { box-sizing: border-box; }
 input, textarea, select, button { font-family: Inter, system-ui, sans-serif; }

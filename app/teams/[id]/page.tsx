@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta, TEAMS_BASE } from "@/lib/data";
 import { av, chip } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import Modal from "@/components/Modal";
 import { templateById, type Capability } from "@/lib/agentTypes";
 import { listLeadsForAgents } from "@/lib/leads/actions";
 import type { LeadDTO } from "@/lib/leads/types";
@@ -51,7 +53,7 @@ export default function TeamDetail() {
   }, [memberIds.join(","), team?.id]);
 
   if (!team) return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>
       <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:32px 24px;text-align:center")}>
         <div style={css("font-size:17px;font-weight:700")}>Team not found</div>
@@ -99,17 +101,17 @@ export default function TeamDetail() {
   ];
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       <Box onClick={() => router.push("/dashboard")} style="font-size:12px;color:#71717A;cursor:pointer" styleHover="color:#006AFF">← Dashboard</Box>
 
-      <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
+      <div className="m-wrap" style={css("background:#fff;border:1px solid #ECECF1;border-radius:20px;padding:22px 24px;display:flex;align-items:center;gap:16px")}>
         <div style={css("width:52px;height:52px;border-radius:14px;background:" + team.iconBg + ";display:flex;align-items:center;justify-content:center;font-size:24px;flex:none")}>{team.icon}</div>
         <div style={css("min-width:0")}>
           <div style={css("font-size:19px;font-weight:700")}>{team.name}</div>
           <div style={css("font-size:13px;color:#71717A;margin-top:2px")}>{teamSubtitle(team)}</div>
           <div style={css("font-size:12px;color:#006AFF;background:#EAF2FF;border-radius:99px;padding:3px 12px;display:inline-block;margin-top:8px;font-weight:600")}>{members.length} member{members.length === 1 ? "" : "s"} · {workingCount} working now</div>
         </div>
-        <div style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
+        <div className="m-wrap m-fluid" style={css("margin-left:auto;display:flex;gap:8px;flex:none")}>
           <Btn onClick={openEdit} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Edit</Btn>
           <Btn onClick={openAdd} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">+ Add agents</Btn>
           {!isSeedTeam && (confirmDel ? (<>
@@ -122,7 +124,7 @@ export default function TeamDetail() {
       </div>
 
       {/* KPIs */}
-      <div style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
+      <div className="m-2col" style={css("display:grid;grid-template-columns:repeat(4,1fr);gap:14px")}>
         {kpis.map(([l, v]) => (
           <div key={l} style={css("background:#fff;border:1px solid #ECECF1;border-radius:14px;padding:16px 18px")}>
             <div style={css("font-size:11.5px;color:#71717A")}>{l}</div>
@@ -161,38 +163,38 @@ export default function TeamDetail() {
         );
       })()}
 
-      <div style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start")}>
         <div style={css("display:flex;flex-direction:column;gap:14px")}>
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Members</div>
             <div style={css("display:flex;flex-direction:column;gap:6px")}>
               {members.length === 0 ? (
-                <div style={css("font-size:12.5px;color:#A1A1AA;padding:8px 10px")}>No agents on this team yet. Use “Add agents” to build it out.</div>
+                <div style={css("font-size:12.5px;color:var(--text-muted);padding:8px 10px")}>No agents on this team yet. Use “Add agents” to build it out.</div>
               ) : members.map((a) => {
                 const m = statusMeta(agentNow(a!.id, live, !!s.paused[a!.id]).status);
                 return (
                   <Box key={a!.id} noButton onClick={() => router.push("/agents/" + a!.id)} style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer" styleHover="background:#FAFAFB">
                     <div style={css(av(a!, 34))}>{a!.initials}</div>
-                    <div><div style={css("font-size:13px;font-weight:600")}>{a!.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a!.role}</div></div>
+                    <div><Link href={"/agents/" + a!.id} onClick={(e) => e.stopPropagation()} style={css("display:block;font-size:13px;font-weight:600;color:inherit;text-decoration:none")}>{a!.name}</Link><div style={css("font-size:11.5px;color:#71717A")}>{a!.role}</div></div>
                     <span style={css("display:inline-flex;align-items:center;gap:5px;margin-left:10px;" + chip(m.bg, m.color))}><span style={css("width:6px;height:6px;border-radius:50%;background:" + m.dot)} />{m.label}</span>
                     <div style={css("margin-left:auto;font-size:12px;color:#71717A")}>{teamLeads.filter((l) => l.agentId === a!.id).length} leads</div>
-                    <Btn onClick={(e) => { e.stopPropagation(); removeTeamMember(team.id, a!.id); }} aria-label={"Remove " + a!.name} title="Remove from team" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#A1A1AA;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none" styleHover="background:#FEECEC;color:#B91C1C">✕</Btn>
+                    <Btn onClick={(e) => { e.stopPropagation(); removeTeamMember(team.id, a!.id); }} aria-label={"Remove " + a!.name} title="Remove from team" style="width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none" styleHover="background:#FEECEC;color:#B91C1C">✕</Btn>
                   </Box>
                 );
               })}
             </div>
           </div>
           <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:16px 18px")}>
-            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Team leads <span style={css("font-size:12px;font-weight:400;color:#A1A1AA")}>· {teamLeads.length}</span></div>
+            <div style={css("font-size:13.5px;font-weight:700;margin-bottom:12px")}>Team leads <span style={css("font-size:12px;font-weight:400;color:var(--text-muted)")}>· {teamLeads.length}</span></div>
             {teamLeads.length === 0 ? (
-              <div style={css("font-size:12.5px;color:#A1A1AA;padding:6px 2px")}>No leads in this team’s book yet.</div>
+              <div style={css("font-size:12.5px;color:var(--text-muted);padding:6px 2px")}>No leads in this team’s book yet.</div>
             ) : (
               <div style={css("display:flex;flex-direction:column")}>
                 {teamLeads.slice(0, 12).map((l) => {
                   const a = byId(l.agentId);
                   return (
                     <div key={l.id} style={css("display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #F4F4F6")}>
-                      <div style={css("font-size:12.5px;font-weight:600;min-width:0;flex:1")}>{l.name}<span style={css("font-size:11px;color:#A1A1AA;font-weight:400")}>{l.company ? " · " + l.company : ""}</span>
+                      <div style={css("font-size:12.5px;font-weight:600;min-width:0;flex:1")}>{l.name}<span style={css("font-size:11px;color:var(--text-muted);font-weight:400")}>{l.company ? " · " + l.company : ""}</span>
                         {(byLead[l.id] || l.workedBy.length > 0) && (
                           <div style={css("display:flex;align-items:center;gap:6px;margin-top:3px")}>
                             <LivePulse info={byLead[l.id]} />
@@ -237,7 +239,7 @@ export default function TeamDetail() {
             <div style={css("font-size:13.5px;font-weight:700;margin-bottom:10px")}>Recent activity</div>
             <div style={css("display:flex;flex-direction:column;gap:9px")}>
               {recent.length === 0 ? (
-                <div style={css("font-size:12px;color:#A1A1AA")}>No activity yet.</div>
+                <div style={css("font-size:12px;color:var(--text-muted)")}>No activity yet.</div>
               ) : recent.map((f, i) => <div key={f.createdAt + i} style={css("font-size:12px;color:#3F3F46;display:flex;gap:8px")}><span style={css("color:#006AFF")}>•</span><span><b>{byId(f.agentId)?.name ?? "Agent"}</b> {f.text}</span></div>)}
             </div>
           </div>
@@ -246,22 +248,21 @@ export default function TeamDetail() {
 
       {/* Add-agents picker */}
       {showAdd && (
-        <div onClick={() => setShowAdd(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:440px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+        <Modal onClose={() => setShowAdd(false)} labelledBy="add-agents-title" style="background:#fff;border-radius:18px;width:100%;max-width:440px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(24,24,27,.28)">
             <div style={css("padding:18px 20px;border-bottom:1px solid #F0F0F3")}>
-              <div style={css("font-size:15px;font-weight:700")}>Add agents to {team.name}</div>
+              <h2 id="add-agents-title" style={css("margin:0;font-size:15px;font-weight:700")}>Add agents to {team.name}</h2>
               <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Pick from agents not already on this team.</div>
             </div>
             <div style={css("flex:1;overflow-y:auto;padding:8px")}>
               {candidates.length === 0 ? (
-                <div style={css("padding:20px;font-size:12.5px;color:#A1A1AA;text-align:center")}>Every agent is already on this team.</div>
+                <div style={css("padding:20px;font-size:12.5px;color:var(--text-muted);text-align:center")}>Every agent is already on this team.</div>
               ) : candidates.map((a) => {
                 const on = !!pick[a.id];
                 return (
-                  <Box key={a.id} onClick={() => setPick((p) => ({ ...p, [a.id]: !p[a.id] }))} style={"display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" + (on ? "background:#EAF2FF" : "")} styleHover="background:#FAFAFB">
+                  <Box key={a.id} onClick={() => setPick((p) => ({ ...p, [a.id]: !p[a.id] }))} aria-pressed={on} style={"display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" + (on ? "background:#EAF2FF" : "")} styleHover="background:#FAFAFB">
                     <div style={css(av(a, 32))}>{a.initials}</div>
                     <div style={css("min-width:0")}><div style={css("font-size:13px;font-weight:600")}>{a.name}</div><div style={css("font-size:11.5px;color:#71717A")}>{a.role}</div></div>
-                    <span style={css("margin-left:auto;width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
+                    <span aria-hidden="true" style={css("margin-left:auto;width:20px;height:20px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid " + (on ? "#006AFF" : "#D4D4D8") + ";background:" + (on ? "#006AFF" : "#fff"))}>
                       {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                     </span>
                   </Box>
@@ -274,42 +275,39 @@ export default function TeamDetail() {
                 Add{chosen.length ? " " + chosen.length : ""}
               </Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit-team modal */}
       {showEdit && (
-        <div onClick={() => setShowEdit(false)} style={css("position:fixed;inset:0;background:rgba(24,24,27,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease")}>
-          <div onClick={(e) => e.stopPropagation()} style={css("background:#fff;border-radius:18px;width:100%;max-width:460px;max-height:84vh;overflow-y:auto;box-shadow:0 24px 60px rgba(24,24,27,.28)")}>
+        <Modal onClose={() => setShowEdit(false)} labelledBy="edit-team-title" style="background:#fff;border-radius:18px;width:100%;max-width:460px;max-height:84vh;overflow-y:auto;box-shadow:0 24px 60px rgba(24,24,27,.28)">
             <div style={css("padding:18px 22px;border-bottom:1px solid #F0F0F3")}>
-              <div style={css("font-size:15px;font-weight:700")}>Edit team</div>
+              <h2 id="edit-team-title" style={css("margin:0;font-size:15px;font-weight:700")}>Edit team</h2>
               <div style={css("font-size:12px;color:#71717A;margin-top:3px")}>Change the name, icon, or shared goal.</div>
             </div>
             <div style={css("padding:20px 22px;display:flex;flex-direction:column;gap:16px")}>
               <div>
-                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Team name</div>
-                <input aria-label="Team name" value={eName} onChange={(e) => setEName(e.target.value)} placeholder="e.g. EMEA Enterprise" style={css("width:100%;border:none;background:#F2F2F2;border-radius:12px;padding:14px 15px;font-size:14px")} />
+                <label htmlFor="edit-team-name" style={css("display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Team name</label>
+                <input id="edit-team-name" value={eName} onChange={(e) => setEName(e.target.value)} placeholder="e.g. EMEA Enterprise" style={css("width:100%;border:none;background:#F2F2F2;border-radius:12px;padding:14px 15px;font-size:14px")} />
               </div>
               <div>
-                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Icon</div>
-                <div style={css("display:flex;gap:8px")}>
+                <div id="edit-team-icon" style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:8px")}>Icon</div>
+                <div role="group" aria-labelledby="edit-team-icon" style={css("display:flex;gap:8px")}>
                   {ICONS.map((ic) => (
-                    <Box key={ic} onClick={() => setEIcon(ic)} aria-label={"Icon " + ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (eIcon === ic ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">{ic}</Box>
+                    <Box key={ic} onClick={() => setEIcon(ic)} aria-label={"Icon " + ic} aria-pressed={eIcon === ic} style={"width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .12s;border:2px solid " + (eIcon === ic ? "#006AFF;background:#F2F7FF" : "#ECECF1;background:#fff")} styleHover="border-color:#CFE0FF">{ic}</Box>
                   ))}
                 </div>
               </div>
               <div>
-                <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Shared goal</div>
-                <textarea aria-label="Shared goal" value={eGoal} onChange={(e) => setEGoal(e.target.value)} placeholder="e.g. Book 40 meetings this quarter in EMEA." style={css("width:100%;min-height:70px;border:1px solid #E4E4E7;border-radius:12px;padding:11px 13px;font-size:13px;line-height:1.55;resize:vertical;color:#18181B")} />
+                <label htmlFor="edit-team-goal" style={css("display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Shared goal</label>
+                <textarea id="edit-team-goal" value={eGoal} onChange={(e) => setEGoal(e.target.value)} placeholder="e.g. Book 40 meetings this quarter in EMEA." style={css("width:100%;min-height:70px;border:1px solid #E4E4E7;border-radius:12px;padding:11px 13px;font-size:13px;line-height:1.55;resize:vertical;color:#18181B")} />
               </div>
             </div>
             <div style={css("padding:14px 22px;border-top:1px solid #F0F0F3;display:flex;gap:10px;justify-content:flex-end")}>
               <Btn onClick={() => setShowEdit(false)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Cancel</Btn>
               <Btn onClick={saveEdit} style="color:#fff;border:none;border-radius:99px;padding:9px 20px;font-size:12.5px;font-weight:700;background:#006AFF;cursor:pointer" styleHover="background:#0052CC">Save changes</Btn>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

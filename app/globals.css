@@ -1,4 +1,7 @@
 /* Base + keyframes ported from the v5 prototype's <style> block. */
+/* --text-muted: tertiary text (timestamps, hints, empty states). #71717A is 4.8:1 on white and 4.6:1 on
+   #FAFAFB, so it passes WCAG AA; the old #A1A1AA was 2.6:1. */
+:root { --text-muted: #71717A; }
 html, body { margin: 0; padding: 0; background: #FAFAFB; font-family: Inter, system-ui, sans-serif; color: #18181B; }
 * { box-sizing: border-box; }
 input, textarea, select, button { font-family: Inter, system-ui, sans-serif; }
@@ -8,7 +11,8 @@ input:focus, textarea:focus { outline: 2px solid #CFE0FF; outline-offset: 0; }
 
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-@keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+/* The toast is centred with translateX(-50%), so the keyframes must keep that shift or it slides in off-centre. */
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 @keyframes dashMove { to { stroke-dashoffset: -20; } }
@@ -23,11 +27,44 @@ input:focus, textarea:focus { outline: 2px solid #CFE0FF; outline-offset: 0; }
 @keyframes badgePopB { from { opacity: 0; transform: translateY(6px) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes rise { 0% { transform: translateY(30px); opacity: 0; } 25% { opacity: .7; } 75% { opacity: .4; } 100% { transform: translateY(-60px); opacity: 0; } }
 
+/* ---- Small screens (max-width: 767px, the same as MOBILE_QUERY in lib/useMediaQuery.ts) ----
+   Pages use inline styles, so these overrides need !important. Desktop is untouched.
+   m-only:    shown only on small screens (the header menu button)
+   m-hide:    hidden on small screens (the docked sidebar and rail)
+   m-page:    page padding
+   m-stack:   grid becomes one column
+   m-2col:    grid becomes two columns
+   m-scroll:  wide table scrolls sideways; its rows get m-table so they keep a usable width
+   m-modal:   modal card fills the screen width
+   m-wrap:    flex row wraps
+   m-fluid:   flex item may shrink and grow (with m-wrap, its buttons wrap)
+   m-header, m-icon-btn: the app header and its "Add agent" button (icon only)
+   m-wiz-*:   the full-screen create wizard (title, body, card, stepper line) */
+.m-only { display: none !important; }
+@media (max-width: 767px) {
+  .m-only { display: flex !important; }
+  .m-hide { display: none !important; }
+  .m-page { padding: 16px 14px !important; }
+  .m-stack { grid-template-columns: minmax(0, 1fr) !important; }
+  .m-2col { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .m-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .m-table { min-width: 640px; }
+  .m-modal { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important; padding: 18px 16px !important; }
+  .m-wrap { flex-wrap: wrap !important; }
+  .m-fluid { flex: 1 1 auto !important; min-width: 0; }
+  .m-header { padding: 0 12px !important; gap: 6px !important; }
+  .m-icon-btn { width: 36px; padding: 0 !important; justify-content: center; }
+  .m-wiz-title { font-size: 18px !important; white-space: nowrap; }
+  .m-wiz-body { padding: 16px 12px !important; gap: 20px !important; }
+  .m-wiz-card { padding: 20px 16px !important; gap: 20px !important; }
+  .m-step-line { width: 20px !important; }
+}
+
 button { transition: transform .12s ease, background .15s ease, box-shadow .15s ease; }
 button:active { transform: scale(.96); }
 [role="button"] { cursor: pointer; }
 /* Keyboard focus ring for buttons and role="button" controls */
-button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
+button:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible, a:focus-visible { outline: 2px solid #006AFF; outline-offset: 2px; }
 
 /* ---- Redesign: icon font (Lucide subset from the Claude Design file) ---- */
 @font-face { font-family: "lucide"; src: url("/fonts/lucide.woff2") format("woff2"); font-display: block; }

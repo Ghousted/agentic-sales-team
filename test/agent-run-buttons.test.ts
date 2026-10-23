@@ -16,7 +16,7 @@ describe("agent page run buttons (T28)", () => {
 
   it("the outreach enqueue result is checked", () => {
     expect(src).toMatch(/enqueueAndRun\(await enqueueOutreachJob\(/);
-    expect(src).toMatch(/if \("error" in res\) \{ showToast\(res\.error\); return false; \}/);
+    expect(src).toMatch(/if \("error" in res\) \{ showError\(res\.error\); return false; \}/);
   });
 
   it("meeting type saves on blur, not on every keystroke", () => {

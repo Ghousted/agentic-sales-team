@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useLiveWork } from "@/lib/useLiveWork";
@@ -20,7 +21,7 @@ export default function AgentsPage() {
   useEffect(() => { getWorkspaceStats().then((w) => setPerAgent(w.perAgent), () => {}); }, []);
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
       {agents.length === 0 && (
         <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:44px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center")}>
           <div style={css("width:52px;height:52px;border-radius:14px;background:#EAF2FF;display:flex;align-items:center;justify-content:center;font-size:24px")}>🤖</div>
@@ -28,7 +29,7 @@ export default function AgentsPage() {
           <Btn onClick={() => router.push("/create")} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first agent</Btn>
         </div>
       )}
-      <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:14px")}>
         {agents.map((a) => {
           const now = agentNow(a.id, live, !!s.paused[a.id]);
           const m = statusMeta(now.status);
@@ -44,7 +45,7 @@ export default function AgentsPage() {
               <div style={css("display:flex;align-items:center;gap:12px")}>
                 <div style={css(av(a, 42))}>{a.initials}</div>
                 <div style={css("min-width:0")}>
-                  <div style={css("font-size:14px;font-weight:700")}>{a.name}</div>
+                  <Link href={"/agents/" + a.id} onClick={(e) => e.stopPropagation()} style={css("display:block;font-size:14px;font-weight:700;color:inherit;text-decoration:none")}>{a.name}</Link>
                   <div style={css("font-size:12px;color:#71717A")}>{a.role}</div>
                 </div>
                 <span style={css(statusPill(m))}>
@@ -56,7 +57,7 @@ export default function AgentsPage() {
                 {now.task}
               </div>
               <div style={css("display:flex;align-items:center;gap:12px;margin-top:14px")}>
-                <div style={css("font-size:11px;color:#A1A1AA;line-height:1.5")}>
+                <div style={css("font-size:11px;color:var(--text-muted);line-height:1.5")}>
                   {out ? <><b style={css("color:#18181B")}>{out.leadsWorked}</b> leads · <b style={css("color:#18181B")}>{out.sent}</b> sent</> : "No work yet"}
                 </div>
                 <div style={css("margin-left:auto;display:flex;gap:6px")}>

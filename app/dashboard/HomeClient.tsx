@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { statusMeta } from "@/lib/data";
@@ -8,6 +8,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import type { WorkspaceStats, ActivityItem } from "@/lib/workspace/stats";
 import { useLiveWork } from "@/lib/useLiveWork";
 import { agentNow, liveAgentCount, teamSubtitle } from "@/lib/agents/derive";
+import { greetingFor, hubScaleFor } from "@/lib/greeting";
 
 const hubTypes: Record<string, string> = { sk: "meeting", mt: "email", ew: "research", rp: "writing", al: "call", nc: "analytics", ps: "idle", lm: "alert" };
 const hubIcons: Record<string, [string, string, string]> = {
@@ -20,7 +21,13 @@ const hubIcons: Record<string, [string, string, string]> = {
 export default function HomeClient({ initialStats, initialActs }: { initialStats: WorkspaceStats | null; initialActs: ActivityItem[] }) {
   const { s, set, agents, teams, byId } = useApp();
   const router = useRouter();
-  const [dims, setDims] = useState({ w: 1280, h: 800 });
+  // The hub card's measured size; null until mounted.
+  const hubRef = useRef<HTMLDivElement>(null);
+  const [card, setCard] = useState<{ w: number; h: number } | null>(null);
+  // Date-dependent text is computed after mount so server and client markup match.
+  const [clock, setClock] = useState<{ greeting: string; month: string } | null>(null);
+  // Badge re-pop tick. Local to the dashboard so it doesn't re-render the app.
+  const [tick, setTick] = useState(0);
   const { live } = useLiveWork();
   const ws = initialStats;
   const acts = initialActs;
@@ -28,14 +35,22 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
   const maxOut = Math.max(1, ...(ws?.perAgent ?? []).map((p) => p.leadsWorked));
 
   useEffect(() => {
-    const on = () => setDims({ w: window.innerWidth, h: window.innerHeight });
+    const el = hubRef.current;
+    if (!el) return;
+    const on = () => setCard({ w: el.clientWidth, h: el.clientHeight });
     on();
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
-  const ct = s.countT;
-  const tick = s.hubTick;
+  useEffect(() => {
+    const now = new Date();
+    setClock({ greeting: greetingFor(now.getHours()), month: now.toLocaleString("en-US", { month: "long" }).toUpperCase() });
+    const t = setInterval(() => setTick((n) => n + 1), 3200);
+    return () => clearInterval(t);
+  }, []);
+
   const userFirst = s.userName.split(" ")[0];
 
   const hubMembers = (s.hubTeam === "all" ? agents.slice(0, 8) : ((teams.find((t) => t.id === s.hubTeam) || teams[0])?.members ?? []).map((id) => byId(id))).filter(Boolean) as typeof agents;
@@ -55,27 +70,25 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
   const hubWorking = ws?.activeAgents ?? 0;
   const leadsWorked = ws?.leadsWorked ?? 0;
   const tasksRunning = ws?.tasksRunning ?? 0;
-  const monthLabel = new Date().toLocaleString("en-US", { month: "long" }).toUpperCase();
+  const monthLabel = clock?.month ?? "THIS MONTH";
 
   const actLine = (f?: ActivityItem) => (f ? (byId(f.agentId)?.name ?? "Agent") + " " + f.text : "");
   const hubLive = actLine(acts[0]).slice(0, 90);
   const hubLive2 = actLine(acts[1]).slice(0, 90);
 
-  const sbW = s.sidebarOpen ? 224 : 70;
-  const hubCardW = dims.w - sbW - 52 - 2;
-  const hubScale = Math.max(0.7, Math.min((dims.h - 250) / 524, (hubCardW - 40) / 760, 1.45));
+  const hubScale = card ? hubScaleFor(card.w, card.h) : 1;
 
   const teamPills = [{ id: "all", label: "Everyone" }].concat(teams.map((t) => ({ id: t.id, label: t.name })));
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
-      <div style={css("display:flex;align-items:baseline;gap:12px")}>
-        <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:24px;font-weight:400;letter-spacing:-.01em;white-space:nowrap")}>Good morning, {userFirst}!</div>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;animation:fadeUp .3s ease")}>
+      <div className="m-wrap" style={css("display:flex;align-items:baseline;gap:12px")}>
+        <div style={css("font-family:'General Sans',Inter,sans-serif;font-size:24px;font-weight:400;letter-spacing:-.01em;white-space:nowrap;transition:opacity .2s;" + (clock ? "" : "opacity:0"))}>{clock?.greeting ?? "Hello"}, {userFirst}!</div>
         <Btn onClick={() => router.push("/agents")} style="margin-left:auto;background:#fff;color:#344054;border:1px solid #D0D5DD;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#F9FAFB">All agents</Btn>
         <Btn onClick={() => set({ showTeamModal: true })} style="background:#18181B;color:#fff;border:none;border-radius:99px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#3F3F46">+ New team</Btn>
       </div>
 
-      <div style={css("position:relative;background:radial-gradient(900px 520px at 50% 38%,#123A8C,#07183F 75%);border:1px solid #1A3A80;border-radius:24px;height:calc(100vh - 178px);min-height:540px;overflow:hidden;box-shadow:0 20px 50px rgba(7,24,63,.3)")}>
+      <div ref={hubRef} style={css("position:relative;background:radial-gradient(900px 520px at 50% 38%,#123A8C,#07183F 75%);border:1px solid #1A3A80;border-radius:24px;height:calc(100vh - 178px);min-height:540px;overflow:hidden;box-shadow:0 20px 50px rgba(7,24,63,.3)")}>
         <div style={css("position:absolute;top:16px;left:20px;right:150px;display:flex;gap:8px;z-index:3;flex-wrap:wrap")}>
           {teamPills.map((p) => (
             <Box key={p.id} onClick={() => set({ hubTeam: p.id })} style={"font-size:11.5px;font-weight:600;border-radius:99px;padding:5px 13px;cursor:pointer;transition:all .12s;backdrop-filter:blur(6px);" + (s.hubTeam === p.id ? "background:#fff;color:#0B2A6B;border:1px solid #fff" : "background:rgba(255,255,255,.07);color:#C7D7F5;border:1px solid rgba(255,255,255,.16)")} styleHover="border-color:#CFE0FF">{p.label}</Box>
@@ -142,8 +155,8 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
 
         {/* live activity labels */}
         <div style={css("position:absolute;bottom:16px;left:20px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;z-index:3;max-width:70%")}>
-          <div style={css("display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#C7D7F5;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:99px;padding:5px 13px;backdrop-filter:blur(8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;opacity:.75")}><span style={css("color:#7E9CD6")}>✦</span>{hubLive2}</div>
-          <div style={css("display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#DCE7FF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:5px 13px;backdrop-filter:blur(8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%")}><span style={css("color:#60A5FA")}>✦</span>{hubLive}</div>
+          {hubLive2 && <div style={css("display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#C7D7F5;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:99px;padding:5px 13px;backdrop-filter:blur(8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;opacity:.75")}><span style={css("color:#7E9CD6")}>✦</span>{hubLive2}</div>}
+          {hubLive && <div style={css("display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:#DCE7FF;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:5px 13px;backdrop-filter:blur(8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%")}><span style={css("color:#60A5FA")}>✦</span>{hubLive}</div>}
         </div>
       </div>
 
@@ -155,7 +168,7 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
           <Btn onClick={() => set({ showTeamModal: true })} style="margin-top:6px;background:#006AFF;color:#fff;border:none;border-radius:99px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#0052CC">+ Create your first team</Btn>
         </div>
       ) : (
-      <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
+      <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 1fr;gap:14px")}>
         {teams.map((t) => {
           const avatars = t.members.slice(0, 3).map((id) => byId(id)).filter(Boolean);
           return (
@@ -168,9 +181,9 @@ export default function HomeClient({ initialStats, initialActs }: { initialStats
                 </div>
               </div>
               <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px")}>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
-                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:#A1A1AA")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{liveAgentCount(live, t.members)}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Leads</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.reduce((n, id) => n + (paMap.get(id)?.leadsWorked ?? 0), 0)}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Members</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{t.members.length}</div></div>
+                <div style={css("background:#FAFAFB;border-radius:10px;padding:10px 12px")}><div style={css("font-size:10.5px;color:var(--text-muted)")}>Working</div><div style={css("font-size:17px;font-weight:700;margin-top:2px")}>{liveAgentCount(live, t.members)}</div></div>
               </div>
             </Box>
           );

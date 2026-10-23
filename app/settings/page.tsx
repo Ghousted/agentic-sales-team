@@ -15,16 +15,16 @@ export default function SettingsPage() {
     updateSettings(patch).catch((e) => console.error("[settings] persist failed:", e));
 
   return (
-    <div style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;max-width:680px;animation:fadeUp .3s ease")}>
+    <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px;max-width:680px;animation:fadeUp .3s ease")}>
       <div style={css("background:#fff;border:1px solid #ECECF1;border-radius:16px;padding:20px 22px;display:flex;flex-direction:column;gap:16px")}>
         <div style={css("font-size:13.5px;font-weight:700")}>Workspace</div>
         <div>
-          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Workspace name</div>
-          <input aria-label="Workspace name" value={s.workspaceName} onChange={(e) => set({ workspaceName: e.target.value })} onBlur={(e) => persist({ workspaceName: e.target.value })} style={css(inputStyle)} />
+          <label htmlFor="settings-workspace-name" style={css("display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Workspace name</label>
+          <input id="settings-workspace-name" value={s.workspaceName} onChange={(e) => set({ workspaceName: e.target.value })} onBlur={(e) => persist({ workspaceName: e.target.value })} style={css(inputStyle)} />
         </div>
         <div>
-          <div style={css("font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Your name</div>
-          <input aria-label="Your name" value={s.userName} onChange={(e) => set({ userName: e.target.value })} onBlur={(e) => persist({ name: e.target.value })} style={css(inputStyle)} />
+          <label htmlFor="settings-your-name" style={css("display:block;font-size:12px;font-weight:600;color:#3F3F46;margin-bottom:6px")}>Your name</label>
+          <input id="settings-your-name" value={s.userName} onChange={(e) => set({ userName: e.target.value })} onBlur={(e) => persist({ name: e.target.value })} style={css(inputStyle)} />
         </div>
       </div>
     </div>

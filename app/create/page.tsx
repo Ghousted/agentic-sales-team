@@ -48,10 +48,10 @@ function Stepper({ step }: { step: number }) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
                 ) : (i + 1)}
               </div>
-              <div style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#006AFF" : "font-weight:500;color:#465668"))}>{label}</div>
+              <div className="m-hide" style={css("font-size:13px;white-space:nowrap;" + (cur || done ? "font-weight:700;color:#006AFF" : "font-weight:500;color:#465668"))}>{label}</div>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={css("width:84.75px;height:32px;display:flex;align-items:center")}>
+              <div className="m-step-line" style={css("width:84.75px;height:32px;display:flex;align-items:center")}>
                 <div style={css("width:100%;height:2px;background:" + (i <= step ? "#006AFF" : "#a1aebe"))} />
               </div>
             )}
@@ -133,10 +133,10 @@ export default function CreatePage() {
   return (
     <div style={css("position:fixed;inset:0;background:#fafafa;z-index:40;display:flex;flex-direction:column;animation:fadeUp .3s ease")}>
       <Header onClose={() => { router.push("/agents"); reset(); }} />
-      <div style={css("flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px 120px;overflow-y:auto")}>
+      <div className="m-wiz-body" style={css("flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:32px;padding:32px 120px;overflow-y:auto")}>
         <Stepper step={step} />
 
-        <div style={css("background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(12,12,13,.05);padding:" + (step === 0 ? "40px" : "32px 40px") + ";display:flex;flex-direction:column;gap:32px;width:" + (step === 1 ? "800px" : step === 2 ? "100%" : step === 3 ? "708px" : "673px") + ";max-width:100%" + (step === 2 ? ";flex:1;min-height:0" : ""))}>
+        <div className="m-wiz-card" style={css("background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(12,12,13,.05);padding:" + (step === 0 ? "40px" : "32px 40px") + ";display:flex;flex-direction:column;gap:32px;width:" + (step === 1 ? "800px" : step === 2 ? "100%" : step === 3 ? "708px" : "673px") + ";max-width:100%" + (step === 2 ? ";flex:1;min-height:0" : ""))}>
 
           {/* ===== Step 1: Identity ===== */}
           {step === 0 && (
@@ -157,7 +157,7 @@ export default function CreatePage() {
                 <div style={css(titleStyle)}>What will this agent do?</div>
                 <div style={css(subtitleStyle)}>Pick a type. Each type has preset capabilities. Choose Custom to pick them yourself.</div>
               </div>
-              <div style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:12px")}>
+              <div className="m-stack" style={css("display:grid;grid-template-columns:repeat(3,1fr);gap:12px")}>
                 {AGENT_TYPES.map((t) => {
                   const on = s.wType === t.id;
                   const chips = t.custom ? (s.wCapabilities.length ? s.wCapabilities : ["pick capabilities"]) : t.capabilities;
@@ -178,7 +178,7 @@ export default function CreatePage() {
               {at?.custom && (
                 <div style={css("border-top:1px solid #ECECF1;padding-top:16px")}>
                   <div style={css("font-size:14px;font-weight:600;color:#414651;margin-bottom:10px")}>Capabilities</div>
-                  <div style={css("display:grid;grid-template-columns:1fr 1fr;gap:10px")}>
+                  <div className="m-stack" style={css("display:grid;grid-template-columns:1fr 1fr;gap:10px")}>
                     {CAPABILITIES.map((c) => {
                       const on = s.wCapabilities.includes(c.id);
                       return (
@@ -204,7 +204,7 @@ export default function CreatePage() {
                 <div style={css(subtitleStyle)}>Choose your agent&rsquo;s appearance.</div>
               </div>
               <div style={css("flex:1;min-height:0;display:flex;gap:80px;align-items:center")}>
-                <div style={css("flex:none;display:flex;align-items:flex-end;justify-content:center")}>
+                <div className="m-hide" style={css("flex:none;display:flex;align-items:flex-end;justify-content:center")}>
                   <div style={css(charBox(character, 320))} />
                 </div>
                 <div style={css("flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,1fr);gap:16px")}>
@@ -286,11 +286,11 @@ export default function CreatePage() {
 function Header({ onClose }: { onClose: () => void }) {
   return (
     <div style={css("position:relative;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e9eaeb;padding:16px 24px;flex:none")}>
-      <div style={css("display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;letter-spacing:-.01em;color:#101418")}>
+      <div className="m-hide" style={css("display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;letter-spacing:-.01em;color:#101418")}>
         <span style={css("width:30px;height:30px;border-radius:9px;background:url('/logo-mark.png') center/cover no-repeat")} />
         Agentic Sales Team
       </div>
-      <div style={css("position:absolute;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600;color:#000;letter-spacing:-.24px")}>Add new agent</div>
+      <div className="m-wiz-title" style={css("position:absolute;left:50%;transform:translateX(-50%);font-size:24px;font-weight:600;color:#000;letter-spacing:-.24px")}>Add new agent</div>
       <Box onClick={onClose} aria-label="Close" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#606b79;font-size:20px" styleHover="color:#181d27">✕</Box>
     </div>
   );

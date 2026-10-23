@@ -22,7 +22,7 @@ const STARTERS: { icon: string; text: string; cap: string }[] = [
 interface Slide { title: string; sub: string; alert?: boolean; teamId?: string; agents: Agent[] }
 
 export default function ChatHome() {
-  const { set, agents, teams, sendTeamChat, showToast } = useApp();
+  const { set, agents, teams, sendTeamChat, showError } = useApp();
   const router = useRouter();
   const [text, setText] = useState("");
   const [agentId, setAgentId] = useState<string>("");
@@ -77,7 +77,7 @@ export default function ChatHome() {
     if (!msg || !agent) return;
     // Agents answer in their team's chat, so the agent has to be on a team.
     const team = teamFor(agent);
-    if (!team) { showToast(first(agent) + " isn’t on a team yet. Add them to one to chat."); set({ showTeamModal: true }); return; }
+    if (!team) { showError(first(agent) + " isn’t on a team yet. Add them to one to chat."); set({ showTeamModal: true }); return; }
     set({ convId: team.id });
     sendTeamChat(team.id, "@" + first(agent) + " " + msg);
     setText("");

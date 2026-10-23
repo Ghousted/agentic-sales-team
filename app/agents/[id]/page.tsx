@@ -120,7 +120,7 @@ export default function AgentDetail() {
 
   const [agentMeetings, setAgentMeetings] = useState<MeetingDTO[]>([]);
   useEffect(() => {
-    if (selId) listMeetings().then((ms) => setAgentMeetings(ms.filter((m) => m.agentId === selId)));
+    if (selId) listMeetings(selId).then(setAgentMeetings);
   }, [selId]);
 
   // Nudge the runner after an enqueue. A refused enqueue shows its error and

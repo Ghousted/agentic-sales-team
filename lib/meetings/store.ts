@@ -86,9 +86,11 @@ export async function bookMeetingForLead(leadId: string, whenText: string, timeZ
   return { ok: true, label };
 }
 
-/** All booked meetings joined to their lead, soonest first. Session-scoped. */
-export async function listMeetings(): Promise<MeetingDTO[]> {
+/** Booked meetings joined to their lead, soonest first. Session-scoped.
+ *  With an agentId, only that agent's meetings; a malformed agentId gets none. */
+export async function listMeetings(agentId?: unknown): Promise<MeetingDTO[]> {
   if (!isDbConfigured()) return [];
+  if (agentId !== undefined && (typeof agentId !== "string" || !agentId || agentId.length > 100)) return [];
   const userId = await uid();
   if (!userId) return [];
   const rows = await getDb().select({
@@ -96,7 +98,8 @@ export async function listMeetings(): Promise<MeetingDTO[]> {
     whenAt: meetings.whenAt, whenLabel: meetings.whenLabel, createdAt: meetings.createdAt, leadName: leads.name,
   }).from(meetings)
     .innerJoin(leads, and(eq(meetings.leadId, leads.id), eq(leads.userId, userId)))
-    .where(eq(meetings.userId, userId)).orderBy(asc(meetings.whenAt));
+    .where(and(eq(meetings.userId, userId), agentId === undefined ? undefined : eq(meetings.agentId, agentId)))
+    .orderBy(asc(meetings.whenAt));
   return rows.map((r) => ({
     id: r.id, agentId: r.agentId, leadId: r.leadId, leadName: r.leadName, title: r.title,
     whenAt: r.whenAt.toISOString(), whenLabel: r.whenLabel, createdAt: r.createdAt.toISOString(),

@@ -9,11 +9,13 @@ import type { WorkspaceStats } from "@/lib/workspace/stats";
 import { statusMeta } from "@/lib/data";
 import { av, statusPill } from "@/lib/visuals";
 import { css, Box, Btn } from "@/components/primitives";
+import { useConfirmClick } from "@/lib/useConfirmClick";
 
 export default function AgentsPage() {
   const { s, agents, deleteAgent } = useApp();
   const router = useRouter();
   const { live } = useLiveWork();
+  const del = useConfirmClick();
   const [perAgent, setPerAgent] = useState<WorkspaceStats["perAgent"]>([]);
   useEffect(() => { getWorkspaceStats().then((w) => setPerAgent(w.perAgent), () => {}); }, []);
 
@@ -59,12 +61,12 @@ export default function AgentsPage() {
                 </div>
                 <div style={css("margin-left:auto;display:flex;gap:6px")}>
                   <Btn
-                    onClick={(e) => { e.stopPropagation(); deleteAgent(a.id); }}
-                    aria-label={"Delete " + a.name}
-                    style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer"
-                    styleHover="background:#FEECEC"
+                    onClick={(e) => { e.stopPropagation(); if (del.confirm(a.id)) deleteAgent(a.id); }}
+                    aria-label={(del.armed === a.id ? "Confirm delete " : "Delete ") + a.name}
+                    style={"color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;" + (del.armed === a.id ? "background:#FDE8E8" : "background:#fff")}
+                    styleHover={del.armed === a.id ? "background:#F9D4D4" : "background:#FEECEC"}
                   >
-                    Delete
+                    {del.armed === a.id ? "Delete?" : "Delete"}
                   </Btn>
                   <Btn
                     onClick={(e) => { e.stopPropagation(); router.push("/agents/" + a.id); }}

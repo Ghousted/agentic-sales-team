@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import { css, Box, Btn } from "@/components/primitives";
 import { chip } from "@/lib/visuals";
+import { useConfirmClick } from "@/lib/useConfirmClick";
 import {
   listProducts, addProduct, deleteProduct, setProductFolder, importProductsCsv,
   listFolders, addFolder, deleteFolder,
@@ -25,6 +26,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
   const [form, setForm] = useState({ name: "", category: "", price: "", description: "" });
   const [folderName, setFolderName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const del = useConfirmClick(); // two-click confirm, keys "f:<folder>" / "p:<product>"
 
   // Root + Unfiled both need the full list (Unfiled filters to loose products client-side).
   const targetFolder = folder === UNFILED ? null : folder;
@@ -68,11 +70,15 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
 
   const removeFolder = async () => {
     if (!folder || folder === UNFILED) return; // Unfiled is virtual. You cannot delete it.
+    if (!del.confirm("f:" + folder)) return;
     await deleteFolder(folder);
     showToast("Folder deleted"); setFolder(null);
   };
 
-  const onDelete = async (id: string, name: string) => { await deleteProduct(id); showToast(name + " deleted"); refresh(); };
+  const onDelete = async (id: string, name: string) => {
+    if (!del.confirm("p:" + id)) return;
+    await deleteProduct(id); showToast(name + " deleted"); refresh();
+  };
   const onMove = async (id: string, fid: string) => { await setProductFolder(id, fid || null); refresh(); };
 
   const isUnfiled = folder === UNFILED;
@@ -96,7 +102,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
           </div>
         )}
         <div style={css("margin-left:auto;display:flex;gap:8px;align-items:center")}>
-          {isRealFolder && <Btn onClick={removeFolder} style="background:#fff;color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#FEECEC">Delete folder</Btn>}
+          {isRealFolder && <Btn onClick={removeFolder} style={"color:#B91C1C;border:1px solid #F3C7C7;border-radius:99px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer;" + (del.armed === "f:" + folder ? "background:#FDE8E8" : "background:#fff")} styleHover={del.armed === "f:" + folder ? "background:#F9D4D4" : "background:#FEECEC"}>{del.armed === "f:" + folder ? "Delete folder?" : "Delete folder"}</Btn>}
           {!inFolderView && <Btn onClick={() => setShowFolder(true)} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">New folder</Btn>}
           <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label="Import CSV" onChange={(e) => onCsv(e.target.files?.[0])} style={css("display:none")} />
           <Btn onClick={() => fileRef.current?.click()} style="background:#F4F4F5;color:#3F3F46;border:none;border-radius:99px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer" styleHover="background:#E4E4E7">Import CSV</Btn>
@@ -165,7 +171,7 @@ export default function ProductsClient({ initialProducts, initialFolders }: { in
                   <option value="">Move… (no folder)</option>
                   {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
-                <Btn onClick={() => onDelete(p.id, p.name)} style="border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;background:#F4F4F5;color:#B91C1C" styleHover="background:#FEECEC">Delete</Btn>
+                <Btn onClick={() => onDelete(p.id, p.name)} style={"border:none;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;color:#B91C1C;" + (del.armed === "p:" + p.id ? "background:#FDE8E8" : "background:#F4F4F5")} styleHover={del.armed === "p:" + p.id ? "background:#F9D4D4" : "background:#FEECEC"}>{del.armed === "p:" + p.id ? "Delete?" : "Delete"}</Btn>
               </div>
             </div>
           ))}

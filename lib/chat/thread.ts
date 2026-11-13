@@ -110,6 +110,14 @@ export function workDoneSummary(kind: string, result: unknown): string {
 export function jobOutcomeText(kind: string, status: string, result: unknown, pod: boolean): string | null {
   if (status === "failed") return kind === "scrape" ? "That search didn't complete. Please try again." : "That run didn't complete. Please check the agent's page.";
   if (status !== "done") return null;
+  const text = doneText(kind, result, pod);
+  // Leads whose AI call failed stay for the next run. Say so, so "0 leads" is not read as "nothing to do".
+  const failed = Number((result as { failed?: unknown } | null)?.failed) || 0;
+  if (!text || failed <= 0) return text;
+  return `${text} I couldn't finish ${failed} lead${failed === 1 ? "" : "s"} because of an error. Ask me to try again.`;
+}
+
+function doneText(kind: string, result: unknown, pod: boolean): string | null {
   const r = (result ?? {}) as Record<string, number | undefined> & { leadIds?: string[] };
   const n = (k: string) => r[k] ?? 0;
   const s = (k: string) => (n(k) === 1 ? "" : "s");

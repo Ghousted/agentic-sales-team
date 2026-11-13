@@ -109,3 +109,10 @@ describe("workDoneSummary", () => {
     }
   });
 });
+
+describe("jobOutcomeText with failed leads", () => {
+  it("says how many leads failed, so 0 is not read as nothing to do", () => {
+    expect(jobOutcomeText("research", "done", { briefed: 0, failed: 2 }, false)).toBe("I've researched 0 leads. I couldn't finish 2 leads because of an error. Ask me to try again.");
+    expect(jobOutcomeText("research", "done", { briefed: 3 }, false)).toBe("I've researched 3 leads.");
+  });
+});

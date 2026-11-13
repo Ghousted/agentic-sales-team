@@ -41,10 +41,8 @@ export async function draftProposal(
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `Prospect:\n${untrusted(`Name: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}`)}` }];
-  try {
-    const r = await aiJSON<ProposalResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.5 });
-    return { title: (r.title ?? "Proposal").trim(), body: (r.body ?? "").trim(), productsUsed: Array.isArray(r.productsUsed) ? r.productsUsed : [] };
-  } catch {
-    return { title: `Proposal for ${lead.company || lead.name}`, body: `Draft proposal for ${lead.name}.`, productsUsed: products.map((p) => p.name) };
-  }
+  // A failed call throws: the runner counts the lead as failed instead of
+  // saving a one-line placeholder the user could send.
+  const r = await aiJSON<ProposalResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 900, temperature: 0.5 });
+  return { title: (r.title ?? "Proposal").trim(), body: (r.body ?? "").trim(), productsUsed: Array.isArray(r.productsUsed) ? r.productsUsed : [] };
 }

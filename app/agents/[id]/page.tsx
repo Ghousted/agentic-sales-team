@@ -192,9 +192,9 @@ export default function AgentDetail() {
   const openProfile = useCallback((url: string) => { openExternal(url); }, []);
 
   const confirmSent = useCallback(async (d: DraftDTO) => {
-    await markDraftSent(d.id);
+    if (!(await markDraftSent(d.id).catch(() => false))) showError("Couldn't mark it as sent. Please try again.");
     if (selId) refetchDrafts(selId);
-  }, [selId, refetchDrafts]);
+  }, [selId, refetchDrafts, showError]);
 
   if (!sel) return (
     <div className="m-page" style={css("padding:24px 26px;display:flex;flex-direction:column;gap:18px")}>

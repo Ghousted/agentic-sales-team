@@ -41,17 +41,17 @@ export function isStale(job: { kind: string; status: string; startedAt: Date | n
  *  that always overruns can't loop forever; a failed job no longer blocks
  *  enqueuePodStage or the scrape claim, so the user can run the stage again.
  *  The status='running' guard keeps a job that just finished as it is. */
-export async function reapStaleJobs(db: Db, userId: string | null, now = new Date()): Promise<number> {
+export async function reapStaleJobs(db: Db, userId: string | null, now = new Date()): Promise<{ id: string; userId: string; agentId: string; kind: string; params: unknown }[]> {
   const isRunning = eq(jobs.status, "running");
   const running = await db.select({ id: jobs.id, kind: jobs.kind, status: jobs.status, startedAt: jobs.startedAt })
     .from(jobs).where(userId ? and(eq(jobs.userId, userId), isRunning) : isRunning);
   const stale = running.filter((j) => isStale(j, now)).map((j) => j.id);
-  if (!stale.length) return 0;
+  if (!stale.length) return [];
   const reaped = await db.update(jobs)
     .set({ status: "failed", finishedAt: now, error: "Timed out: the run was stopped before it finished." })
     .where(and(...(userId ? [eq(jobs.userId, userId)] : []), isRunning, inArray(jobs.id, stale)))
-    .returning({ id: jobs.id });
-  return reaped.length;
+    .returning({ id: jobs.id, userId: jobs.userId, agentId: jobs.agentId, kind: jobs.kind, params: jobs.params });
+  return reaped;
 }
 
 /** Reject if `p` hasn't settled within `ms`. The underlying work isn't cancelled,

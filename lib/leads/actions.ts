@@ -57,10 +57,10 @@ export async function listDraftsForLead(leadId: string): Promise<DraftDTO[]> {
 export async function listAllDrafts(): Promise<DraftDTO[]> {
   return store.listAllDrafts();
 }
-export async function markDraftSent(draftId: string): Promise<void> {
+export async function markDraftSent(draftId: string): Promise<boolean> {
   return store.markDraftSent(draftId);
 }
-export async function discardDraft(draftId: string): Promise<void> {
+export async function discardDraft(draftId: string): Promise<boolean> {
   return store.discardDraft(draftId);
 }
 export async function clearSentDrafts(): Promise<number> {

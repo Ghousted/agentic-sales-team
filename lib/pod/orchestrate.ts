@@ -16,6 +16,7 @@ import { autoCaps } from "./autonomy";
 import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
+import { listProducts } from "@/lib/products/store";
 
 // `auto`: the capabilities the user set to Auto on the agent page (no Proceed/Cancel ask).
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[]; auto?: string[] }
@@ -104,15 +105,17 @@ export async function countPending(userId: string, agentId: string, capability: 
   return rows.length;
 }
 
-export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<void> {
+/** Queue a pod stage and post its ask. "busy" when this team already has an
+ *  active job of that kind, "paused" when the agent is paused or removed. */
+export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<"queued" | "busy" | "paused"> {
   // Don't stack duplicates: skip if this team already has an active job for this capability.
   // A 'running' job past its time limit is dead (the runner reaps it), so it doesn't count.
   const now = new Date();
   const active = await getDb().select().from(jobs)
     .where(and(eq(jobs.userId, userId), eq(jobs.kind, capability), inArray(jobs.status, ["queued", "running", "needs_approval"])));
-  if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return;
+  if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return "busy";
   const info = await agentInfo(userId, agentId);
-  if (!info) return;
+  if (!info) return "paused";
   const leadCount = await countPending(userId, agentId, capability, teamId);
   // A stage waits for the user (the ask shows Proceed/Cancel in the chat), unless
   // the agent runs it on Auto: then it is queued now and the runner picks it up.
@@ -125,6 +128,16 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
     },
   }).returning({ id: jobs.id });
   await postTeamMessage(userId, teamId, info.id, auto ? startText(capability, row.id) : askText(capability, leadCount, row.id, await userFirstName(userId)));
+  return "queued";
+}
+
+/** Tell the team that a pod stage did not finish, so the chat is not left on
+ *  "Okay, starting now." The chain stops here. */
+export async function podStageFailed(userId: string, teamId: string, kind: string, agentId: string, reason: "error" | "paused"): Promise<void> {
+  const noun = NOUN[kind] ?? kind;
+  await postTeamMessage(userId, teamId, agentId, reason === "paused"
+    ? `I'm paused, so my ${noun} run did not start. Turn me back on, then ask me again.`
+    : `My ${noun} run stopped with an error, so I stopped the chain. Ask me to try again.`);
 }
 
 /** Whether the user cancelled this team's run after `since` (when the finished
@@ -152,7 +165,7 @@ export async function nextCoverableStage(userId: string, teamId: string, complet
 
 /** After a pod stage completes, narrate the hand-off and enqueue the next stage.
  *  or, at the end of the chain, @mention the user for the final action. */
-export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[], since?: Date): Promise<void> {
+export async function chainNext(userId: string, teamId: string, completedKind: string, count = 0, ranBy?: string, leadIds?: string[], since?: Date, failed = 0): Promise<void> {
   // `since` is when the finished job was created. A run cancelled after that stops here.
   const cancelled = since ? await runCancelledSince(userId, teamId, since) : false;
   // ranBy is the agent that ran the job. It can be an agent from another team (a
@@ -170,10 +183,19 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
 
   // A stage that moved no leads forward ends the chain. The next stage has no
   // new work, so tell the user instead of running each later stage on 0 leads.
+  // Matching is the exception: outreach and proposals do not need a match.
+  let done = `I've ${donePhrase(completedKind, count)}.`;
   if (count <= 0) {
     const userName = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."} I stopped the chain here.`);
-    return;
+    if (failed > 0) {
+      await postTeamMessage(userId, teamId, finisher.id, `@${userName}, I couldn't finish ${failed} lead${failed === 1 ? "" : "s"} because of an error. Ask me to try again. I stopped the chain here.`);
+      return;
+    }
+    if (completedKind !== "match") {
+      await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."} I stopped the chain here.`);
+      return;
+    }
+    done = "I found no listings that match these leads, so I'll pass them on without matches.";
   }
 
   // Scrape → the assessor gate (the only stage that turns pending into accepted).
@@ -192,20 +214,34 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
     return;
   }
 
-  const next = await nextCoverableStage(userId, teamId, completedKind);
+  // Matching and proposals use the product catalog. With an empty catalog, skip
+  // matching and say so; stop before proposals.
+  let next = await nextCoverableStage(userId, teamId, completedKind);
+  let noCatalog: boolean | null = null;
+  const catalogEmpty = async () => (noCatalog ??= (await listProducts(userId)).length === 0);
+  if (next?.capability === "match" && await catalogEmpty()) {
+    done += " Your product catalog is empty, so I skipped matching.";
+    next = await nextCoverableStage(userId, teamId, "match");
+  }
+  if (next?.capability === "proposal" && await catalogEmpty()) {
+    const userName = await userFirstName(userId);
+    await postTeamMessage(userId, teamId, finisher.id, `${done} @${userName}, your product catalog is empty, so I can't write proposals. Add products on the Products page.`);
+    return;
+  }
   if (next) {
     const info = await agentInfo(userId, next.agentId);
     if (info) {
       // An agent that also covers the next stage says what it does next instead
       // of @mentioning itself.
-      const handoff = info.id === finisher.id
-        ? `Next, I'll do the ${NOUN[next.capability] ?? next.capability}.`
-        : `@${first(info)}, please do the ${NOUN[next.capability] ?? next.capability}.`;
-      await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. ${handoff}`);
-      await enqueuePodStage(userId, teamId, next.capability, next.agentId);
+      const noun = NOUN[next.capability] ?? next.capability;
+      const handoff = info.id === finisher.id ? `Next, I'll do the ${noun}.` : `@${first(info)}, please do the ${noun}.`;
+      await postTeamMessage(userId, teamId, finisher.id, `${done} ${handoff}`);
+      const r = await enqueuePodStage(userId, teamId, next.capability, next.agentId);
+      if (r === "busy") await postTeamMessage(userId, teamId, info.id, `A ${noun} run is already waiting on this team. Answer that one first.`);
+      if (r === "paused") await postTeamMessage(userId, teamId, finisher.id, `${first(info)} is paused, so I stopped the chain here.`);
     }
   } else {
     const userName = await userFirstName(userId);
-    await postTeamMessage(userId, teamId, finisher.id, `I've ${donePhrase(completedKind, count)}. @${userName}, ${finalAction(completedKind)}.`);
+    await postTeamMessage(userId, teamId, finisher.id, `${done} @${userName}, ${finalAction(completedKind)}.`);
   }
 }

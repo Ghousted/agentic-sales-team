@@ -350,14 +350,17 @@ function activityForDraft(where: SQL | undefined, type: string, text: string) {
   }).from(outreachDrafts).where(where));
 }
 
-export async function markDraftSent(draftId: string): Promise<void> {
-  if (!isDbConfigured()) return;
+/** False when nothing was saved (signed out, or not the user's draft), so the
+ *  page can undo its change and tell the user. True when sent, now or before. */
+export async function markDraftSent(draftId: string): Promise<boolean> {
+  if (!isDbConfigured()) return false;
   const userId = await uid();
-  if (!userId) return;
+  if (!userId) return false;
   const db = getDb();
   const [d] = await db.select().from(outreachDrafts)
     .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId))).limit(1);
-  if (!d || d.status === "sent") return;
+  if (!d) return false;
+  if (d.status === "sent") return true;
   // One transaction. The draft update stamps this exact sentAt and skips a draft
   // that is already sent, so the lead and activity writes run only when this
   // call is the one that sent it (a double click logs one "Sent").
@@ -372,16 +375,18 @@ export async function markDraftSent(draftId: string): Promise<void> {
         exists(db.select({ id: outreachDrafts.id }).from(outreachDrafts).where(sentNow)))),
     activityForDraft(sentNow, "email_sent", `Sent "${d.subject}"`),
   ]);
+  return true;
 }
 
 /** Hide a single draft from the Emails page (soft-hide, not a delete. The row
  *  stays in the table so analytics counts are unaffected). Used for "Discard". */
-export async function discardDraft(draftId: string): Promise<void> {
-  if (!isDbConfigured()) return;
+export async function discardDraft(draftId: string): Promise<boolean> {
+  if (!isDbConfigured()) return false;
   const userId = await uid();
-  if (!userId) return;
-  await getDb().update(outreachDrafts).set({ dismissed: true })
-    .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId)));
+  if (!userId) return false;
+  const rows = await getDb().update(outreachDrafts).set({ dismissed: true })
+    .where(and(eq(outreachDrafts.id, draftId), eq(outreachDrafts.userId, userId))).returning({ id: outreachDrafts.id });
+  return rows.length > 0;
 }
 
 /** Hide every already-sent draft from the inbox in one shot ("Clear sent").

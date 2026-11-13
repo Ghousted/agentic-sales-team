@@ -22,6 +22,8 @@ vi.mock("./orchestrate", () => ({
 }));
 const catalog = vi.hoisted(() => ({ items: [] as { id: string; name: string; description: string }[] }));
 vi.mock("@/lib/products/store", () => ({ listProducts: async () => catalog.items }));
+const search = vi.hoisted(() => ({ configError: null as null | { job: string; user: string } }));
+vi.mock("@/lib/jobs/scrape", () => ({ scrapeConfigError: () => search.configError }));
 const JOB_ID = "33333333-3333-4333-8333-333333333333";
 vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "33333333-3333-4333-8333-333333333333" })) }));
 vi.mock("./teamMessages", () => ({
@@ -55,6 +57,7 @@ beforeEach(() => {
   route.next = null;
   book.leads = [];
   pending.n = 3;
+  search.configError = null;
   // One product: the search uses it without asking.
   catalog.items = [{ id: "p1", name: "AI Training", description: "" }];
   vi.mocked(enqueueJob).mockClear();
@@ -288,5 +291,24 @@ describe("an open question", () => {
     intent("outreach");
     await teamChat("t1", "Email marketers · Austin · 5 leads ⟦answer:" + encodeURIComponent(JSON.stringify({ what: "Email marketers", where: "Austin", count: 5 })) + "⟧");
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ kind: "scrape", target: 5, instruction: "Email marketers. Selling: AI Training. Location: Austin." });
+  });
+});
+
+describe("setup the agent needs", () => {
+  it("says lead search is not set up, before any question, when the keys are missing", async () => {
+    search.configError = { job: "FIRECRAWL_API_KEY not set.", user: "" };
+    intent("scrape");
+    const res = await teamChat("t1", "find leads");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/Lead search isn't set up/);
+  });
+
+  it("says the catalog is empty when asked to match leads", async () => {
+    catalog.items = [];
+    route.next = { actor: { ...scout, capabilities: ["match"] }, capability: "match", messages: [] };
+    intent("match");
+    const res = await teamChat("t1", "match the leads");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages.at(-1)?.text).toMatch(/catalog is empty, so I can't match leads/);
   });
 });

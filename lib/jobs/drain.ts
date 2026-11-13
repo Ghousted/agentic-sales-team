@@ -16,7 +16,7 @@ import { pickLeadsForMatch, addMatches } from "@/lib/matches/store";
 import { matchLead } from "@/lib/ai/match";
 import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
-import { chainNext, agentInfo } from "@/lib/pod/orchestrate";
+import { chainNext, agentInfo, podStageFailed } from "@/lib/pod/orchestrate";
 import { jobErrorMessage } from "@/lib/jobs/errors";
 import { reapStaleJobs, withDeadline, LEAD_TIMEOUT_MS, RUN_CLAIM_BUDGET_MS, RUN_LEAD_BUDGET_MS } from "@/lib/jobs/runtime";
 
@@ -31,7 +31,13 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
   const scope = opts.userId;
 
   // Jobs a killed invocation left 'running' would block their stage for good.
-  try { await reapStaleJobs(db, scope); } catch (e) { console.error("[jobs] reap failed:", e); }
+  try {
+    // A reaped pod stage would leave the chat on "starting now": say it stopped.
+    for (const j of await reapStaleJobs(db, scope)) {
+      const p = (j.params ?? {}) as { pod?: boolean; teamId?: string };
+      if (p.pod && p.teamId && j.kind !== "scrape") await podStageFailed(j.userId, p.teamId, j.kind, j.agentId, "error");
+    }
+  } catch (e) { console.error("[jobs] reap failed:", e); }
 
   // Stay inside maxDuration: stop claiming jobs, then stop starting leads, while
   // there is still time to save the result. Unstarted leads stay for the next run.
@@ -80,6 +86,9 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
       if (!(await agentInfo(userId, candidate.agentId))) {
         await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "The agent is paused or removed, so the run did not start." })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+        if (params.pod && params.teamId) {
+          try { await podStageFailed(userId, params.teamId, candidate.kind, candidate.agentId, "paused"); } catch (e) { console.error("[jobs] notify failed:", e); }
+        }
         continue;
       }
       if (candidate.kind === "outreach") {
@@ -146,13 +155,17 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
       console.error(`[jobs] ${candidate.kind} job ${candidate.id} failed:`, e);
       await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: jobErrorMessage(candidate.kind, e) })
         .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+      // A pod stage has no chat follower: say so in the team chat.
+      if (params.pod && params.teamId) {
+        try { await podStageFailed(userId, params.teamId, candidate.kind, candidate.agentId, "error"); } catch (err) { console.error("[jobs] notify failed:", err); }
+      }
     }
 
     // Auto-hand-off: after any pod-chain stage, narrate + enqueue the next stage
     // (or @mention the user at the end). `created` is the stage's forward count.
     // Its own try: a failed hand-off must not turn the finished stage into 'failed'.
     if (finished && params.pod && params.teamId) {
-      try { await chainNext(userId, params.teamId, candidate.kind, created, candidate.agentId, undefined, candidate.createdAt); }
+      try { await chainNext(userId, params.teamId, candidate.kind, created, candidate.agentId, undefined, candidate.createdAt, failed); }
       catch (e) { console.error("[jobs] chainNext failed:", e); }
     }
   }

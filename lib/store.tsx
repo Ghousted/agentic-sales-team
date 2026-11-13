@@ -49,6 +49,7 @@ interface State extends WizardState {
   convId: string;
   chatInput: string;
   chatAwaiting: Record<string, number>; // teamId → sends still waiting on teamChat (shows typing dots)
+  chatPending: Record<string, string[]>; // teamId → job ids waiting for Proceed/Cancel, kept so the buttons show with the cached thread
   chatLeadPicks: { id: string; name: string }[];
   hubTeam: string;
   toast: string;
@@ -86,7 +87,7 @@ const initialWizard: WizardState = {
 const initialState: State = {
   ...initialWizard,
   authed: false, showAuth: false, authMode: "login", sidebarOpen: true,
-  chats: chatsInit(), convId: "sk", chatInput: "", chatAwaiting: {}, chatLeadPicks: [],
+  chats: chatsInit(), convId: "sk", chatInput: "", chatAwaiting: {}, chatPending: {}, chatLeadPicks: [],
   hubTeam: "all",
   toast: "", toastError: false, paused: {}, removed: {}, agentConfig: {}, teamMembers: {}, extraAgents: [], extraTeams: [],
   search: "",
@@ -422,7 +423,8 @@ export function AppProvider({ children, initialUser, initialWorkspace }: { child
       try { status = await reportTeamJob(teamId, job.id); }
       catch { if (slow > 0) { if (++slow <= 40) setTimeout(poll, 15_000); return; } if (waited >= 40) { addLocal("system", "I've lost track of that run. Please check the agent's page."); return; } waited++; setTimeout(poll, 2500); return; }
       if (!status) return;
-      if (status === "done" || status === "failed") { await pullThread(teamId); return; }
+      // "dismissed": the user cancelled the run, and the cancel posted its own summary.
+      if (status === "done" || status === "failed" || status === "dismissed") { await pullThread(teamId); return; }
       if (waited >= 40) {
         if (slow === 0) addLocal("system", "Still working on it in the background. The result will appear here when it's done.");
         if (++slow > 40) return; // ~10 more minutes; the agent's page shows the result after that

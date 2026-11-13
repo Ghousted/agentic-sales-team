@@ -13,6 +13,7 @@ import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutco
 import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { listProducts, type ProductDTO } from "@/lib/products/store";
+import { scrapeConfigError } from "@/lib/jobs/scrape";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
 import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, ANY_PRODUCT, MAX_PRODUCT_PICKS, NO_PRODUCTS_TEXT, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText, stripMentions } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
@@ -62,6 +63,9 @@ function sellingText(product: string | undefined, catalog: ProductDTO[]): string
 }
 
 async function scrapeStep(userId: string, actor: Member, teamId: string, brief: ScrapeBrief): Promise<TeamChatResult> {
+  // A deploy without the search keys can never finish a search: say so before
+  // any question, not as "please try again" after Proceed.
+  if (scrapeConfigError()) return { messages: [{ who: actor.id, text: "Lead search isn't set up on this server yet. Ask your admin to add the search and AI API keys." }] };
   // The leads are for a product in the catalog. With none, say so and stop. With
   // one, use it. With more, ask which one.
   const catalog = await listProducts(userId);
@@ -337,6 +341,10 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // Other lead-consuming capabilities: approve picks (if any), pass leadIds.
   if (LEAD_CAPS.has(cap) && picks.length) {
     await setLeadReview(picks, "accepted");
+  }
+  // Matching and proposals use the product catalog.
+  if ((cap === "match" || cap === "proposal") && !(await listProducts(userId)).length) {
+    return { messages: [...pre, { who: actor.id, text: `Your product catalog is empty, so I can't ${cap === "match" ? "match leads" : "write a proposal"}. Add products on the Products page.` }] };
   }
   // With no picks, the job works this team's leads (the runner reads the job's
   // teamId). Say so now when none of them needs this step, instead of asking.

@@ -3,7 +3,7 @@ import "server-only";
 // pod-stage jobs. Server-only. No engine work here. It wires the existing
 // capability jobs into a handed-off pipeline; a stage asks the user first unless
 // the agent runs it on Auto.
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, agents, agentConfig, agentStates, jobs } from "@/lib/db";
 import { AGENTS_BASE } from "@/lib/data";
 import { membersOfTeam } from "@/lib/teams/membership";
@@ -18,7 +18,9 @@ import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 import { listProducts } from "@/lib/products/store";
 import { isAIConfigured } from "@/lib/ai/openrouter";
-import { AI_JOB_KINDS, NO_AI_TEXT, MAX_BATCH_SIZE } from "@/lib/jobs/limits";
+import { AI_JOB_KINDS, NO_AI_TEXT, MAX_BATCH_SIZE, MAX_SCRAPE_TARGET } from "@/lib/jobs/limits";
+import { isFirecrawlConfigured } from "@/lib/scrape/firecrawl";
+import { briefFromInstruction, briefInstruction, scrapeAskText, sellingFrom, widerBrief, type ScrapeBrief } from "@/lib/chat/clarify";
 
 // `auto`: the capabilities the user set to Auto on the agent page (no Proceed/Cancel ask).
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[]; auto?: string[] }
@@ -199,7 +201,10 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
       return;
     }
     if (completedKind !== "match") {
-      await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."} I stopped the chain here.`);
+      // No good leads from a search: offer the same search with a wider scope.
+      const wider = completedKind === "scrape" || completedKind === "assess" ? await planWiderSearch(userId, teamId) : null;
+      await postTeamMessage(userId, teamId, finisher.id, `@${userName}, ${NOTHING[completedKind] ?? "I had no leads to pass on."}${wider ? "" : " I stopped the chain here."}`);
+      if (wider) await offerWiderSearch(userId, teamId, wider);
       return;
     }
     done = "I found no listings that match these leads, so I'll pass them on without matches.";
@@ -253,4 +258,39 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
     const userName = await userFirstName(userId);
     await postTeamMessage(userId, teamId, finisher.id, `${done} @${userName}, ${finalAction(completedKind)}.`);
   }
+}
+
+/** A wider version of the team's last search, ready to offer, or null when it
+ *  cannot run (no search keys, no agent that can search, nothing to widen, or a
+ *  search already waiting). */
+interface WiderSearch { agent: AgentInfo; brief: ScrapeBrief; change: string; selling: string; count: number }
+async function planWiderSearch(userId: string, teamId: string): Promise<WiderSearch | null> {
+  if (!isFirecrawlConfigured() || !isAIConfigured()) return null;
+  const db = getDb();
+  const teamScrapes = and(eq(jobs.userId, userId), eq(jobs.kind, "scrape"), sql`${jobs.params}->>'teamId' = ${teamId}`);
+  const [last] = await db.select({ agentId: jobs.agentId, params: jobs.params }).from(jobs).where(teamScrapes).orderBy(desc(jobs.createdAt)).limit(1);
+  const p = (last?.params ?? {}) as { instruction?: unknown; target?: unknown };
+  if (!last || typeof p.instruction !== "string" || !p.instruction.trim()) return null;
+  const waiting = await db.select({ id: jobs.id }).from(jobs).where(and(teamScrapes, inArray(jobs.status, ["needs_approval", "queued", "running"]))).limit(1);
+  if (waiting.length) return null;
+  const agentId = (await agentInfo(userId, last.agentId))?.capabilities.includes("scrape") ? last.agentId : await memberWithCapability(userId, teamId, "scrape");
+  const agent = agentId ? await agentInfo(userId, agentId) : null;
+  if (!agent) return null;
+  const selling = sellingFrom(p.instruction);
+  const before: ScrapeBrief = { ...briefFromInstruction(p.instruction), product: selling.split(" (")[0] || undefined, count: typeof p.target === "number" ? p.target : undefined };
+  const w = widerBrief(before, MAX_SCRAPE_TARGET);
+  if (!w) return null;
+  return { agent, brief: w.brief, change: w.change, selling, count: Math.min(w.brief.count ?? before.count ?? 10, MAX_SCRAPE_TARGET) };
+}
+
+/** Queue the wider search and ask for it with Proceed/Cancel. */
+async function offerWiderSearch(userId: string, teamId: string, w: WiderSearch): Promise<void> {
+  const [row] = await getDb().insert(jobs).values({
+    userId, agentId: w.agent.id, kind: "scrape", status: "needs_approval",
+    params: {
+      agent: { id: w.agent.id, name: w.agent.name, role: w.agent.role, goal: w.agent.goal, task: w.agent.task },
+      leadIds: null, batchSize: 5, target: w.count, instruction: briefInstruction(w.brief, w.selling), pod: true, teamId,
+    },
+  }).returning({ id: jobs.id });
+  await postTeamMessage(userId, teamId, w.agent.id, scrapeAskText(w.brief, w.count, MAX_SCRAPE_TARGET, row.id, `Want me to look again with a wider scope? I'll search ${w.change}:`));
 }

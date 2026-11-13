@@ -172,6 +172,14 @@ describe("scrape clarifying questions", () => {
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Selling: AI Training. Location: Metro Manila Philippines." });
   });
 
+  it("does not offer an old saved search whose target was a whole message", async () => {
+    state.lastJobs = [[{ teamId: "t1", instruction: "@Ava Hi find me leads pls. Location: Makati Philippines." }]];
+    intent("scrape");
+    const res = await teamChat("t1", "find leads");
+    const { pendingScrapeBrief } = await import("./clarify");
+    expect(pendingScrapeBrief(res.messages[0].text)?.suggest).toBeUndefined();
+  });
+
   it("passes the agent's last message to intent detection", async () => {
     agentSaid("If you'd like to adjust the criteria for finding new leads, I can send that request to them.");
     intent("chat");

@@ -58,7 +58,10 @@ export async function lastScrapeBrief(userId: string, teamId: string): Promise<S
   const instruction = (job?.params as { instruction?: unknown } | undefined)?.instruction;
   if (typeof instruction !== "string" || !instruction.trim()) return null;
   const b = briefFromInstruction(instruction);
-  return b.what ? b : null;
+  // A search saved before the target checks existed can hold a whole message
+  // ("@Ava Hi find me leads pls"). Offer or reuse only a real target.
+  const what = stripMentions(b.what ?? "");
+  return what && scrapeHasTarget(what) && !isBareMore(what) && !readDecision(what) ? { ...b, what } : null;
 }
 
 /** The brief for a fresh scrape request, using the team's last search:

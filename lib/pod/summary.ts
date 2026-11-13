@@ -31,6 +31,19 @@ export function askBookText(type: string, names: string, label: string, jobId: s
   return `I'm ready to book a ${type} with ${names} on ${label}. Proceed? ⟦approve:${jobId}⟧`;
 }
 
+/** Said instead of an ask when the team has no leads the step can work on. */
+export function nothingToDoText(kind: string): string {
+  switch (kind) {
+    case "assess": return "There are no new leads to review on this team.";
+    case "research": return "There are no accepted leads on this team that still need research. Accept some leads first.";
+    case "qualify": return "There are no accepted leads on this team that still need a score. Accept some leads first.";
+    case "match": return "There are no accepted leads on this team that still need matching. Accept some leads first.";
+    case "proposal": return "There are no accepted leads on this team that still need a proposal. Accept some leads first.";
+    case "outreach": return "There are no accepted leads on this team that still need a first email. Accept some leads first.";
+    default: return "There is nothing for me to do on this team now.";
+  }
+}
+
 /** What the agent says as an approved (or Auto) step starts. A scrape's line
  *  carries the ⟦run:…⟧ marker, so its live timeline shows under it. */
 export function startText(kind: string, jobId: string): string {

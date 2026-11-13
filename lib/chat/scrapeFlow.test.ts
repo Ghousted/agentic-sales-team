@@ -11,7 +11,8 @@ vi.mock("@/lib/db", async (importActual) => ({ ...(await importActual<typeof imp
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
 const team = vi.hoisted(() => ({ members: ["s1"] }));
 vi.mock("@/lib/teams/membership", () => ({ membersOfTeam: async () => team.members }));
-vi.mock("@/lib/pod/orchestrate", () => ({ agentInfo: async () => scout }));
+const pending = vi.hoisted(() => ({ n: 3 }));
+vi.mock("@/lib/pod/orchestrate", () => ({ agentInfo: async () => scout, countPending: vi.fn(async () => pending.n) }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => false, aiJSON: vi.fn() }));
 vi.mock("@/lib/ai/intent", () => ({ detectIntent: vi.fn() }));
 const route = vi.hoisted(() => ({ next: null as null | { actor: unknown; capability: string; messages: { who: string; text: string }[]; handoff?: { who: string; text: string }[] } }));
@@ -53,6 +54,7 @@ beforeEach(() => {
   team.members = ["s1"];
   route.next = null;
   book.leads = [];
+  pending.n = 3;
   // One product: the search uses it without asking.
   catalog.items = [{ id: "p1", name: "AI Training", description: "" }];
   vi.mocked(enqueueJob).mockClear();
@@ -238,19 +240,23 @@ describe("the product the leads are for", () => {
 describe("an agent from another team", () => {
   const researcher = { id: "r1", name: "Apex", role: "Researcher", goal: "", task: "", capabilities: ["research"] };
 
-  it("works this team's accepted leads, not its own team's", async () => {
-    book.leads = [{ id: "L1", name: "Nancy", review: "accepted" }, { id: "L2", name: "Sarah", review: "accepted" }, { id: "L3", name: "Pending", review: "pending" }];
+  it("counts and works this team's leads: the job carries the team", async () => {
+    const { countPending } = await import("@/lib/pod/orchestrate");
     route.next = { actor: researcher, capability: "research", messages: [] };
     intent("research");
     await teamChat("t1", "run research");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ kind: "research", leadIds: ["L1", "L2"], batchSize: 2 });
+    expect(vi.mocked(countPending)).toHaveBeenCalledWith(expect.any(String), "r1", "research", "t1");
+    const job = vi.mocked(enqueueJob).mock.calls[0][0];
+    expect(job).toMatchObject({ kind: "research", teamId: "t1" });
+    expect(job.leadIds).toBeUndefined();
   });
 
-  it("says so when this team has no accepted leads", async () => {
+  it("says so, and asks nothing, when no lead on the team needs the step", async () => {
+    pending.n = 0;
     route.next = { actor: researcher, capability: "research", messages: [] };
     intent("research");
     const res = await teamChat("t1", "run research");
     expect(enqueueJob).not.toHaveBeenCalled();
-    expect(res.messages.at(-1)?.text).toMatch(/no accepted leads/);
+    expect(res.messages.at(-1)?.text).toMatch(/no accepted leads on this team that still need research/);
   });
 });

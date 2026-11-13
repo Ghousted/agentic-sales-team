@@ -4,7 +4,7 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, isDbConfigured, matches, leads, products } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
-import { teammatesOf } from "@/lib/teams/membership";
+import { leadPoolOf } from "@/lib/teams/membership";
 import type { MatchResult } from "@/lib/leads/types";
 
 type LeadRow = typeof leads.$inferSelect;
@@ -29,7 +29,7 @@ export interface MatchDTO {
 /** Leads a match run should process: the given ids (own accepted leads, honored
  *  regardless of team book), or the agent's teammate-book accepted leads the
  *  matchmaker hasn't run on yet (matchedAt unset), oldest first, capped. */
-export async function pickLeadsForMatch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForMatch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   if (!isDbConfigured()) return [];
   const db = getDb();
   if (leadIds && leadIds.length) {
@@ -37,7 +37,7 @@ export async function pickLeadsForMatch(userId: string, agentId: string, leadIds
       .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
       .limit(batchSize);
   }
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   return db.select().from(leads)
     .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), eq(leads.review, "accepted"), isNull(leads.matchedAt)))
     .orderBy(asc(leads.createdAt)).limit(batchSize);

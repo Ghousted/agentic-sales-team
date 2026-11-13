@@ -91,15 +91,16 @@ export async function leadOwnerForTeam(userId: string, teamId: string, actorId: 
   return (await memberWithCapability(userId, teamId, "assess")) ?? members[0];
 }
 
-/** How many book/pending leads the stage would process now (for the approval count). */
-export async function countPending(userId: string, agentId: string, capability: string): Promise<number> {
+/** How many book/pending leads the stage would process now (for the approval
+ *  count). With a team, only that team's leads count. */
+export async function countPending(userId: string, agentId: string, capability: string, teamId?: string | null): Promise<number> {
   const pick = capability === "research" ? pickLeadsForResearch
     : capability === "assess" ? pickLeadsForAssess
     : capability === "qualify" ? pickLeadsForQualify
     : capability === "match" ? pickLeadsForMatch
     : capability === "proposal" ? pickLeadsForProposal
     : pickLeadsForRun; // outreach
-  const rows = await pick(userId, agentId, undefined, POD_BATCH);
+  const rows = await pick(userId, agentId, undefined, POD_BATCH, teamId);
   return rows.length;
 }
 
@@ -112,7 +113,7 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return;
   const info = await agentInfo(userId, agentId);
   if (!info) return;
-  const leadCount = await countPending(userId, agentId, capability);
+  const leadCount = await countPending(userId, agentId, capability, teamId);
   // A stage waits for the user (the ask shows Proceed/Cancel in the chat), unless
   // the agent runs it on Auto: then it is queued now and the runner picks it up.
   const auto = !!info.auto?.includes(capability);

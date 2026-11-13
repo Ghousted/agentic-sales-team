@@ -18,7 +18,7 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   isDbConfigured: () => true,
 }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => null }));
-vi.mock("@/lib/teams/membership", () => ({ teammatesOf: async (_u: string, agentId: string) => [agentId] }));
+vi.mock("@/lib/teams/membership", () => ({ teammatesOf: async (_u: string, agentId: string) => [agentId], leadPoolOf: async (_u: string, agentId: string) => [agentId] }));
 
 const { pickLeadsForMatch, addMatches } = await import("@/lib/matches/store");
 

@@ -17,6 +17,7 @@ vi.mock("@/lib/db", async (importOriginal) => ({
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => null }));
 vi.mock("@/lib/teams/membership", () => ({
   teammatesOf: async (_u: string, agentId: string) => [agentId],
+  leadPoolOf: async (_u: string, agentId: string) => [agentId],
   membersOfTeam: async () => [],
 }));
 

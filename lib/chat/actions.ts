@@ -5,7 +5,7 @@
 // A capability the agent runs on Auto (agent page) starts at once instead.
 import { getSession } from "@/lib/auth/session";
 import { membersOfTeam } from "@/lib/teams/membership";
-import { agentInfo } from "@/lib/pod/orchestrate";
+import { agentInfo, countPending } from "@/lib/pod/orchestrate";
 import { detectIntent } from "@/lib/ai/intent";
 import { resolve, parseMentions, type ChatOutMsg } from "./orchestrate";
 import { enqueueJob } from "@/lib/jobs/actions";
@@ -18,14 +18,14 @@ import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief,
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
-import { askText, askBookText, startText } from "@/lib/pod/summary";
+import { askText, askBookText, startText, nothingToDoText } from "@/lib/pod/summary";
 import { approveStep, cancelStep, openApproval, createMeetingAsk } from "@/lib/pod/decisions";
 import { readDecision } from "./yesNo";
 import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, messages } from "@/lib/db";
-import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET, MAX_BATCH_SIZE } from "@/lib/jobs/limits";
+import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET } from "@/lib/jobs/limits";
 
 /** A job the client should follow now (kick the runner, wait for the outcome):
  *  one that started without an ask (Auto) or that a typed "yes" approved. */
@@ -87,9 +87,10 @@ async function scrapeStep(userId: string, actor: Member, teamId: string, brief: 
 /** Approve any picked leads, then ask to run an outreach job for the target (or
  *  start it, on Auto). Shared by the fresh-request gate and the pending-answer
  *  path. `pre` is a hand-off line to say first. */
-async function askOutreach(actor: Member, teamId: string, target: { leadIds?: string[]; all?: boolean }, pre: ChatOutMsg[] = []): Promise<TeamChatResult> {
+async function askOutreach(userId: string, actor: Member, teamId: string, target: { leadIds?: string[]; all?: boolean }, pre: ChatOutMsg[] = []): Promise<TeamChatResult> {
   const agent = { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task };
   const picks = target.leadIds?.length ? target.leadIds : null;
+  if (!picks && (await countPending(userId, actor.id, "outreach", teamId)) === 0) return { messages: [...pre, { who: actor.id, text: nothingToDoText("outreach") }] };
   if (picks) await setLeadReview(picks, "accepted");
   const ask = !runsAuto(actor, "outreach");
   const enq = await enqueueJob(picks
@@ -276,7 +277,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
       }
     }
     if (!target) return { messages: [{ who: pendingAgent.id, text: askWhoAgainText(pendingAgent.name) }] };
-    return askOutreach(pendingAgent, teamId, target);
+    return askOutreach(userId, pendingAgent, teamId, target);
   }
 
   const res = await resolve(userId, teamId, message, intent, { lastSpeakerId: lastSpeaker?.id, history });
@@ -291,11 +292,11 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
 
   // Fresh outreach request. The ask replaces actWith's "I'm drafting outreach now".
   if (cap === "outreach") {
-    if (picks.length) return askOutreach(actor, teamId, { leadIds: picks }, pre);
+    if (picks.length) return askOutreach(userId, actor, teamId, { leadIds: picks }, pre);
     // no picks: ask who, unless "all" with at least one accepted lead.
     if (isAllRequest(message)) {
       const teamLeads = await listTeamLeadsForPicker(teamId);
-      if (teamLeads.some((l) => l.review === "accepted")) return askOutreach(actor, teamId, { all: true }, pre);
+      if (teamLeads.some((l) => l.review === "accepted")) return askOutreach(userId, actor, teamId, { all: true }, pre);
     }
     return { messages: [...pre, { who: actor.id, text: askWhoText(actor.name) }] };
   }
@@ -320,12 +321,11 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   if (LEAD_CAPS.has(cap) && picks.length) {
     await setLeadReview(picks, "accepted");
   }
-  // An agent from another team works this team's leads. With no picks, give it
-  // this team's accepted leads, else the job reads the agent's own team's leads.
-  let ids = LEAD_CAPS.has(cap) ? picks : [];
-  if (LEAD_CAPS.has(cap) && !ids.length && !memberIds.includes(actor.id)) {
-    ids = (await listTeamLeadsForPicker(teamId)).filter((l) => l.review === "accepted").map((l) => l.id).slice(0, MAX_BATCH_SIZE);
-    if (!ids.length) return { messages: [...pre, { who: actor.id, text: "This team has no accepted leads yet. Accept some leads first, then ask me again." }] };
+  // With no picks, the job works this team's leads (the runner reads the job's
+  // teamId). Say so now when none of them needs this step, instead of asking.
+  const ids = LEAD_CAPS.has(cap) ? picks : [];
+  if ((LEAD_CAPS.has(cap) || cap === "assess") && !ids.length && (await countPending(userId, actor.id, cap, teamId)) === 0) {
+    return { messages: [...pre, { who: actor.id, text: nothingToDoText(cap) }] };
   }
   const auto = runsAuto(actor, cap);
   const enq = await enqueueJob({

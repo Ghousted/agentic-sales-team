@@ -7,6 +7,7 @@ import { css, Box, Btn } from "@/components/primitives";
 import { BRIEF_LABEL, BRIEF_OPTIONS, scrapeAnswerText, type BriefField } from "@/lib/chat/clarify";
 
 const PLACEHOLDER: Record<BriefField, string> = {
+  product: "Type a product name…",
   what: "For example: HR managers at hospitals",
   where: "Type something… (a city, country or region)",
   count: "Type a number… (up to 25)",

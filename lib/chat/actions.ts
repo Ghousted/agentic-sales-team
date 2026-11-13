@@ -12,8 +12,9 @@ import { enqueueJob } from "@/lib/jobs/actions";
 import { listTeamMessages as _listTeamMessages, insertTeamMessages, postJobOutcome, chatUnread } from "./teamMessages";
 import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
+import { listProducts, type ProductDTO } from "@/lib/products/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText } from "./clarify";
+import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, ANY_PRODUCT, MAX_PRODUCT_PICKS, NO_PRODUCTS_TEXT, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
@@ -24,7 +25,7 @@ import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/me
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, messages } from "@/lib/db";
-import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET } from "@/lib/jobs/limits";
+import { MAX_CHAT_MESSAGE_CHARS, DAILY_CHAT_MESSAGE_QUOTA, QUOTA_WINDOW_MS, MAX_SCRAPE_TARGET, MAX_BATCH_SIZE } from "@/lib/jobs/limits";
 
 /** A job the client should follow now (kick the runner, wait for the outcome):
  *  one that started without an ask (Auto) or that a typed "yes" approved. */
@@ -51,15 +52,31 @@ const LEAD_CAPS = new Set(["outreach", "research", "qualify", "proposal", "match
 /** Ask for whatever the scrape brief still misses (who, where, how many), or ask
  *  to run the scrape once it is complete. Shared by a fresh request and the reply
  *  to a question. A team-chat scrape starts the chain (scrape → assess → …). */
-async function scrapeStep(actor: Member, teamId: string, brief: ScrapeBrief): Promise<TeamChatResult> {
-  const b = settleBrief(brief);
+/** What the user sells, for the search instruction: the chosen product, or the
+ *  whole catalog for "Any product". */
+function sellingText(product: string | undefined, catalog: ProductDTO[]): string {
+  const line = (p: ProductDTO) => (p.description.trim() ? `${p.name} (${p.description.trim().slice(0, 160)})` : p.name);
+  if (!product || product === ANY_PRODUCT) return catalog.slice(0, 5).map((p) => p.name).join(", ");
+  const p = catalog.find((c) => c.name.toLowerCase() === product.toLowerCase());
+  return p ? line(p) : product;
+}
+
+async function scrapeStep(userId: string, actor: Member, teamId: string, brief: ScrapeBrief): Promise<TeamChatResult> {
+  // The leads are for a product in the catalog. With none, say so and stop. With
+  // one, use it. With more, ask which one.
+  const catalog = await listProducts(userId);
+  if (!catalog.length) return { messages: [{ who: actor.id, text: NO_PRODUCTS_TEXT }] };
+  const withProduct: ScrapeBrief = brief.product?.trim() ? brief
+    : catalog.length === 1 ? { ...brief, product: catalog[0].name }
+    : { ...brief, products: catalog.slice(0, MAX_PRODUCT_PICKS).map((p) => p.name) };
+  const b = settleBrief(withProduct);
   const missing = missingBriefFields(b);
   if (missing.length) return { messages: [{ who: actor.id, text: askScrapeDetailsText(b, missing, MAX_SCRAPE_TARGET) }] };
   const count = Math.min(b.count!, MAX_SCRAPE_TARGET);
   const auto = runsAuto(actor, "scrape");
   const enq = await enqueueJob({
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
-    kind: "scrape", capabilities: actor.capabilities, target: count, instruction: briefInstruction(b),
+    kind: "scrape", capabilities: actor.capabilities, target: count, instruction: briefInstruction(b, sellingText(b.product, catalog)),
     pod: true, teamId, ask: !auto,
   });
   if ("error" in enq) return { messages: [{ who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
@@ -237,7 +254,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
     const { agent, brief } = pendingScrape;
     // The question card sends exact values. A typed reply is parsed.
     const answer = scrapeAnswerFrom(message) ?? await readScrapeAnswer(message, brief, missingBriefFields(brief));
-    return scrapeStep(agent, teamId, mergeBrief(brief, answer));
+    return scrapeStep(userId, agent, teamId, mergeBrief(brief, answer));
   }
 
   // Pending-answer path: Outreach just asked "who?", and this is an unmentioned
@@ -287,7 +304,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   if (cap === "scrape") {
     // A card answer with no open question (a stale card) still gives the place and count.
     const asked = mergeBrief(briefFromRequest(message, intent.params), scrapeAnswerFrom(message) ?? {});
-    const step = await scrapeStep(actor, teamId, withLastSearch(asked, message, await lastScrapeBrief(userId, teamId)));
+    const step = await scrapeStep(userId, actor, teamId, withLastSearch(asked, message, await lastScrapeBrief(userId, teamId)));
     return { ...step, messages: [...pre, ...step.messages] };
   }
 
@@ -303,18 +320,25 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   if (LEAD_CAPS.has(cap) && picks.length) {
     await setLeadReview(picks, "accepted");
   }
+  // An agent from another team works this team's leads. With no picks, give it
+  // this team's accepted leads, else the job reads the agent's own team's leads.
+  let ids = LEAD_CAPS.has(cap) ? picks : [];
+  if (LEAD_CAPS.has(cap) && !ids.length && !memberIds.includes(actor.id)) {
+    ids = (await listTeamLeadsForPicker(teamId)).filter((l) => l.review === "accepted").map((l) => l.id).slice(0, MAX_BATCH_SIZE);
+    if (!ids.length) return { messages: [...pre, { who: actor.id, text: "This team has no accepted leads yet. Accept some leads first, then ask me again." }] };
+  }
   const auto = runsAuto(actor, cap);
   const enq = await enqueueJob({
     agent: { id: actor.id, name: actor.name, role: actor.role, goal: actor.goal, task: actor.task },
     kind: cap, capabilities: actor.capabilities,
     target: intent.params.target ?? 10,
-    leadIds: LEAD_CAPS.has(cap) && picks.length ? picks : undefined,
-    batchSize: LEAD_CAPS.has(cap) && picks.length ? picks.length : undefined,
+    leadIds: ids.length ? ids : undefined,
+    batchSize: ids.length ? ids.length : undefined,
     teamId, ask: !auto,
   });
   if ("error" in enq) return { messages: [...pre, { who: actor.id, text: "I wasn't able to start that: " + enq.error }] };
   if (auto) return { messages: [...pre, { who: actor.id, text: startText(cap, enq.jobId) }], follow: { id: enq.jobId, kind: cap, pod: false } };
-  return { messages: [...pre, { who: actor.id, text: askText(cap, LEAD_CAPS.has(cap) && picks.length ? picks.length : null, enq.jobId) }] };
+  return { messages: [...pre, { who: actor.id, text: askText(cap, ids.length ? ids.length : null, enq.jobId) }] };
 }
 
 /** The thread rows after `afterId` (all of them for 0), oldest first. */

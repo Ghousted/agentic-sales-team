@@ -14,6 +14,8 @@ const db = drizzle(async (sql, params) => {
   return { rows: [] };
 }, { schema });
 
+const ai = vi.hoisted(() => ({ on: true }));
+vi.mock("@/lib/ai/openrouter", async (importActual) => ({ ...(await importActual<typeof import("@/lib/ai/openrouter")>()), isAIConfigured: () => ai.on }));
 vi.mock("@/lib/db", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/db")>()),
   isDbConfigured: () => true,
@@ -56,6 +58,16 @@ describe("enqueueJob size limits", () => {
     const res = await enqueueJob({ agent, kind: "scrape", instruction: "x".repeat(MAX_INSTRUCTION_CHARS + 1) });
     expect(res).toHaveProperty("error");
     expect(inserted()).toHaveLength(0);
+  });
+});
+
+describe("enqueueJob without the AI key", () => {
+  it("refuses an AI step, so no sample output is saved, but still allows a scrape to be asked", async () => {
+    ai.on = false;
+    try {
+      expect(await enqueueJob({ agent, kind: "outreach" })).toEqual({ error: expect.stringMatching(/AI isn't set up/) });
+      expect(inserted()).toHaveLength(0);
+    } finally { ai.on = true; }
   });
 });
 

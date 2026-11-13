@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { detectIntent } from "./intent";
+import { detectIntent, keywordIntent } from "./intent";
 
 const reply = (content: unknown) =>
   new Response(JSON.stringify({ choices: [{ message: { content: typeof content === "string" ? content : JSON.stringify(content) } }] }), { status: 200 });
@@ -114,5 +114,17 @@ describe("detectIntent context", () => {
     fetchMock.mockResolvedValue(reply({ capability: "chat", params: {}, summary: "hi" }));
     await detectIntent("hello", agents);
     expect(body().messages.at(-1).content).toBe("hello");
+  });
+});
+
+describe("keywordIntent (no AI)", () => {
+  it("reads 'do …' as a command, and 'do you …' as a question", () => {
+    expect(keywordIntent("Do research on my leads").capability).toBe("research");
+    expect(keywordIntent("do you research every lead?").capability).toBe("chat");
+  });
+
+  it("reads a message that opens with a search verb as a search", () => {
+    expect(keywordIntent("find planners who book venues").capability).toBe("scrape");
+    expect(keywordIntent("find a time to meet with Ana").capability).toBe("book-meeting");
   });
 });

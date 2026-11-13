@@ -33,7 +33,7 @@ A single **Next.js** app: web UI, server actions, and the job/scrape runners all
 - Node 18.17+ (or 20+)
 - pnpm `11.3.0`: `corepack enable && corepack prepare pnpm@11.3.0 --activate`
 - A [Neon](https://neon.tech) Postgres database (free tier is fine; pgvector is available)
-- *(Optional)* an OpenRouter API key for real AI. Without it, the app uses canned fallbacks.
+- *(Optional)* an OpenRouter API key for real AI. Without it, AI steps (research, qualify, assess, match, outreach, proposals) do not start, and the agents say that AI is not set up.
 - *(Optional)* a Firecrawl API key. Only the lead-scraping capability uses it.
 
 **Setup**
@@ -54,7 +54,7 @@ Create `.env.local` (git-ignored):
 |---|---|---|
 | `DATABASE_URL` | ✅ | Neon connection string (use the **pooled** URL) |
 | `AUTH_SECRET` | ✅ | Signs session cookies (any long random string, e.g. `openssl rand -hex 32`). A dev fallback is used when `NODE_ENV !== "production"`; **required in production.** |
-| `OPENROUTER_API_KEY` | optional | Enables all AI features. Without it, engines return canned output. |
+| `OPENROUTER_API_KEY` | optional | Enables all AI features. Without it, AI steps do not start and the agents say that AI is not set up. |
 | `FIRECRAWL_API_KEY` | optional | Enables the `scrape` capability (find leads from the public web). |
 | `OPENROUTER_MODEL` | optional | Override the chat/JSON model (default `google/gemini-2.5-flash`). |
 | `CRON_SECRET` | ✅ in production | Bearer token Vercel Cron sends to `/api/cron/jobs` and `/api/cron/scrape` (any long random string). While unset, both routes refuse every call, so queued jobs and scrapes only run from an open tab. |

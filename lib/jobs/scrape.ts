@@ -57,7 +57,7 @@ export async function runClaimedScrapeJob(job: Job): Promise<{ leadsFound: numbe
     // A team-chat scrape run by an agent from another team files its leads under
     // a team member, so this team's assessor picks them up and they land in its book.
     const owner = params.pod && params.teamId ? await leadOwnerForTeam(job.userId, params.teamId, job.agentId) : job.agentId;
-    leadIds = await addScrapedLeads(job.userId, owner, prospects);
+    leadIds = await addScrapedLeads(job.userId, owner, prospects, params.teamId);
     leadsFound = leadIds.length;
     const already = prospects.length - leadsFound;
     log.put({

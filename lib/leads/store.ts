@@ -67,15 +67,16 @@ export async function addLead(input: { agentId: string; name: string; title?: st
   return toLeadDTO(row);
 }
 
-/** Insert scraped prospects as PENDING leads (the approval gate), deduped against
- *  the agent's existing leads by profileUrl or email. Returns how many were added. */
-/** Save new scraped prospects as pending leads, skipping ones already in the book.
- *  Returns the new lead ids, so the chat can show the results. */
-export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[]): Promise<string[]> {
+/** Save new scraped prospects as pending leads, skipping ones already in the book
+ *  (same profile URL or email). The book is the team's leads when `teamId` is
+ *  given, so a prospect another member found is not added twice. Returns the new
+ *  lead ids, so the chat can show the results. */
+export async function addScrapedLeads(userId: string, agentId: string, prospects: Prospect[], teamId?: string | null): Promise<string[]> {
   if (!isDbConfigured() || prospects.length === 0) return [];
   const db = getDb();
+  const book = Array.from(new Set([agentId, ...(await leadPoolOf(userId, agentId, teamId))]));
   const existing = await db.select({ profileUrl: leads.profileUrl, email: leads.email })
-    .from(leads).where(and(eq(leads.userId, userId), eq(leads.agentId, agentId)));
+    .from(leads).where(and(eq(leads.userId, userId), inArray(leads.agentId, book)));
   const seenUrl = new Set(existing.map((e) => safeHttpUrl(e.profileUrl)).filter(Boolean));
   const seenEmail = new Set(existing.map((e) => (e.email ?? "").trim().toLowerCase()).filter(Boolean));
   const rows: (typeof leads.$inferInsert & { id: string })[] = [];

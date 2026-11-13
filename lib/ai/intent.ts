@@ -60,7 +60,12 @@ type Capability = Intent["capability"];
 // A status ask, then a question about how things work, then each command's
 // keywords, most specific first. "find a time to meet" is a meeting, not a scrape.
 const STATUS = /\b(any (updates?|news)|status|progress|how('?s| is) it going|done yet|working on|where are (you|we) at)\b/i;
-const QUESTION = /^(how|what|why|who|where|which|is|are|do|does|did)\b/i;
+// "do research on my leads" is a command: do/does/is/are open a question only
+// when a subject follows ("do you research leads?").
+const QUESTION = /^(how|what|why|who|where|which)\b|^(is|are|do|does|did)\s+(you|we|they|i|it|he|she|the|this|that|there|your|our|my)\b/i;
+// A message that opens with a search verb is a search, even when it names a
+// meeting word later ("find planners who book venues"). "find a time" is not.
+const SEARCH_START = /^(please\s+)?(find|search( for)?|look for|get me|scrape|source|pull)\b(?!\s+(me\s+)?(a\s+)?(time|slot|day)\b)/i;
 const RULES: [Capability, RegExp][] = [
   ["book-meeting", /\b(meeting|meet|call|demo|calendar|book|schedule)\b/i],
   ["follow-up", /\bfollow[- ]?ups?\b|\bre-?engage\b|\bnudge\b/i],
@@ -80,7 +85,7 @@ export function keywordIntent(message: string): Intent {
   const summary = message.slice(0, 60);
   if (STATUS.test(text)) return { capability: "status", params: {}, summary };
   if (QUESTION.test(text)) return { capability: "chat", params: {}, summary };
-  const hit = RULES.find(([, re]) => re.test(text));
+  const hit = SEARCH_START.test(text) ? RULES.find(([c]) => c === "scrape") : RULES.find(([, re]) => re.test(text));
   if (!hit) return { capability: "chat", params: {}, summary };
   const n = hit[0] === "scrape" ? Number(text.match(/\b(\d{1,3})\b/)?.[1]) : NaN;
   return { capability: hit[0], params: n > 0 ? { target: n } : {}, summary };

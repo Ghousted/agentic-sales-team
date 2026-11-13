@@ -1,13 +1,14 @@
 "use server";
 // Job queue: enqueue an outreach run (a `jobs` row) and read job status.
 // The run itself is done by POST /api/jobs/run (a Node route handler).
-import { and, eq, gte, sql } from "drizzle-orm";
-import { getDb, isDbConfigured, jobs } from "@/lib/db";
+import { and, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { getDb, isDbConfigured, jobs, outreachDrafts } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import type { ScrapeStep } from "@/lib/scrape/steps";
-import { limitJobSize, jobQuotaError, QUOTA_WINDOW_MS } from "./limits";
+import { limitJobSize, jobQuotaError, QUOTA_WINDOW_MS, AI_JOB_KINDS, NO_AI_TEXT } from "./limits";
+import { isAIConfigured } from "@/lib/ai/openrouter";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 
 // Callers still send a whole snapshot; only its id is read.
@@ -33,6 +34,7 @@ export async function enqueueJob(input: { agent: AgentRef; kind: string; capabil
   if (!info.capabilities.includes(input.kind)) {
     return { error: "This agent can't run " + input.kind + "." };
   }
+  if (AI_JOB_KINDS.has(input.kind) && !isAIConfigured()) return { error: NO_AI_TEXT };
   // Size and quota are checked here, where every user-started job is created, so
   // neither the run route nor the cron can be handed a job that skipped them.
   const size = limitJobSize(input);
@@ -54,6 +56,19 @@ export async function enqueueJob(input: { agent: AgentRef; kind: string; capabil
 }
 
 export async function enqueueOutreachJob(input: { agent: AgentRef; leadIds?: string[]; batchSize?: number }): Promise<{ jobId: string } | { error: string }> {
+  // A lead keeps one open draft. When every picked lead has one, say so instead
+  // of running a job that drafts nothing.
+  const ids = (input.leadIds ?? []).filter((id) => typeof id === "string");
+  if (ids.length && isDbConfigured()) {
+    const userId = await uid();
+    if (userId) {
+      const open = await getDb().select({ leadId: outreachDrafts.leadId }).from(outreachDrafts)
+        .where(and(eq(outreachDrafts.userId, userId), inArray(outreachDrafts.leadId, ids.slice(0, 100)), ne(outreachDrafts.status, "sent"), eq(outreachDrafts.dismissed, false)));
+      if (new Set(open.map((r) => r.leadId)).size >= new Set(ids).size) {
+        return { error: ids.length === 1 ? "This lead already has a draft. Open it in Emails." : "These leads already have drafts. Open them in Emails." };
+      }
+    }
+  }
   return enqueueJob({ agent: input.agent, kind: "outreach", leadIds: input.leadIds, batchSize: input.batchSize });
 }
 

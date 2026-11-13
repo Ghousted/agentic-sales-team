@@ -47,8 +47,13 @@ export function nothingToDoText(kind: string): string {
 /** What the agent says as an approved (or Auto) step starts. A scrape's line
  *  carries the ⟦run:…⟧ marker, so its live timeline shows under it. */
 export function startText(kind: string, jobId: string): string {
-  return kind === "scrape" ? "Okay, starting the search now. I will post the results here." + runMarker(jobId) : "Okay, starting now.";
+  if (kind === "scrape") return "Okay, starting the search now. I will post the results here." + runMarker(jobId);
+  // A lead step writes live steps too, so its timeline shows under this line.
+  return "Okay, starting now." + (TIMELINE_KINDS.has(kind) ? runMarker(jobId) : "");
 }
+
+/** The lead steps whose runs write a live timeline. */
+const TIMELINE_KINDS = new Set(["assess", "research", "qualify", "match", "outreach", "proposal"]);
 
 /** The status reply while a step waits for Proceed/Cancel. n as in actionPhrase. */
 export function waitingText(kind: string, n: number | null): string {

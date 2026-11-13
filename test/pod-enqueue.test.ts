@@ -69,7 +69,7 @@ describe("enqueuePodStage", () => {
     fake.state.selects = [[], [agentRow], [], [{ settings: { research: { mode: "auto" }, qualify: { mode: "ask" } } }]];
     await enqueuePodStage("u1", "t1", "research", "a1");
     expect(fake.state.inserts[0]).toMatchObject({ status: "queued", params: { teamId: "t1", pod: true } });
-    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "a1", "Okay, starting now."]);
+    expect(vi.mocked(postTeamMessage).mock.calls[0]).toEqual(["u1", "t1", "a1", "Okay, starting now. ⟦run:new-job⟧"]);
   });
 
   it("still asks for a stage the agent runs on Auto only for another capability", async () => {

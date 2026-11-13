@@ -1,6 +1,7 @@
 "use client";
-// Live timeline of a scrape under the agent's "starting the search now" message
-// (the ⟦run:…⟧ marker): plan, sources found, seller check, leads picked, saved.
+// Live timeline of a run under the agent's "starting now" message (the ⟦run:…⟧
+// marker). A scrape shows plan, sources found, seller check, leads picked, saved.
+// A lead step (review, research, …) shows the leads picked and each lead's result.
 // Polls the job while it runs, then folds into a one-line summary.
 import { useEffect, useState } from "react";
 import { css, Box } from "@/components/primitives";
@@ -9,12 +10,20 @@ import { openExternal, safeHttpUrl } from "@/lib/url/safeUrl";
 import { stepSummary, type ScrapeStep } from "@/lib/scrape/steps";
 
 const POLL_MS = 1200;
+/** Icon and colour per item kind: a source, a dropped/dismissed one, a finished lead, a failed lead. */
+const ITEM_ICON: Record<NonNullable<ScrapeStep["items"]>[number]["kind"] & string, [string, string]> = {
+  source: ["icon-globe", "#6b7686"],
+  dropped: ["icon-ban", "#C0362C"],
+  done: ["icon-circle-check", "#0f7b3f"],
+  failed: ["icon-circle-alert", "#C0362C"],
+};
 /** Stop polling a job that never finishes (the runner was killed). */
 const MAX_POLL_MS = 3 * 60_000;
 
 export default function ScrapeProgress({ jobId }: { jobId: string }) {
   const [steps, setSteps] = useState<ScrapeStep[]>([]);
   const [status, setStatus] = useState<string>("queued");
+  const [kind, setKind] = useState<string>("scrape");
   const [open, setOpen] = useState<boolean | null>(null); // null: follow the status
 
   useEffect(() => {
@@ -24,7 +33,7 @@ export default function ScrapeProgress({ jobId }: { jobId: string }) {
     const tick = async () => {
       const p = await getScrapeProgress(jobId).catch(() => null);
       if (!alive) return;
-      if (p) { setSteps(p.steps); setStatus(p.status); }
+      if (p) { setSteps(p.steps); setStatus(p.status); setKind(p.kind); }
       const live = !p || p.status === "queued" || p.status === "running";
       if (live && Date.now() - started < MAX_POLL_MS) timer = setTimeout(tick, POLL_MS);
     };
@@ -36,14 +45,17 @@ export default function ScrapeProgress({ jobId }: { jobId: string }) {
   const failed = status === "failed";
   const expanded = open ?? running;
   const current = [...steps].reverse().find((s) => s.status === "active");
-  const head = failed ? "The search stopped" : running ? `${current?.label ?? "Starting the search"}…` : stepSummary(steps) || "Search finished";
+  const search = kind === "scrape";
+  const head = failed ? (search ? "The search stopped" : "The run stopped")
+    : running ? `${current?.label ?? (search ? "Starting the search" : "Starting")}…`
+    : stepSummary(steps) || (search ? "Search finished" : "Done");
 
   return (
     <div style={css("align-self:stretch;max-width:620px;display:flex;flex-direction:column;gap:10px;animation:cUp .25s ease-out backwards")}>
       <Box
         onClick={() => setOpen(!expanded)}
         aria-expanded={expanded}
-        aria-label={expanded ? "Hide the search steps" : "Show the search steps"}
+        aria-label={expanded ? "Hide the steps" : "Show the steps"}
         style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#6b7686;font-size:14px;align-self:flex-start"
         styleHover="color:#101418"
       >
@@ -74,9 +86,9 @@ export default function ScrapeProgress({ jobId }: { jobId: string }) {
                           style={"display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:" + (j ? "1px solid #f3f4f6" : "0") + ";cursor:" + (it.url ? "pointer" : "default")}
                           styleHover={it.url ? "background:#f8fafc" : undefined}
                         >
-                          <i className={it.kind === "dropped" ? "icon-ban" : "icon-globe"} style={{ fontSize: 16, color: it.kind === "dropped" ? "#C0362C" : "#6b7686", flex: "none" }} />
+                          <i className={ITEM_ICON[it.kind ?? "source"][0]} style={{ fontSize: 16, color: ITEM_ICON[it.kind ?? "source"][1], flex: "none" }} />
                           <span style={css("flex:1;min-width:0;font-size:13.5px;color:" + (it.kind === "dropped" ? "#8a94a3;text-decoration:line-through" : "#101418") + ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{it.title}</span>
-                          <span style={css("flex:none;font-size:12.5px;color:#8a94a3")}>{it.meta}</span>
+                          <span style={css("flex:none;font-size:12.5px;color:" + (it.kind === "done" ? "#0f7b3f" : it.kind === "failed" ? "#C0362C" : "#8a94a3"))}>{it.meta}</span>
                         </Box>
                       ))}
                       {!!s.more && <div style={css("padding:8px 14px;border-top:1px solid #f3f4f6;font-size:12.5px;color:#8a94a3")}>and {s.more} more</div>}

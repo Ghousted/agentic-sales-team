@@ -8,6 +8,7 @@ import { membersOfTeam } from "@/lib/teams/membership";
 import { agentInfo } from "@/lib/pod/orchestrate";
 import { CAPABILITIES } from "@/lib/agentTypes";
 import { converse } from "./converse";
+import { MENTION_RE } from "./clarify";
 import { workDoing, workDoneSummary } from "./thread";
 import { waitingText } from "@/lib/pod/summary";
 import type { Intent } from "@/lib/ai/intent";
@@ -28,7 +29,7 @@ const engineReady = (cap: string) => CAPABILITIES.find((c) => c.id === cap)?.eng
 
 /** Resolve @Name mentions in the message to agent ids among the given roster. */
 export function parseMentions(message: string, roster: { id: string; name: string }[]): string[] {
-  const tokens = (message.match(/@([\w'-]+)/g) ?? []).map((t) => t.slice(1).toLowerCase());
+  const tokens = (message.match(MENTION_RE) ?? []).map((t) => t.slice(1).toLowerCase());
   const ids: string[] = [];
   for (const tok of tokens) {
     const hit = roster.find((a) => a.name.toLowerCase().split(" ")[0] === tok || a.name.toLowerCase().replace(/\s+/g, "") === tok);

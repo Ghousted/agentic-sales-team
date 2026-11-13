@@ -138,6 +138,21 @@ describe("chainNext", () => {
     expect(fake.state.inserts).toHaveLength(1);
   });
 
+  it("asks the assessor to review only the leads the search found", async () => {
+    vi.mocked(membersOfTeam).mockResolvedValue(["s1", "as1"]);
+    fake.state.selects = [
+      [scout], [], [],            // memberWithCapability(scrape)
+      [scout], [], [],            // finisher
+      [scout], [], [], [assessor], [], [], // memberWithCapability(assess)
+      [assessor], [], [],         // assessor info for the hand-off line
+      [],                         // enqueuePodStage: no active jobs
+      [assessor], [], [],         // enqueuePodStage: agentInfo
+    ];
+    await chainNext("u1", "t1", "scrape", 2, undefined, ["L1", "L2"]);
+    expect(fake.state.inserts[0]).toMatchObject({ kind: "assess", params: { leadIds: ["L1", "L2"], leadCount: 2, batchSize: 2 } });
+    expect(vi.mocked(postTeamMessage).mock.calls.at(-1)?.[3]).toMatch(/review 2 new leads/);
+  });
+
   it("stops before proposals, and says why, when the catalog is empty", async () => {
     catalog.items = [];
     const ae = { ...agentRow, id: "ae1", name: "Ivan Torres", capabilities: ["outreach", "proposal"] };

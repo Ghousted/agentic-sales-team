@@ -42,6 +42,8 @@ export default function ChatHome() {
     Promise.all(teams.map((t) => listPendingApprovals(t.id).then((rows) => ({ t, rows })).catch(() => ({ t, rows: [] }))))
       .then((res) => {
         if (!live) return;
+        // Share them with the chat page, so its Proceed/Cancel buttons show at once.
+        set((prev) => ({ chatPending: { ...prev.chatPending, ...Object.fromEntries(res.map(({ t, rows }) => [t.id, rows.map((r) => r.id)])) } }));
         setNeeds(res.filter(({ rows }) => rows.length).map(({ t, rows }) => ({
           title: rows.length + (rows.length === 1 ? " approval" : " approvals") + " waiting in " + t.name,
           sub: rows[0].agentName + " is waiting for your yes" + (rows[0].leadCount ? " on " + rows[0].leadCount + " lead" + (rows[0].leadCount === 1 ? "" : "s") : "") + ". Nothing goes out until you approve it.",

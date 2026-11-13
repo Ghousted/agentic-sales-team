@@ -38,20 +38,27 @@ export default function EmailsClient({ initialDrafts }: { initialDrafts: DraftDT
   const copyMessage = (d: DraftDTO) => {
     navigator.clipboard?.writeText(d.body).then(() => showToast("Message copied"), () => showError("Copy failed"));
   };
+  // Each change shows at once. When the save fails, undo it and say so.
   const markSent = async (d: DraftDTO) => {
     setDrafts((prev) => prev.map((x) => (x.id === d.id ? { ...x, status: "sent", sentAt: new Date().toISOString() } : x)));
-    await markDraftSent(d.id);
-    showToast("Marked as sent");
+    const ok = await markDraftSent(d.id).catch(() => false);
+    if (ok) { showToast("Marked as sent"); return; }
+    setDrafts((prev) => prev.map((x) => (x.id === d.id ? d : x)));
+    showError("Couldn't mark it as sent. Please try again.");
   };
   // Discard / Clear sent soft-hide the draft. Analytics counts still read the row.
   const discard = async (d: DraftDTO) => {
     setDrafts((prev) => prev.filter((x) => x.id !== d.id));
-    await discardDraft(d.id);
-    showToast("Draft discarded");
+    const ok = await discardDraft(d.id).catch(() => false);
+    if (ok) { showToast("Draft discarded"); return; }
+    setDrafts((prev) => (prev.some((x) => x.id === d.id) ? prev : [d, ...prev]));
+    showError("Couldn't discard the draft. Please try again.");
   };
   const clearSent = async () => {
+    const before = drafts;
     setDrafts((prev) => prev.filter((x) => !isSent(x)));
-    const n = await clearSentDrafts();
+    const n = await clearSentDrafts().catch(() => -1);
+    if (n < 0) { setDrafts(before); showError("Couldn't clear the sent drafts. Please try again."); return; }
     if (n > 0) showToast(`Cleared ${n} sent draft${n === 1 ? "" : "s"}`);
   };
 

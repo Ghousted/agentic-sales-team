@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { av } from "@/lib/visuals";
@@ -94,7 +94,9 @@ function ChatsInner() {
   // The agent whose next line is being revealed. Only the reveal below writes it;
   // the store's chatAwaiting (a send still waiting on the server) is separate.
   const [typer, setTyper] = useState<string | null>(null);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // From the store, not local state: the dashboard and earlier visits fill it, so
+  // the Proceed/Cancel buttons show with the cached thread, not one poll later.
+  const pendingIds = useMemo(() => new Set(s.chatPending[activeId] ?? []), [s.chatPending, activeId]);
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [deciding, setDeciding] = useState<Set<string>>(new Set());
   const [teamLeads, setTeamLeads] = useState<TeamLeadPick[]>([]);
@@ -192,7 +194,7 @@ function ChatsInner() {
       try {
         const [rows, pend] = await Promise.all([listTeamMessages(teamId, cursorRef.current), listPendingApprovals(teamId)]);
         if (!alive) return;
-        setPendingIds(new Set(pend.map((p) => p.id)));
+        set((prev) => ({ chatPending: { ...prev.chatPending, [teamId]: pend.map((p) => p.id) } }));
         // Read the cursor now, not at request time: a clear may have moved it past
         // rows this request still returned.
         const fresh = clearingRef.current ? [] : rows.filter((r) => r.id > cursorRef.current);

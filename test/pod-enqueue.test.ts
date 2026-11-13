@@ -24,6 +24,8 @@ vi.mock("@/lib/leads/store", () => ({
 }));
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []) }));
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []) }));
+const catalog = vi.hoisted(() => ({ items: [{ id: "p1", name: "AI Training" }] as { id: string; name: string }[] }));
+vi.mock("@/lib/products/store", () => ({ listProducts: async () => catalog.items }));
 vi.mock("@/lib/chat/teamMessages", () => ({ postTeamMessage: vi.fn(async () => {}), userFirstName: vi.fn(async () => "Sam") }));
 
 import { chainNext, enqueuePodStage, leadOwnerForTeam } from "@/lib/pod/orchestrate";
@@ -32,7 +34,7 @@ import { postTeamMessage } from "@/lib/chat/teamMessages";
 
 const agentRow = { id: "a1", userId: "u1", name: "Ann", role: "", goal: "", task: "", capabilities: ["research"] };
 
-beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; vi.mocked(postTeamMessage).mockClear(); });
+beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; vi.mocked(postTeamMessage).mockClear(); catalog.items = [{ id: "p1", name: "AI Training" }]; });
 
 describe("enqueuePodStage", () => {
   it("still skips when the team has a live running job for the stage", async () => {
@@ -133,6 +135,26 @@ describe("chainNext", () => {
     ];
     await chainNext("u1", "t1", "scrape", 3);
     expect(fake.state.inserts).toHaveLength(1);
+  });
+
+  it("stops before proposals, and says why, when the catalog is empty", async () => {
+    catalog.items = [];
+    const ae = { ...agentRow, id: "ae1", name: "Ivan Torres", capabilities: ["outreach", "proposal"] };
+    vi.mocked(membersOfTeam).mockResolvedValue(["ae1"]);
+    fake.state.selects = [
+      [ae], [], [],               // finisher
+      [ae], [], [],               // nextCoverableStage: proposal
+    ];
+    await chainNext("u1", "t1", "outreach", 5, "ae1");
+    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toBe("I've drafted 5 emails. @Sam, your product catalog is empty, so I can't write proposals. Add products on the Products page.");
+    expect(fake.state.inserts).toHaveLength(0);
+  });
+
+  it("says leads failed, not 'no leads', when every lead of a stage failed", async () => {
+    const a1 = { ...agentRow, id: "a1", capabilities: ["research"] };
+    fake.state.selects = [[a1], [], []];
+    await chainNext("u1", "t1", "research", 0, "a1", undefined, undefined, 3);
+    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toBe("@Sam, I couldn't finish 3 leads because of an error. Ask me to try again. I stopped the chain here.");
   });
 
   it("doesn't @mention itself when the same agent does the next stage", async () => {

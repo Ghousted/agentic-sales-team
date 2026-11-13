@@ -33,12 +33,9 @@ export async function qualifyLead(
   ].join("\n");
   const rb = lead.research ? `\nResearch: ${lead.research.summary}; priorities: ${(lead.research.priorities || []).join("; ")}` : "";
   const turns: Turn[] = [{ role: "user", text: `${untrusted(`Name: ${lead.name}\nTitle: ${lead.title || "(unknown)"}\nCompany: ${lead.company || "(unknown)"}${rb}`)}\nHas email: ${lead.email ? "yes" : "no"}` }];
-  try {
-    const r = await aiJSON<QualifyResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.3 });
-    const score = Math.max(1, Math.min(100, Math.round(r.score ?? 50)));
-    return { score, tier: r.tier ?? clampTier(score), reason: (r.reason ?? "").trim() || "Qualified." };
-  } catch {
-    const s = lead.email ? 60 : 45;
-    return { score: s, tier: clampTier(s), reason: "Heuristic score (qualification failed)." };
-  }
+  // A failed call throws: the runner counts the lead as failed and leaves it
+  // unscored for the next run, instead of saving a made-up score.
+  const r = await aiJSON<QualifyResult>(system, turns, SCHEMA as unknown as Record<string, unknown>, { maxTokens: 300, temperature: 0.3 });
+  const score = Math.max(1, Math.min(100, Math.round(r.score ?? 50)));
+  return { score, tier: r.tier ?? clampTier(score), reason: (r.reason ?? "").trim() || "Qualified." };
 }

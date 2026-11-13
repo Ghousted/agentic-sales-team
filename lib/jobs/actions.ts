@@ -81,14 +81,14 @@ export async function getJob(id: string): Promise<{ status: string; result: unkn
   return row ?? null;
 }
 
-/** A scrape job's live steps for the chat timeline. The user's own jobs only. */
-export async function getScrapeProgress(jobId: string): Promise<{ status: string; steps: ScrapeStep[]; error: string | null } | null> {
+/** A job's live steps for the chat timeline (a scrape or a lead step). The user's own jobs only. */
+export async function getScrapeProgress(jobId: string): Promise<{ status: string; kind: string; steps: ScrapeStep[]; error: string | null } | null> {
   if (!isDbConfigured() || typeof jobId !== "string" || !/^[0-9a-f-]{36}$/i.test(jobId)) return null;
   const userId = await uid();
   if (!userId) return null;
   const [job] = await getDb().select({ status: jobs.status, kind: jobs.kind, result: jobs.result, error: jobs.error })
     .from(jobs).where(and(eq(jobs.id, jobId), eq(jobs.userId, userId))).limit(1);
-  if (!job || job.kind !== "scrape") return null;
+  if (!job) return null;
   const steps = (job.result as { steps?: ScrapeStep[] } | null)?.steps;
-  return { status: job.status, steps: Array.isArray(steps) ? steps : [], error: job.status === "failed" ? "That search didn't complete." : null };
+  return { status: job.status, kind: job.kind, steps: Array.isArray(steps) ? steps : [], error: job.status === "failed" ? (job.kind === "scrape" ? "That search didn't complete." : "That run didn't complete.") : null };
 }

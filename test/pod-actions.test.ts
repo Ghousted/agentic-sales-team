@@ -96,7 +96,7 @@ describe("approveJob (Proceed)", () => {
   it("says a short 'starting now' for other steps", async () => {
     state.answer = (sql) => (/^update "jobs"/.test(sql) ? [["a2", "research", { teamId: "t1" }]] : []);
     expect(await approveJob(JOB)).toEqual({ ok: true, kind: "research", pod: false });
-    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toBe("Okay, starting now.");
+    expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toMatch(/^Okay, starting now\. ⟦run:[0-9a-f-]{36}⟧$/);
   });
 });
 

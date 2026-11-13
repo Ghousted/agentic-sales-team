@@ -13,7 +13,9 @@ describe("waitingText", () => {
 describe("startText and askBookText", () => {
   it("starts a scrape with its live timeline marker, other steps with a short line", () => {
     expect(startText("scrape", "j1")).toBe("Okay, starting the search now. I will post the results here. ⟦run:j1⟧");
-    expect(startText("research", "j1")).toBe("Okay, starting now.");
+    expect(startText("research", "j1")).toBe("Okay, starting now. ⟦run:j1⟧");
+    // A meeting booking has no live steps, so no timeline marker.
+    expect(startText("book-meeting", "j1")).toBe("Okay, starting now.");
   });
 
   it("asks before booking, with who, when and the Proceed/Cancel marker", () => {

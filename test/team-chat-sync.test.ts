@@ -151,7 +151,7 @@ describe("teamChat", () => {
       db.rows = [{ id: 1, who: "me", text: "write to my leads" }, { id: 2, who: "out", text: askWhoText("Ollie") }];
       const res = await teamChat("t1", "Jane");
       expect(enqueueJob).toHaveBeenCalledWith(expect.objectContaining({ kind: "outreach", leadIds: ["l1"], ask: false }));
-      expect(res.messages.at(-1)?.text).toBe("Okay, starting now.");
+      expect(res.messages.at(-1)?.text).toBe("Okay, starting now. ⟦run:j1⟧");
       expect(res.follow).toEqual({ id: "j1", kind: "outreach", pod: false });
     });
 

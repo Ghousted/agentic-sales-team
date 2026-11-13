@@ -1,15 +1,18 @@
-// The live step log of a scrape, shown as a timeline in the team chat. The scrape
-// writes each step into its job row while it runs; the chat polls the row.
+// The live step log of a run (a scrape, or a lead step such as research), shown as
+// a timeline in the team chat. The run writes each step into its job row while
+// it runs; the chat polls the row.
 // No I/O here, so the browser can import the types and unit tests can check it.
 
-export type ScrapeStepId = "plan" | "search" | "gate" | "extract" | "save";
+/** Scrape steps: plan, search, gate, extract, save. Lead steps: pick, work. */
+export type ScrapeStepId = "plan" | "search" | "gate" | "extract" | "save" | "pick" | "work";
 
 export interface ScrapeStepItem {
   title: string;
   meta: string;
   url?: string;
-  /** "dropped" for a result the seller check removed. */
-  kind?: "source" | "dropped";
+  /** "dropped": a result the seller check removed, or a lead that was dismissed or
+   *  skipped. "done": a lead the step finished. "failed": a lead that failed. */
+  kind?: "source" | "dropped" | "done" | "failed";
 }
 
 export interface ScrapeStep {
@@ -42,7 +45,10 @@ export function trunc(text: string, n: number): string {
   return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t;
 }
 
-/** The marker that puts the live timeline of scrape job `jobId` under a message. */
+/** At most this many items are listed in a step; the rest show as "and N more". */
+export const STEP_ITEMS_MAX = 8;
+
+/** The marker that puts the live timeline of job `jobId` under a message. */
 export function runMarker(jobId: string): string {
   return ` ⟦run:${jobId}⟧`;
 }
@@ -83,6 +89,9 @@ export function createStepLog(write?: (steps: ScrapeStep[]) => Promise<void>): S
 /** One line for the finished timeline, for example
  *  "47 sources · 11 sellers dropped · 8 leads". */
 export function stepSummary(steps: ScrapeStep[]): string {
+  // A lead step: its work step's final label ("Reviewed 2 leads · 1 accepted").
+  const work = steps.find((s) => s.id === "work");
+  if (work) return work.status === "done" ? work.label : "";
   const search = steps.find((s) => s.id === "search");
   const gate = steps.find((s) => s.id === "gate");
   const save = steps.find((s) => s.id === "save");

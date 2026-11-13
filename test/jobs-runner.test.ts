@@ -111,7 +111,7 @@ describe("POST /api/jobs/run", () => {
     const res = await runJobs();
     expect(res.status).toBe(200);
     expect(chainNext).toHaveBeenCalledOnce();
-    expect(doneUpdate()?.result).toEqual({ briefed: 1, failed: 0 });
+    expect(doneUpdate()?.result).toMatchObject({ briefed: 1, failed: 0 });
     expect(fake.state.updates.some((u) => u.status === "failed")).toBe(false);
   });
 
@@ -123,7 +123,7 @@ describe("POST /api/jobs/run", () => {
     vi.mocked(draftResearch).mockImplementation(async () => { clock += 100_000; return { summary: "s" } as never; });
     await runJobs();
     expect(draftResearch).toHaveBeenCalledTimes(2);
-    expect(doneUpdate()?.result).toEqual({ briefed: 2, failed: 0, skipped: 1 });
+    expect(doneUpdate()?.result).toMatchObject({ briefed: 2, failed: 0, skipped: 1 });
   });
 
   it("gives up on a lead whose AI call hangs and moves on", async () => {
@@ -136,7 +136,13 @@ describe("POST /api/jobs/run", () => {
     const pending = runJobs();
     await vi.advanceTimersByTimeAsync(80_000);
     await pending;
-    expect(doneUpdate()?.result).toEqual({ briefed: 1, failed: 1 });
+    expect(doneUpdate()?.result).toMatchObject({ briefed: 1, failed: 1 });
+    // The live timeline: the leads picked, each lead with its result, a summary.
+    const steps = (doneUpdate()?.result as { steps: { id: string; label: string; items?: { meta: string; kind: string }[] }[] }).steps;
+    expect(steps.find((st) => st.id === "pick")?.label).toBe("Picked 2 leads");
+    const work = steps.find((st) => st.id === "work")!;
+    expect(work.label).toBe("Researched 1 lead · 1 failed");
+    expect(work.items?.map((it) => [it.meta, it.kind])).toEqual(expect.arrayContaining([["Brief ready", "done"], ["Failed", "failed"]]));
   });
 });
 
@@ -181,7 +187,7 @@ describe("match job", () => {
       .mockRejectedValueOnce(new Error("LLM down"));
     await runJobs();
     expect(vi.mocked(addMatches).mock.calls.map((c) => c[2])).toEqual(["fit", "nofit"]);
-    expect(doneUpdate()?.result).toEqual({ matched: 1, failed: 1 });
+    expect(doneUpdate()?.result).toMatchObject({ matched: 1, failed: 1 });
   });
 });
 

@@ -109,20 +109,28 @@ export async function countPending(userId: string, agentId: string, capability: 
   return rows.length;
 }
 
-/** Queue a pod stage and post its ask. "busy" when this team already has an
- *  active job of that kind, "paused" when the agent is paused or removed.
+/** Queue a pod stage and post its ask. "busy" when this team already has a job
+ *  of that kind queued or running, "paused" when the agent is paused or removed.
+ *  A job of that kind still waiting for Proceed/Cancel is replaced: its ask can
+ *  be gone (a cleared chat), and the user now looks at this newer chain.
  *  `leadIds` limits the stage to those leads, for example the review of the
  *  leads a search just found. Without them the stage works the team's book. */
 export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string, leadIds?: string[]): Promise<"queued" | "busy" | "paused" | "no-ai"> {
   if (AI_JOB_KINDS.has(capability) && !isAIConfigured()) return "no-ai";
-  // Don't stack duplicates: skip if this team already has an active job for this capability.
+  // Don't stack duplicates: skip if this team already has a job of this kind at work.
   // A 'running' job past its time limit is dead (the runner reaps it), so it doesn't count.
   const now = new Date();
   const active = await getDb().select().from(jobs)
     .where(and(eq(jobs.userId, userId), eq(jobs.kind, capability), inArray(jobs.status, ["queued", "running", "needs_approval"])));
-  if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return "busy";
+  const mine = active.filter((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId);
+  if (mine.some((j) => j.status !== "needs_approval")) return "busy";
   const info = await agentInfo(userId, agentId);
   if (!info) return "paused";
+  const waiting = mine.map((j) => j.id);
+  if (waiting.length) {
+    await getDb().update(jobs).set({ status: "dismissed", finishedAt: now })
+      .where(and(eq(jobs.userId, userId), inArray(jobs.id, waiting), eq(jobs.status, "needs_approval")));
+  }
   const ids = leadIds?.length ? leadIds.slice(0, MAX_BATCH_SIZE) : null;
   const leadCount = ids ? ids.length : await countPending(userId, agentId, capability, teamId);
   // A stage waits for the user (the ask shows Proceed/Cancel in the chat), unless
@@ -250,7 +258,7 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
       const handoff = info.id === finisher.id ? `Next, I'll do the ${noun}.` : `@${first(info)}, please do the ${noun}.`;
       await postTeamMessage(userId, teamId, finisher.id, `${done} ${handoff}`);
       const r = await enqueuePodStage(userId, teamId, next.capability, next.agentId);
-      if (r === "busy") await postTeamMessage(userId, teamId, info.id, `A ${noun} run is already waiting on this team. Answer that one first.`);
+      if (r === "busy") await postTeamMessage(userId, teamId, info.id, `A ${noun} run is already in progress on this team. I'll pick up these leads in my next run.`);
       if (r === "paused") await postTeamMessage(userId, teamId, finisher.id, `${first(info)} is paused, so I stopped the chain here.`);
       if (r === "no-ai") await postTeamMessage(userId, teamId, info.id, NO_AI_TEXT);
     }

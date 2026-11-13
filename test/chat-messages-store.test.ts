@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Scripted Drizzle stand-in: each awaited select/delete returns the next queued
 // result; inserts are recorded.
 const fake = vi.hoisted(() => {
-  const state = { results: [] as unknown[][], inserts: [] as unknown[] };
+  const state = { results: [] as unknown[][], inserts: [] as unknown[], updates: [] as unknown[] };
   const chain = (result: () => unknown) => {
     const c: Record<string, unknown> = {};
     for (const m of ["from", "where", "limit", "orderBy", "returning"]) c[m] = () => c;
@@ -14,6 +14,7 @@ const fake = vi.hoisted(() => {
   const db = {
     select: () => chain(next),
     delete: () => chain(next),
+    update: () => ({ set: (v: unknown) => { state.updates.push(v); return chain(() => []); } }),
     insert: () => ({ values: (v: unknown) => { state.inserts.push(v); return chain(() => []); } }),
   };
   return { state, db };
@@ -47,6 +48,13 @@ describe("clearMessages", () => {
   it("returns the highest id it deleted, so the poll cursor can skip past them", async () => {
     fake.state.results = [[{ id: 7 }, { id: 12 }, { id: 9 }]];
     expect(await clearMessages("t1")).toBe(12);
+  });
+
+  it("cancels the steps that wait for Proceed/Cancel, since their asks are deleted", async () => {
+    fake.state.updates = [];
+    fake.state.results = [[{ id: 3 }]];
+    await clearMessages("t1");
+    expect(fake.state.updates).toEqual([expect.objectContaining({ status: "dismissed" })]);
   });
 });
 

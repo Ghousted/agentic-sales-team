@@ -2,8 +2,8 @@
 // Persistence for a user's workspace: created agents, created teams, and
 // per-agent removed/paused flags. The 8 seed agents / 4 seed teams stay static;
 // only a user's own changes are stored (and merged client-side on load).
-import { and, eq, asc } from "drizzle-orm";
-import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig, teamMembers } from "@/lib/db";
+import { and, eq, asc, sql } from "drizzle-orm";
+import { getDb, isDbConfigured, agents, teams, agentStates, messages, agentConfig, teamMembers, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import type { Agent, Team, StatusKey, ChatMsg, Chats } from "@/lib/types";
 import type { ThreadMsg } from "@/lib/chat/thread";
@@ -225,5 +225,9 @@ export async function clearMessages(convId: string): Promise<number> {
   const userId = await uid();
   if (!userId) return 0;
   const gone = await getDb().delete(messages).where(and(eq(messages.userId, userId), eq(messages.agentId, convId))).returning({ id: messages.id });
+  // A step waiting for Proceed/Cancel loses its ask with the messages: cancel it,
+  // so it does not wait unseen and block the next step of that kind.
+  await getDb().update(jobs).set({ status: "dismissed", finishedAt: new Date() })
+    .where(and(eq(jobs.userId, userId), eq(jobs.status, "needs_approval"), sql`${jobs.params}->>'teamId' = ${convId}`));
   return gone.reduce((max, r) => Math.max(max, r.id), 0);
 }

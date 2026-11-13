@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Scripted Drizzle stand-in: each awaited select returns the next queued result.
 const fake = vi.hoisted(() => {
-  const state = { selects: [] as unknown[][], inserts: [] as unknown[] };
+  const state = { selects: [] as unknown[][], inserts: [] as unknown[], updates: [] as unknown[] };
   const chain = (result: () => unknown) => {
     const c: Record<string, unknown> = {};
     for (const m of ["from", "where", "limit", "returning"]) c[m] = () => c;
@@ -12,6 +12,7 @@ const fake = vi.hoisted(() => {
   const db = {
     select: () => chain(() => state.selects.shift() ?? []),
     insert: () => ({ values: (v: unknown) => { state.inserts.push(v); return chain(() => [{ id: "new-job" }]); } }),
+    update: () => ({ set: (v: unknown) => { state.updates.push(v); return chain(() => []); } }),
   };
   return { state, db };
 });
@@ -35,7 +36,7 @@ import { postTeamMessage } from "@/lib/chat/teamMessages";
 
 const agentRow = { id: "a1", userId: "u1", name: "Ann", role: "", goal: "", task: "", capabilities: ["research"] };
 
-beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; vi.mocked(postTeamMessage).mockClear(); catalog.items = [{ id: "p1", name: "AI Training" }]; });
+beforeEach(() => { fake.state.selects = []; fake.state.inserts = []; fake.state.updates = []; vi.mocked(postTeamMessage).mockClear(); catalog.items = [{ id: "p1", name: "AI Training" }]; });
 
 describe("enqueuePodStage", () => {
   it("still skips when the team has a live running job for the stage", async () => {
@@ -50,6 +51,23 @@ describe("enqueuePodStage", () => {
     fake.state.selects = [[dead], [agentRow], []];
     await enqueuePodStage("u1", "t1", "research", "a1");
     expect(fake.state.inserts).toHaveLength(1);
+  });
+
+  it("replaces a step of that kind still waiting for an answer, whose ask may be gone", async () => {
+    const old = { id: "old", kind: "qualify", status: "needs_approval", startedAt: null, params: { teamId: "t1" } };
+    fake.state.selects = [[old], [agentRow], [], []];
+    const r = await enqueuePodStage("u1", "t1", "qualify", "a1");
+    expect(r).toBe("queued");
+    expect(fake.state.updates).toEqual([expect.objectContaining({ status: "dismissed" })]);
+    expect(fake.state.inserts).toHaveLength(1);
+  });
+
+  it("is busy, and replaces nothing, while a step of that kind is queued or running", async () => {
+    const live = { id: "live", kind: "qualify", status: "queued", startedAt: null, params: { teamId: "t1" } };
+    fake.state.selects = [[live]];
+    expect(await enqueuePodStage("u1", "t1", "qualify", "a1")).toBe("busy");
+    expect(fake.state.updates).toHaveLength(0);
+    expect(fake.state.inserts).toHaveLength(0);
   });
 
   it("asks first when the agent has no saved mode (Ask is the default)", async () => {

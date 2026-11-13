@@ -5,7 +5,8 @@ import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { aiJSON, isAIConfigured } from "@/lib/ai/openrouter";
-import { scrapeHasTarget, briefFromInstruction, isMoreRequest, DEFAULT_SCRAPE_COUNT, ANY_PRODUCT, type BriefField, type ScrapeBrief } from "./clarify";
+import { scrapeHasTarget, briefFromInstruction, isMoreRequest, stripMentions, DEFAULT_SCRAPE_COUNT, ANY_PRODUCT, type BriefField, type ScrapeBrief } from "./clarify";
+import { readDecision } from "./yesNo";
 import { stripMarkers } from "./thread";
 
 const ANYWHERE = /\b(anywhere|any ?where|any location|everywhere|worldwide|world ?wide|global(ly)?|international(ly)?|remote|online|doesn'?t matter|does not matter|no preference|any country|all countries)\b/i;
@@ -22,7 +23,7 @@ const DEFER = /\b(not sure|unsure|don'?t know|no idea|you (pick|choose|decide)|u
 /** "Lets look for more", "search again": names no target of its own. */
 function isBareMore(message: string): boolean {
   if (!isMoreRequest(message)) return false;
-  const rest = message.replace(/@[\w'-]+/g, " ").replace(/\b(let'?s|lets|look(ing)?|for|find|search|get|some|more|again|another|batch|round|set|same|criteria|please|can|you|we|leads?|prospects?|the|a|of|like|those|these|ones)\b/gi, " ");
+  const rest = stripMentions(message).replace(/\b(let'?s|lets|look(ing)?|for|find|search|get|some|more|again|another|batch|round|set|same|criteria|please|can|you|we|leads?|prospects?|the|a|of|like|those|these|ones|last|time|before|previous|earlier|did|do|as)\b/gi, " ");
   return !rest.replace(/[^a-z0-9]/gi, "").length;
 }
 
@@ -36,12 +37,13 @@ function firstCount(text: string): number | undefined {
 export function briefFromRequest(raw: string, params: { geo?: string; target?: number }): ScrapeBrief {
   // Hidden ⟦…⟧ markers are app state, and an @mention names the agent: neither is
   // part of what to search for.
-  const message = stripMarkers(raw).replace(/@[\w'-]+/g, " ").replace(/\s+/g, " ");
+  const message = stripMentions(stripMarkers(raw));
   // A card answer ("Manila · 5 leads") names a place and a count, not who to find.
   if (/⟦answer:/.test(raw)) return {};
   const geo = params.geo?.trim() && !PLATFORM.test(params.geo.trim()) ? params.geo.trim() : undefined;
   return {
-    what: scrapeHasTarget(message) && !isBareMore(message) ? message.trim() : undefined,
+    // A plain "yes" or "do it" (to an agent's offer) names no target either.
+    what: scrapeHasTarget(message) && !isBareMore(message) && !readDecision(message) ? message.trim() : undefined,
     where: geo && !ANYWHERE.test(geo) ? geo : ANYWHERE_REQUEST.test(message) || (geo && ANYWHERE.test(geo)) ? "anywhere" : undefined,
     count: params.target && params.target > 0 ? params.target : undefined,
   };
@@ -104,7 +106,9 @@ const SCHEMA = {
 } as const;
 
 /** Read the user's answer to the agent's scrape questions. */
-export async function readScrapeAnswer(reply: string, known: ScrapeBrief, missing: BriefField[]): Promise<ScrapeBrief> {
+export async function readScrapeAnswer(raw: string, known: ScrapeBrief, missing: BriefField[]): Promise<ScrapeBrief> {
+  // An @mention names the agent, not an answer.
+  let reply = stripMentions(raw);
   // The product is one of the catalog names, so rules read it. The model reads the rest.
   const product = missing.includes("product") ? productAnswer(reply, known.products) : undefined;
   const rest = missing.filter((f) => f !== "product");

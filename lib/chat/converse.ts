@@ -1,4 +1,5 @@
 import "server-only";
+import { stripMarkers } from "./thread";
 // A real, in-character conversational reply for the team chat: used when a
 // message is a question or small talk (intent = chat/unknown) rather than a
 // command. The responding agent answers with knowledge of its own persona, its
@@ -58,8 +59,11 @@ function toTurns(history: HistMsg[]): Turn[] {
     const role: Turn["role"] = m.who === "me" ? "user" : "model";
     if (!out.length && role === "model") continue;
     const last = out[out.length - 1];
-    if (last && last.role === role) last.text += "\n" + m.text;
-    else out.push({ role, text: m.text });
+    // Hidden ⟦…⟧ markers are app state: the model must not see or copy them.
+    const text = stripMarkers(m.text);
+    if (!text) continue;
+    if (last && last.role === role) last.text += "\n" + text;
+    else out.push({ role, text });
   }
   return out;
 }

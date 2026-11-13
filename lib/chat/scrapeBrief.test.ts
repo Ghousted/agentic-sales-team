@@ -91,3 +91,16 @@ describe("withLastSearch", () => {
     expect(withLastSearch({}, "yes", null)).toEqual({});
   });
 });
+
+describe("what a request names as the target", () => {
+  it("names no target for a yes, filler words, or 'like last time'", () => {
+    expect(briefFromRequest("yes", {}).what).toBeUndefined();
+    expect(briefFromRequest("@Scout sure, do it", {}).what).toBeUndefined();
+    expect(briefFromRequest("find me 10 good leads", {}).what).toBeUndefined();
+    expect(briefFromRequest("find me ten leads for my product", {}).what).toBeUndefined();
+  });
+
+  it("keeps a real target and drops an accented @mention", () => {
+    expect(briefFromRequest("@Zoë dentists in Austin", {}).what).toBe("dentists in Austin");
+  });
+});

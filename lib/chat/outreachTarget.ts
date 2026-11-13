@@ -1,8 +1,10 @@
 // Pure helpers for the team-chat outreach "ask who" gate. No I/O, so unit tests can check it.
 
 // Matches an explicit "everyone" ask so outreach can target the whole book
-// without a /lead pick. Word-boundaried so it won't fire inside "call"/"small".
-const ALL_RE = /\b(all|everyone|everybody|every ?(one|lead|body))\b/i;
+// without a /lead pick. "everyone" anywhere counts. "all" counts only as the
+// object of the ask ("email all", "all of them", "all leads"), not inside
+// "all the dentists" or "Maria and all her colleagues".
+const ALL_RE = /\b(everyone|everybody|all of them|all (my |the )?leads|the whole (list|book))\b|\ball\s*[.!?]?\s*$/i;
 
 /** True when the message asks to outreach the entire book ("all", "everyone"). */
 export function isAllRequest(message: string): boolean {

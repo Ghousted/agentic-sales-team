@@ -29,7 +29,7 @@ const NAV_ALT = Object.keys(NAV_ROUTES).sort((a, b) => b.length - a.length).map(
 /** Render a chat message with @mentions highlighted (Messenger-style) and, for
  *  agent messages, navigational phrases turned into clickable links. */
 function renderRich(text: string, mine: boolean, router: { push: (href: string) => void }): ReactNode[] {
-  const re = new RegExp("(@[\\w'-]+)|(«[^»]+»)" + (mine ? "" : `|\\b(?:${NAV_ALT})\\b`), "gi");
+  const re = new RegExp("(@[\\p{L}\\p{N}_'-]+)|(«[^»]+»)" + (mine ? "" : `|\\b(?:${NAV_ALT})\\b`), "giu");
   const out: ReactNode[] = [];
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
@@ -56,7 +56,7 @@ function renderRich(text: string, mine: boolean, router: { push: (href: string) 
 function renderComposer(text: string): ReactNode[] {
   // Highlight @mentions and inline «lead» tokens. The « » delimiters stay in the
   // rendered text so its width matches the transparent input (caret alignment).
-  const re = /@[\w'-]+|«[^»]+»/g;
+  const re = /@[\p{L}\p{N}_'-]+|«[^»]+»/gu;
   const out: ReactNode[] = [];
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {

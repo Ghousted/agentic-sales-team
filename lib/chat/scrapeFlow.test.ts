@@ -17,7 +17,7 @@ vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => false, aiJSON: vi.
 vi.mock("@/lib/ai/intent", () => ({ detectIntent: vi.fn() }));
 const route = vi.hoisted(() => ({ next: null as null | { actor: unknown; capability: string; messages: { who: string; text: string }[]; handoff?: { who: string; text: string }[] } }));
 vi.mock("./orchestrate", () => ({
-  parseMentions: () => [],
+  parseMentions: vi.fn(() => []),
   resolve: async () => route.next ?? ({ actor: scout, capability: "scrape", messages: [{ who: "s1", text: "Understood. I'm finding leads now." }] }),
 }));
 const catalog = vi.hoisted(() => ({ items: [] as { id: string; name: string; description: string }[] }));
@@ -258,5 +258,35 @@ describe("an agent from another team", () => {
     const res = await teamChat("t1", "run research");
     expect(enqueueJob).not.toHaveBeenCalled();
     expect(res.messages.at(-1)?.text).toMatch(/no accepted leads on this team that still need research/);
+  });
+});
+
+describe("an open question", () => {
+  it("still takes the answer when the user @mentions the agent that asked", async () => {
+    intent("scrape");
+    agentSaid((await teamChat("t1", "find leads")).messages[0].text);
+    intent("chat");
+    const { parseMentions } = await import("./orchestrate");
+    vi.mocked(parseMentions).mockReturnValueOnce(["s1"]);
+    const res = await teamChat("t1", "@Ava dentists");
+    const { pendingScrapeBrief } = await import("./clarify");
+    expect(pendingScrapeBrief(res.messages[0].text)?.what).toBe("dentists");
+  });
+
+  it("closes on 'never mind' instead of searching for it", async () => {
+    intent("scrape");
+    agentSaid((await teamChat("t1", "find leads")).messages[0].text);
+    intent("chat");
+    const res = await teamChat("t1", "never mind");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/I stopped/);
+  });
+
+  it("reads a card answer even when its words look like another command", async () => {
+    intent("scrape");
+    agentSaid((await teamChat("t1", "find leads")).messages[0].text);
+    intent("outreach");
+    await teamChat("t1", "Email marketers · Austin · 5 leads ⟦answer:" + encodeURIComponent(JSON.stringify({ what: "Email marketers", where: "Austin", count: 5 })) + "⟧");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ kind: "scrape", target: 5, instruction: "Email marketers. Selling: AI Training. Location: Austin." });
   });
 });

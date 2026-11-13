@@ -14,14 +14,14 @@ import { sinceLastUserMessage, stripMarkers, type StoredMsg } from "./thread";
 import { listTeamLeadsForPicker, setLeadReview } from "@/lib/leads/store";
 import { listProducts, type ProductDTO } from "@/lib/products/store";
 import { isAllRequest, askWhoText, askWhoAgainText, isAskWhoPrompt } from "./outreachTarget";
-import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, ANY_PRODUCT, MAX_PRODUCT_PICKS, NO_PRODUCTS_TEXT, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText } from "./clarify";
+import { isAskScrapePrompt, pendingScrapeBrief, missingBriefFields, settleBrief, mergeBrief, askScrapeDetailsText, briefInstruction, scrapeAnswerFrom, scrapeAskText, ANY_PRODUCT, MAX_PRODUCT_PICKS, NO_PRODUCTS_TEXT, type ScrapeBrief, askWhenText, askWhatTimeText, pendingMeeting, askMeetingWhoText, isAskMeetingWhoPrompt, bookedText, stripMentions } from "./clarify";
 import { resolveTargetLeads } from "@/lib/ai/resolveLeads";
 import { inAccountWorkspaces } from "@/lib/workspaces/scope";
 import { briefFromRequest, readScrapeAnswer, lastScrapeBrief, withLastSearch } from "./scrapeBrief";
 import { askText, askBookText, startText, nothingToDoText } from "@/lib/pod/summary";
 import { approveStep, cancelStep, openApproval, createMeetingAsk } from "@/lib/pod/decisions";
 import { readDecision } from "./yesNo";
-import { parseMeetingTime, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
+import { parseMeetingTime, parseMeetingPhrase, safeTimeZone, zonedDate, dayLabel } from "@/lib/ai/meetingTime";
 import { bookMeeting, meetingSettings } from "@/lib/meetings/store";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, messages } from "@/lib/db";
@@ -159,7 +159,7 @@ export async function teamChat(teamId: string, message: string, leadIds?: string
   // message" means since the previous one.
   const history = await _listTeamMessages(userId, teamId);
   // A clear yes/no while an agent's "Proceed?" is open works as the button.
-  const decision = readDecision(text);
+  const decision = readDecision(stripMentions(text));
   const asked = decision ? await openApproval(userId, openAsks(history)) : null;
   const [mine] = await insertTeamMessages(userId, teamId, [{ who: "me", text }]);
   if (decision && asked) {
@@ -222,12 +222,23 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   const intent = await detectIntent(message, members.map((m) => ({ name: m.name, capabilities: m.capabilities })), lastAgent ? stripMarkers(lastAgent.text) : undefined);
   const mentions = parseMentions(message, members);
 
+  // The agent with an open question. An @mention of that agent still answers it.
+  // A mention of another agent is a new request.
+  const asker = pendingMeet?.agent ?? pendingMeetingWho ?? pendingScrape?.agent ?? pendingAgent;
+  const answers = !!asker && mentions.every((id) => id === asker.id);
+  // "cancel" or "never mind" closes the open question instead of being read as the answer.
+  if (asker && answers && readDecision(stripMentions(message)) === "no") {
+    return { messages: [{ who: asker.id, text: "Okay, I stopped. Ask me again when you're ready." }] };
+  }
+
   // Pending meeting time: the Meeting agent asked "when?" or "what time?". This
   // unmentioned reply is the answer. When a day is already known (the marker
   // carries it), prepend it so a bare "2pm" lands on that day. resolveTimeAndBook
   // books, or re-asks for whichever detail is still missing.
-  if (pendingMeet && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
-    const phrase = pendingMeet.date ? `${pendingMeet.date} ${message}` : message;
+  if (pendingMeet && answers && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
+    // A reply that names its own day ("Friday 3pm") replaces the asked-about day.
+    const ownDay = parseMeetingPhrase(stripMentions(message), new Date(), tz)?.date;
+    const phrase = pendingMeet.date && !ownDay ? `${pendingMeet.date} ${message}` : message;
     return { messages: await resolveTimeAndBook(userId, pendingMeet.agent, teamId, pendingMeet.leadIds, phrase, tz) };
   }
 
@@ -236,7 +247,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // free-text name) and move on to asking "when?" (or book if a time is already
   // given). Without this, a lead-pick reply falls through to converse() and the
   // booking loses its lead.
-  if (pendingMeetingWho && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
+  if (pendingMeetingWho && answers && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "book-meeting")) {
     const a = pendingMeetingWho;
     let ids = (leadIds ?? []).filter(Boolean);
     if (!ids.length) {
@@ -251,7 +262,8 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // Pending scrape details: the agent asked who, where or how many, and this is an
   // unmentioned reply that isn't a different command → read it as the answer. It
   // starts the scrape, or asks for what is still missing.
-  if (pendingScrape && mentions.length === 0 && (intent.capability === "scrape" || intent.capability === "chat" || intent.capability === "unknown")) {
+  // A question-card answer is always the answer, whatever words it holds ("Email Pro").
+  if (pendingScrape && answers && (scrapeAnswerFrom(message) || intent.capability === "scrape" || intent.capability === "chat" || intent.capability === "unknown")) {
     const { agent, brief } = pendingScrape;
     // The question card sends exact values. A typed reply is parsed.
     const answer = scrapeAnswerFrom(message) ?? await readScrapeAnswer(message, brief, missingBriefFields(brief));
@@ -260,7 +272,7 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
 
   // Pending-answer path: Outreach just asked "who?", and this is an unmentioned
   // reply that isn't a different command → interpret it as the answer.
-  if (pendingAgent && mentions.length === 0 && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "outreach")) {
+  if (pendingAgent && answers && (intent.capability === "chat" || intent.capability === "unknown" || intent.capability === "outreach")) {
     const picks = (leadIds ?? []).filter(Boolean);
     let target: { leadIds?: string[]; all?: boolean } | null = null;
     if (picks.length) {
@@ -312,7 +324,12 @@ async function reply(userId: string, teamId: string, message: string, leadIds: s
   // Book-meeting is interactive: needs a lead (/lead pick) + a time. Ask for
   // whichever is missing; book immediately once both are known.
   if (cap === "book-meeting") {
-    const bmPicks = (leadIds ?? []).filter(Boolean);
+    let bmPicks = (leadIds ?? []).filter(Boolean);
+    // "book a meeting with Maria tomorrow 2pm" names the lead: use it, not "who?".
+    if (!bmPicks.length) {
+      const r = await resolveTargetLeads(stripMentions(message), await listTeamLeadsForPicker(teamId));
+      if (r.mode === "some" && r.leadIds.length) bmPicks = r.leadIds;
+    }
     if (!bmPicks.length) return { messages: [...pre, { who: actor.id, text: askMeetingWhoText() }] };
     return { messages: [...pre, ...(await resolveTimeAndBook(userId, actor, teamId, bmPicks, message, tz))] };
   }

@@ -2,6 +2,14 @@
 // A scrape needs a target (what/who/where); a bare "find leads" has none, so the
 // agent asks before it runs a weak search. No I/O, so unit tests can check it.
 
+/** An @mention: "@" and a name, accented letters included ("@Zoë"). Global. */
+export const MENTION_RE = /@[\p{L}\p{N}_'-]+/gu;
+
+/** The message without @mentions. */
+export function stripMentions(text: string): string {
+  return (text || "").replace(MENTION_RE, " ").replace(/\s+/g, " ").trim();
+}
+
 // Generic scrape verbs/nouns/platforms that carry no targeting on their own.
 const SCRAPE_STOPWORDS = new Set([
   "find", "finds", "get", "gets", "grab", "pull", "scrape", "scrapes", "search", "source", "sourced", "fetch", "look", "looking", "lookup",
@@ -10,6 +18,10 @@ const SCRAPE_STOPWORDS = new Set([
   "facebook", "fb", "reddit", "linkedin", "twitter", "instagram", "ig", "online", "web", "internet", "social", "media", "posts", "post",
   // Greetings and filler ("hi, find me leads pls") name no target either.
   "hi", "hello", "hey", "yo", "pls", "plz", "thanks", "thank", "thx", "kindly", "ok", "okay", "just", "let", "lets", "help", "want", "need", "i", "im", "we", "there",
+  // Quality words, number words and "my product" name no target either.
+  "good", "great", "quality", "best", "top", "real", "few", "couple", "several", "lot", "lots", "many",
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "twenty", "fifty", "hundred",
+  "our", "product", "products", "service", "services", "offer", "offering", "business",
 ]);
 
 // The country, told apart from the pronoun "us" ("find us leads") by its capitals.
@@ -18,7 +30,7 @@ const US_PLACE = /(^|[^A-Za-z])(US|USA|U\.S\.(A\.?)?)(?![A-Za-z])/;
 /** Does a scrape request name a target (what/who/where), or is it a bare command?
  *  A count alone ("find me 50 leads") is not a target. */
 export function scrapeHasTarget(message: string): boolean {
-  const text = (message || "").replace(/@[\w'-]+/g, " ");
+  const text = stripMentions(message);
   if (US_PLACE.test(text)) return true;
   const meaningful = text
     .toLowerCase()

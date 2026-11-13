@@ -18,7 +18,7 @@ import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 import { listProducts } from "@/lib/products/store";
 import { isAIConfigured } from "@/lib/ai/openrouter";
-import { AI_JOB_KINDS, NO_AI_TEXT } from "@/lib/jobs/limits";
+import { AI_JOB_KINDS, NO_AI_TEXT, MAX_BATCH_SIZE } from "@/lib/jobs/limits";
 
 // `auto`: the capabilities the user set to Auto on the agent page (no Proceed/Cancel ask).
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[]; auto?: string[] }
@@ -108,8 +108,10 @@ export async function countPending(userId: string, agentId: string, capability: 
 }
 
 /** Queue a pod stage and post its ask. "busy" when this team already has an
- *  active job of that kind, "paused" when the agent is paused or removed. */
-export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<"queued" | "busy" | "paused" | "no-ai"> {
+ *  active job of that kind, "paused" when the agent is paused or removed.
+ *  `leadIds` limits the stage to those leads, for example the review of the
+ *  leads a search just found. Without them the stage works the team's book. */
+export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string, leadIds?: string[]): Promise<"queued" | "busy" | "paused" | "no-ai"> {
   if (AI_JOB_KINDS.has(capability) && !isAIConfigured()) return "no-ai";
   // Don't stack duplicates: skip if this team already has an active job for this capability.
   // A 'running' job past its time limit is dead (the runner reaps it), so it doesn't count.
@@ -119,7 +121,8 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
   if (active.some((j) => !isStale(j, now) && (j.params as { teamId?: string })?.teamId === teamId)) return "busy";
   const info = await agentInfo(userId, agentId);
   if (!info) return "paused";
-  const leadCount = await countPending(userId, agentId, capability, teamId);
+  const ids = leadIds?.length ? leadIds.slice(0, MAX_BATCH_SIZE) : null;
+  const leadCount = ids ? ids.length : await countPending(userId, agentId, capability, teamId);
   // A stage waits for the user (the ask shows Proceed/Cancel in the chat), unless
   // the agent runs it on Auto: then it is queued now and the runner picks it up.
   const auto = !!info.auto?.includes(capability);
@@ -127,7 +130,7 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
     userId, agentId, kind: capability, status: auto ? "queued" : "needs_approval",
     params: {
       agent: { id: info.id, name: info.name, role: info.role, goal: info.goal, task: info.task },
-      teamId, pod: true, leadCount, batchSize: POD_BATCH, leadIds: null,
+      teamId, pod: true, leadCount, batchSize: ids ? ids.length : POD_BATCH, leadIds: ids,
     },
   }).returning({ id: jobs.id });
   await postTeamMessage(userId, teamId, info.id, auto ? startText(capability, row.id) : askText(capability, leadCount, row.id, await userFirstName(userId)));
@@ -209,7 +212,8 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
       const info = await agentInfo(userId, assessorId);
       if (info) {
         await postTeamMessage(userId, teamId, finisher.id, `I found ${count} new lead${count === 1 ? "" : "s"}. @${first(info)}, please review them.${leadsMarker(leadIds)}`);
-        await enqueuePodStage(userId, teamId, "assess", assessorId);
+        // Review the leads this search found, not every pending lead on the team.
+        await enqueuePodStage(userId, teamId, "assess", assessorId, leadIds);
       }
     } else {
       const userName = await userFirstName(userId);

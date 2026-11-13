@@ -27,6 +27,13 @@ export async function teammatesOf(userId: string, agentId: string): Promise<stri
   return Array.from(mates);
 }
 
+/** The agents whose leads a job works on: the members of the job's team when
+ *  the job has one, so an agent from another team, or an agent on two teams,
+ *  works only this team's leads. Without a team, every team the agent is on. */
+export async function leadPoolOf(userId: string, agentId: string, teamId?: string | null): Promise<string[]> {
+  return teamId ? membersOfTeam(userId, teamId) : teammatesOf(userId, agentId);
+}
+
 /** The agent ids on a team (team_members override, else base members), minus
  *  agents the user removed. Paused agents stay members: their leads are still
  *  the team's, and agentInfo keeps them from acting. */

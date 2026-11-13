@@ -3,7 +3,7 @@ import "server-only";
 // for the proposal job (accepted teammate leads without a proposal yet).
 import { and, asc, desc, eq, inArray, notExists } from "drizzle-orm";
 import { getDb, isDbConfigured, proposals, leads } from "@/lib/db";
-import { teammatesOf } from "@/lib/teams/membership";
+import { leadPoolOf } from "@/lib/teams/membership";
 import type { ProposalResult } from "@/lib/leads/types";
 
 // Mirrors the unexported LeadRow idiom in lib/leads/store.ts. The queries
@@ -40,7 +40,7 @@ export async function markProposalSent(userId: string, id: string): Promise<void
 // Accepted teammate leads that don't yet have a proposal, oldest first, capped.
 // The "no proposal yet" filter runs in SQL before LIMIT, so leads that already
 // have one can't fill the window and starve newer leads.
-export async function pickLeadsForProposal(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForProposal(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   if (!isDbConfigured()) return [];
   const db = getDb();
   const noProposal = notExists(db.select({ id: proposals.id }).from(proposals)
@@ -49,6 +49,6 @@ export async function pickLeadsForProposal(userId: string, agentId: string, lead
   if (leadIds && leadIds.length) {
     return db.select().from(leads).where(and(accepted, inArray(leads.id, leadIds))).limit(batchSize);
   }
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   return db.select().from(leads).where(and(accepted, inArray(leads.agentId, mates))).orderBy(asc(leads.createdAt)).limit(batchSize);
 }

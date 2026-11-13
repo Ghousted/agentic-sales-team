@@ -2,7 +2,7 @@ import "server-only";
 // Meetings persistence: book a meeting (+ advance the lead) and list the booked
 // meetings (joined to their lead) for the calendar.
 import { and, asc, eq, sql } from "drizzle-orm";
-import { getDb, isDbConfigured, meetings, leads, agents, agentConfig } from "@/lib/db";
+import { getDb, isDbConfigured, meetings, leads, agents, agentConfig, agentStates } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { parseMeetingTime } from "@/lib/ai/meetingTime";
 
@@ -40,11 +40,16 @@ export async function meetingSettings(userId: string, agentId: string): Promise<
   };
 }
 
-/** The user's first book-meeting-capable agent, if any (for direct "Book a meeting"). */
+/** The user's first active book-meeting-capable agent, if any (for direct
+ *  "Book a meeting"). A paused or removed agent is skipped. */
 export async function findMeetingAgent(userId: string): Promise<{ id: string; name: string; role: string; goal: string; task: string } | null> {
   if (!isDbConfigured()) return null;
-  const rows = await getDb().select().from(agents).where(eq(agents.userId, userId));
-  const m = rows.find((r) => (r.capabilities as string[]).includes("book-meeting"));
+  const [rows, states] = await Promise.all([
+    getDb().select().from(agents).where(eq(agents.userId, userId)),
+    getDb().select().from(agentStates).where(eq(agentStates.userId, userId)),
+  ]);
+  const off = new Set(states.filter((s) => s.paused || s.removed).map((s) => s.agentId));
+  const m = rows.find((r) => (r.capabilities as string[]).includes("book-meeting") && !off.has(r.id));
   return m ? { id: m.id, name: m.name, role: m.role, goal: m.goal, task: m.task } : null;
 }
 

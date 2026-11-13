@@ -11,13 +11,17 @@ vi.mock("@/lib/db", async (importActual) => ({ ...(await importActual<typeof imp
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ userId: "00000000-0000-4000-8000-00000000000a" }) }));
 const team = vi.hoisted(() => ({ members: ["s1"] }));
 vi.mock("@/lib/teams/membership", () => ({ membersOfTeam: async () => team.members }));
-vi.mock("@/lib/pod/orchestrate", () => ({ agentInfo: async () => scout }));
+const pending = vi.hoisted(() => ({ n: 3 }));
+vi.mock("@/lib/pod/orchestrate", () => ({ agentInfo: async () => scout, countPending: vi.fn(async () => pending.n) }));
 vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => false, aiJSON: vi.fn() }));
 vi.mock("@/lib/ai/intent", () => ({ detectIntent: vi.fn() }));
+const route = vi.hoisted(() => ({ next: null as null | { actor: unknown; capability: string; messages: { who: string; text: string }[]; handoff?: { who: string; text: string }[] } }));
 vi.mock("./orchestrate", () => ({
   parseMentions: () => [],
-  resolve: async () => ({ actor: scout, capability: "scrape", messages: [{ who: "s1", text: "Understood. I'm finding leads now." }] }),
+  resolve: async () => route.next ?? ({ actor: scout, capability: "scrape", messages: [{ who: "s1", text: "Understood. I'm finding leads now." }] }),
 }));
+const catalog = vi.hoisted(() => ({ items: [] as { id: string; name: string; description: string }[] }));
+vi.mock("@/lib/products/store", () => ({ listProducts: async () => catalog.items }));
 const JOB_ID = "33333333-3333-4333-8333-333333333333";
 vi.mock("@/lib/jobs/actions", () => ({ enqueueJob: vi.fn(async () => ({ jobId: "33333333-3333-4333-8333-333333333333" })) }));
 vi.mock("./teamMessages", () => ({
@@ -25,7 +29,8 @@ vi.mock("./teamMessages", () => ({
   insertTeamMessages: vi.fn(async (_u: string, _t: string, msgs: { who: string; text: string }[]) => msgs.map((m, i) => ({ id: 100 + i, ...m }))),
   postJobOutcome: async () => null,
 }));
-vi.mock("@/lib/leads/store", () => ({ listTeamLeadsForPicker: async () => [], setLeadReview: async () => {} }));
+const book = vi.hoisted(() => ({ leads: [] as { id: string; name: string; review: string }[] }));
+vi.mock("@/lib/leads/store", () => ({ listTeamLeadsForPicker: async () => book.leads, setLeadReview: async () => {} }));
 vi.mock("@/lib/ai/resolveLeads", () => ({ resolveTargetLeads: async () => ({ mode: "none", leadIds: [] }) }));
 vi.mock("@/lib/meetings/store", () => ({ bookMeeting: async () => false, meetingSettings: async () => ({}) }));
 
@@ -47,6 +52,11 @@ beforeEach(() => {
   state.history = [];
   state.lastJobs = [];
   team.members = ["s1"];
+  route.next = null;
+  book.leads = [];
+  pending.n = 3;
+  // One product: the search uses it without asking.
+  catalog.items = [{ id: "p1", name: "AI Training", description: "" }];
   vi.mocked(enqueueJob).mockClear();
 });
 
@@ -68,7 +78,7 @@ describe("scrape clarifying questions", () => {
     expect(enqueueJob).toHaveBeenCalledOnce();
     expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({
       kind: "scrape", target: 15, pod: true, teamId: "t1", ask: true,
-      instruction: "Look for business in linkedin looking for an ai training provider. Location: Austin.",
+      instruction: "Look for business in linkedin looking for an ai training provider. Selling: AI Training. Location: Austin.",
     });
     // The agent asks first: the Proceed/Cancel panel sits under this message, and
     // the live timeline only appears once the user proceeds.
@@ -76,6 +86,7 @@ describe("scrape clarifying questions", () => {
     expect(runIdFrom(res.messages[0].text)).toBeNull();
     expect(stripMarkers(res.messages[0].text)).toBe([
       "I'm ready to search:",
+      "• For: AI Training",
       "• Looking for: Look for business in linkedin looking for an ai training provider",
       "• Where: Austin",
       "• How many: 15 leads",
@@ -86,7 +97,7 @@ describe("scrape clarifying questions", () => {
   it("starts at once when the request says who, where and how many", async () => {
     intent("scrape", { geo: "Texas", target: 20 });
     const res = await teamChat("t1", "find 20 dentists in Texas");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 20, instruction: "find 20 dentists in Texas. Location: Texas.", ask: true });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 20, instruction: "find 20 dentists in Texas. Selling: AI Training. Location: Texas.", ask: true });
     expect(res.messages[0].text).toMatch(/^I'm ready to search:[\s\S]*Proceed\?/);
   });
 
@@ -106,7 +117,7 @@ describe("scrape clarifying questions", () => {
     agentSaid(second.messages[0].text);
     intent("chat");
     await teamChat("t1", "hmm");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Location: Texas." });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Selling: AI Training. Location: Texas." });
   });
 
   it("starts with the defaults when the user leaves the details to the agent", async () => {
@@ -114,7 +125,7 @@ describe("scrape clarifying questions", () => {
     agentSaid((await teamChat("t1", "find AI training buyers")).messages[0].text);
     intent("chat");
     await teamChat("t1", "not sure, you pick");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers" });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Selling: AI Training." });
   });
 
   it("starts from the card's answer without parsing it", async () => {
@@ -124,7 +135,7 @@ describe("scrape clarifying questions", () => {
     intent("chat");
     // Rules would read "United Kingdom · 25 leads" badly. The marker is exact.
     await teamChat("t1", scrapeAnswerText({ where: "United Kingdom", count: "25" }));
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 25, instruction: "find businesses that need AI training. Location: United Kingdom." });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 25, instruction: "find businesses that need AI training. Selling: AI Training. Location: United Kingdom." });
   });
 
   it("reads the answer to a question from an agent on another team", async () => {
@@ -134,7 +145,7 @@ describe("scrape clarifying questions", () => {
     team.members = ["someone-else"]; // Ava was sent this request across teams
     intent("scrape");
     const res = await teamChat("t1", scrapeAnswerText({ where: "Metro Manila Philippines", count: "5" }));
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 5, instruction: "find businesses that need AI training. Location: Metro Manila Philippines." });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 5, instruction: "find businesses that need AI training. Selling: AI Training. Location: Metro Manila Philippines." });
     expect(stripMarkers(res.messages[0].text)).not.toMatch(/·|⟦/);
   });
 
@@ -155,7 +166,7 @@ describe("scrape clarifying questions", () => {
     agentSaid(res.messages[0].text);
     intent("chat");
     await teamChat("t1", "10");
-    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Location: Metro Manila Philippines." });
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 10, instruction: "find AI training buyers. Selling: AI Training. Location: Metro Manila Philippines." });
   });
 
   it("passes the agent's last message to intent detection", async () => {
@@ -177,5 +188,75 @@ describe("scrape clarifying questions", () => {
     intent("chat");
     const res = await teamChat("t1", "dentists");
     expect(res.messages[0].text).toMatch(/Where\?/);
+  });
+
+  it("asks who to find when the request is only a greeting and an @mention", async () => {
+    intent("scrape", { geo: "Makati Philippines", target: 2 });
+    const res = await teamChat("t1", "@Ava Hi find me leads pls");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/Who should I look for\?/);
+    expect(res.messages[0].text).not.toMatch(/@Ava/);
+  });
+});
+
+describe("the product the leads are for", () => {
+  it("tells the user, and searches nothing, when the catalog is empty", async () => {
+    catalog.items = [];
+    intent("scrape", { geo: "Texas", target: 20 });
+    const res = await teamChat("t1", "find 20 dentists in Texas");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/no products in your catalog/);
+  });
+
+  it("asks which product when the catalog has more than one", async () => {
+    catalog.items = [{ id: "p1", name: "AI Training", description: "" }, { id: "p2", name: "Payroll", description: "Monthly payroll service" }];
+    intent("scrape", { geo: "Texas", target: 20 });
+    const res = await teamChat("t1", "find 20 dentists in Texas");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages[0].text).toMatch(/Which product should I find leads for\?/);
+    expect(res.messages[0].text).not.toMatch(/Where\?|How many/);
+  });
+
+  it("starts with the picked product and its description", async () => {
+    catalog.items = [{ id: "p1", name: "AI Training", description: "" }, { id: "p2", name: "Payroll", description: "Monthly payroll service" }];
+    intent("scrape", { geo: "Texas", target: 20 });
+    agentSaid((await teamChat("t1", "find 20 dentists in Texas")).messages[0].text);
+    intent("chat");
+    const res = await teamChat("t1", "payroll please");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ target: 20, instruction: "find 20 dentists in Texas. Selling: Payroll (Monthly payroll service). Location: Texas." });
+    expect(res.messages[0].text).toMatch(/• For: Payroll/);
+  });
+
+  it("uses the whole catalog for 'Any product'", async () => {
+    catalog.items = [{ id: "p1", name: "AI Training", description: "" }, { id: "p2", name: "Payroll", description: "" }];
+    intent("scrape", { geo: "Texas", target: 20 });
+    agentSaid((await teamChat("t1", "find 20 dentists in Texas")).messages[0].text);
+    intent("chat");
+    await teamChat("t1", "any of them");
+    expect(vi.mocked(enqueueJob).mock.calls[0][0]).toMatchObject({ instruction: "find 20 dentists in Texas. Selling: AI Training, Payroll. Location: Texas." });
+  });
+});
+
+describe("an agent from another team", () => {
+  const researcher = { id: "r1", name: "Apex", role: "Researcher", goal: "", task: "", capabilities: ["research"] };
+
+  it("counts and works this team's leads: the job carries the team", async () => {
+    const { countPending } = await import("@/lib/pod/orchestrate");
+    route.next = { actor: researcher, capability: "research", messages: [] };
+    intent("research");
+    await teamChat("t1", "run research");
+    expect(vi.mocked(countPending)).toHaveBeenCalledWith(expect.any(String), "r1", "research", "t1");
+    const job = vi.mocked(enqueueJob).mock.calls[0][0];
+    expect(job).toMatchObject({ kind: "research", teamId: "t1" });
+    expect(job.leadIds).toBeUndefined();
+  });
+
+  it("says so, and asks nothing, when no lead on the team needs the step", async () => {
+    pending.n = 0;
+    route.next = { actor: researcher, capability: "research", messages: [] };
+    intent("research");
+    const res = await teamChat("t1", "run research");
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(res.messages.at(-1)?.text).toMatch(/no accepted leads on this team that still need research/);
   });
 });

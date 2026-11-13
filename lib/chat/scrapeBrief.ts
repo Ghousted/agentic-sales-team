@@ -5,7 +5,7 @@ import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured, jobs } from "@/lib/db";
 import { aiJSON, isAIConfigured } from "@/lib/ai/openrouter";
-import { scrapeHasTarget, briefFromInstruction, isMoreRequest, DEFAULT_SCRAPE_COUNT, type BriefField, type ScrapeBrief } from "./clarify";
+import { scrapeHasTarget, briefFromInstruction, isMoreRequest, DEFAULT_SCRAPE_COUNT, ANY_PRODUCT, type BriefField, type ScrapeBrief } from "./clarify";
 import { stripMarkers } from "./thread";
 
 const ANYWHERE = /\b(anywhere|any ?where|any location|everywhere|worldwide|world ?wide|global(ly)?|international(ly)?|remote|online|doesn'?t matter|does not matter|no preference|any country|all countries)\b/i;
@@ -34,8 +34,9 @@ function firstCount(text: string): number | undefined {
 /** The brief from a fresh scrape request. `params` comes from intent detection,
  *  which already reads the place (geo) and the count (target). */
 export function briefFromRequest(raw: string, params: { geo?: string; target?: number }): ScrapeBrief {
-  // Hidden ⟦…⟧ markers are app state, never part of what to search for.
-  const message = stripMarkers(raw);
+  // Hidden ⟦…⟧ markers are app state, and an @mention names the agent: neither is
+  // part of what to search for.
+  const message = stripMarkers(raw).replace(/@[\w'-]+/g, " ").replace(/\s+/g, " ");
   // A card answer ("Manila · 5 leads") names a place and a count, not who to find.
   if (/⟦answer:/.test(raw)) return {};
   const geo = params.geo?.trim() && !PLATFORM.test(params.geo.trim()) ? params.geo.trim() : undefined;
@@ -69,9 +70,22 @@ export function withLastSearch(brief: ScrapeBrief, message: string, last: Scrape
   return brief.what ? brief : { ...brief, suggest: { what: last.what, where: last.where } };
 }
 
+/** The catalog product a reply names, ANY_PRODUCT when it leaves the choice
+ *  open, or undefined. A product name is matched as typed, ignoring case. */
+export function productAnswer(reply: string, products: string[] | undefined): string | undefined {
+  const text = reply.toLowerCase();
+  const named = (products ?? []).filter((p) => text.includes(p.toLowerCase())).sort((a, b) => b.length - a.length)[0];
+  if (named) return named;
+  return /\b(any|all|every|whichever|either)\b/i.test(reply) || DEFER.test(reply) ? ANY_PRODUCT : undefined;
+}
+
 /** Rules only. Used when the model is not available. */
-export function ruleAnswer(reply: string, missing: BriefField[]): ScrapeBrief {
+export function ruleAnswer(reply: string, missing: BriefField[], products?: string[]): ScrapeBrief {
   const out: ScrapeBrief = {};
+  if (missing.includes("product")) {
+    out.product = productAnswer(reply, products);
+    if (out.product && out.product !== ANY_PRODUCT) reply = reply.replace(new RegExp(out.product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), " ");
+  }
   if (missing.includes("count")) out.count = firstCount(reply) ?? (DEFER.test(reply) ? DEFAULT_SCRAPE_COUNT : undefined);
   if (missing.includes("where") && (ANYWHERE.test(reply) || DEFER.test(reply))) out.where = "anywhere";
   const rest = reply.replace(/\b\d{1,3}\b/g, " ").replace(ANYWHERE, " ").replace(DEFER, " ").replace(/\s+/g, " ").replace(/^[\s,.;-]+|[\s,.;-]+$/g, "").trim();
@@ -91,10 +105,16 @@ const SCHEMA = {
 
 /** Read the user's answer to the agent's scrape questions. */
 export async function readScrapeAnswer(reply: string, known: ScrapeBrief, missing: BriefField[]): Promise<ScrapeBrief> {
-  if (!isAIConfigured()) return ruleAnswer(reply, missing);
+  // The product is one of the catalog names, so rules read it. The model reads the rest.
+  const product = missing.includes("product") ? productAnswer(reply, known.products) : undefined;
+  const rest = missing.filter((f) => f !== "product");
+  if (!rest.length) return { product };
+  if (!isAIConfigured()) return ruleAnswer(reply, missing, known.products);
+  // Keep the product name out of who-to-find.
+  if (product && product !== ANY_PRODUCT) reply = reply.replace(new RegExp(product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), " ");
   const system = [
     "A sales agent asked the user for details before it searches for leads. Read the user's reply and extract the details.",
-    `The agent asked for: ${missing.join(", ")}.`,
+    `The agent asked for: ${rest.join(", ")}.`,
     `Already known: ${JSON.stringify({ what: known.what ?? "", where: known.where ?? "", count: known.count ?? 0 })}.`,
     "- what: who to find (the buyer or the kind of company, with any industry, role or need). '' if the reply does not say.",
     "- where: the city, country or region. 'anywhere' if the user says location does not matter (anywhere, worldwide, global, online, no preference). '' if the reply does not say.",
@@ -105,12 +125,13 @@ export async function readScrapeAnswer(reply: string, known: ScrapeBrief, missin
   try {
     const r = await aiJSON<{ what?: string; where?: string; count?: number }>(system, [{ role: "user", text: reply }], SCHEMA as unknown as Record<string, unknown>, { maxTokens: 150, temperature: 0 });
     return {
+      product,
       what: r.what?.trim() || undefined,
       where: r.where?.trim() || undefined,
       count: typeof r.count === "number" && r.count > 0 ? Math.floor(r.count) : undefined,
     };
   } catch (e) {
     console.error("[scrapeBrief] AI call failed, using rules:", e);
-    return ruleAnswer(reply, missing);
+    return ruleAnswer(reply, missing, known.products);
   }
 }

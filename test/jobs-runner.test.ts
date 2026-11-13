@@ -44,7 +44,7 @@ vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () =
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []), addMatches: vi.fn() }));
 vi.mock("@/lib/products/store", () => ({ searchProducts: vi.fn(async () => []) }));
 vi.mock("@/lib/scrape/firecrawl", () => ({ runFirecrawlScrape: vi.fn(), isFirecrawlConfigured: () => true }));
-vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a) }));
+vi.mock("@/lib/pod/orchestrate", () => ({ chainNext: vi.fn(async () => {}), leadOwnerForTeam: vi.fn(async (_u: string, _t: string, a: string) => a), agentInfo: vi.fn(async (_u: string, id: string) => ({ id })) }));
 
 import { POST as runJobs } from "@/app/api/jobs/run/route";
 import { POST as runScrape } from "@/app/api/scrape/route";
@@ -196,6 +196,15 @@ describe("failed job errors", () => {
     const failed = fake.state.updates.find((u) => u.status === "failed");
     expect(failed?.error).toBe("Research failed. Please try again.");
     expect(log.mock.calls.some((c) => String(c[1]).includes("does not exist"))).toBe(true);
+  });
+
+  it("fails, and runs nothing, when the agent was paused or removed after approval", async () => {
+    const { agentInfo } = await import("@/lib/pod/orchestrate");
+    vi.mocked(agentInfo).mockResolvedValueOnce(null);
+    fake.state.selects = [[researchJob()]];
+    await runJobs();
+    expect(pickLeadsForResearch).not.toHaveBeenCalled();
+    expect(fake.state.updates.find((u) => u.status === "failed")?.error).toMatch(/paused or removed/);
   });
 
   it("stores a generic line when a scrape throws an unexpected error", async () => {

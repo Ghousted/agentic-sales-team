@@ -7,7 +7,7 @@ import { and, count, desc, eq, exists, inArray, asc, isNull, ne, sql, type SQL }
 import { getDb, isDbConfigured, leads, outreachDrafts, activity, jobs } from "@/lib/db";
 import { getSession } from "@/lib/auth/session";
 import { LEAD_STAGES, type LeadDTO, type DraftDTO, type OutreachResult, type ResearchBrief, type QualifyResult, type AssessResult, type LiveWorkDTO, type TeamLeadPick } from "./types";
-import { teammatesOf, membersOfTeam } from "@/lib/teams/membership";
+import { teammatesOf, membersOfTeam, leadPoolOf } from "@/lib/teams/membership";
 import type { Prospect } from "@/lib/scrape/firecrawl";
 import { safeHttpUrl } from "@/lib/url/safeUrl";
 
@@ -428,9 +428,9 @@ export async function clearDraftsForLead(leadId: string): Promise<number> {
 
 /** Pick the leads a run should process: the given ids, or the agent's leads
  *  that don't yet have a draft (idempotent re-runs), oldest first, capped. */
-export async function pickLeadsForRun(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForRun(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   const db = getDb();
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
       .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
@@ -474,9 +474,9 @@ export async function applyOutreachResult(userId: string, agentId: string, lead:
 
 /** Pick the agent's leads that don't have a research brief yet (or the given
  *  ids), oldest first, capped. */
-export async function pickLeadsForResearch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForResearch(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   const db = getDb();
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
       .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
@@ -501,9 +501,9 @@ export async function applyResearchResult(userId: string, agentId: string, lead:
  *  given ids, oldest first, capped. Standalone (not layered on
  *  pickLeadsForResearch) because that helper's null-research filter would
  *  wrongly exclude leads that were researched but never scored. */
-export async function pickLeadsForQualify(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForQualify(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   const db = getDb();
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
       .where(and(eq(leads.userId, userId), inArray(leads.id, leadIds), eq(leads.review, "accepted")))
@@ -529,9 +529,9 @@ export async function applyQualifyResult(userId: string, agentId: string, lead: 
 
 /** Pick PENDING (freshly-scraped) teammate-book leads for the Assessor to review,
  *  or the given ids, oldest first, capped. */
-export async function pickLeadsForAssess(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number): Promise<LeadRow[]> {
+export async function pickLeadsForAssess(userId: string, agentId: string, leadIds: string[] | undefined, batchSize: number, teamId?: string | null): Promise<LeadRow[]> {
   const db = getDb();
-  const mates = await teammatesOf(userId, agentId);
+  const mates = await leadPoolOf(userId, agentId, teamId);
   if (leadIds && leadIds.length) {
     return db.select().from(leads)
       .where(and(eq(leads.userId, userId), inArray(leads.agentId, mates), inArray(leads.id, leadIds), eq(leads.review, "pending")))
@@ -568,10 +568,10 @@ export async function getLiveWork(): Promise<LiveWorkDTO[]> {
     .where(and(eq(jobs.userId, userId), eq(jobs.status, "running"), inArray(jobs.kind, ["research", "outreach"])));
   const out: LiveWorkDTO[] = [];
   for (const j of running) {
-    const p = j.params as { agent?: { id?: string; name?: string }; leadIds?: string[] | null; batchSize?: number };
+    const p = j.params as { agent?: { id?: string; name?: string }; leadIds?: string[] | null; batchSize?: number; teamId?: string | null };
     const agentId = p.agent?.id ?? j.agentId;
     const pick = j.kind === "research" ? pickLeadsForResearch : pickLeadsForRun;
-    const pool = await pick(userId, agentId, p.leadIds ?? undefined, p.batchSize ?? 5);
+    const pool = await pick(userId, agentId, p.leadIds ?? undefined, p.batchSize ?? 5, p.teamId);
     out.push({ agentId, agentName: p.agent?.name ?? "Agent", capability: j.kind, leadIds: pool.map((l) => l.id) });
   }
   return out;

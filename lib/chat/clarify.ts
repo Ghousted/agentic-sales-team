@@ -8,6 +8,8 @@ const SCRAPE_STOPWORDS = new Set([
   "me", "us", "my", "some", "any", "a", "an", "the", "for", "of", "to", "and", "on", "in", "new", "more", "please", "can", "could", "would", "you", "go", "ahead", "now", "start", "started", "run", "do", "give",
   "lead", "leads", "prospect", "prospects", "customer", "customers", "buyer", "buyers", "seller", "sellers", "client", "clients", "people", "person", "contact", "contacts", "folks",
   "facebook", "fb", "reddit", "linkedin", "twitter", "instagram", "ig", "online", "web", "internet", "social", "media", "posts", "post",
+  // Greetings and filler ("hi, find me leads pls") name no target either.
+  "hi", "hello", "hey", "yo", "pls", "plz", "thanks", "thank", "thx", "kindly", "ok", "okay", "just", "let", "lets", "help", "want", "need", "i", "im", "we", "there",
 ]);
 
 // The country, told apart from the pronoun "us" ("find us leads") by its capitals.
@@ -52,9 +54,19 @@ export interface ScrapeBrief {
   again?: boolean;
   /** The last search's values, offered as quick picks in the question card. */
   suggest?: { what?: string; where?: string };
+  /** The catalog product the leads are for, or ANY_PRODUCT. */
+  product?: string;
+  /** The catalog's product names, offered as quick picks when more than one exists. */
+  products?: string[];
 }
 
-export type BriefField = "what" | "where" | "count";
+export type BriefField = "product" | "what" | "where" | "count";
+
+/** The answer that leaves the product open: the search uses the whole catalog. */
+export const ANY_PRODUCT = "Any product";
+
+/** Shown instead of a search when the catalog is empty: the leads are for a product. */
+export const NO_PRODUCTS_TEXT = "You have no products in your catalog yet, so I don't know what to find leads for. Add a product on the Products page, then ask me again.";
 
 /** Ask at most this many times. After that a missing place becomes "anywhere"
  *  and a missing count the default, so a vague user is never stuck in a loop. */
@@ -63,6 +75,7 @@ export const DEFAULT_SCRAPE_COUNT = 10;
 
 export function missingBriefFields(b: ScrapeBrief): BriefField[] {
   const out: BriefField[] = [];
+  if (b.products?.length && !b.product?.trim()) out.push("product");
   if (!b.what?.trim()) out.push("what");
   if (!b.where?.trim()) out.push("where");
   if (!b.count || b.count < 1) out.push("count");
@@ -73,7 +86,7 @@ export function missingBriefFields(b: ScrapeBrief): BriefField[] {
  *  is never guessed. */
 export function settleBrief(b: ScrapeBrief): ScrapeBrief {
   if ((b.asked ?? 0) < MAX_SCRAPE_ASKS) return b;
-  return { ...b, where: b.where?.trim() || "anywhere", count: b.count && b.count > 0 ? b.count : DEFAULT_SCRAPE_COUNT };
+  return { ...b, product: b.product?.trim() || (b.products?.length ? ANY_PRODUCT : undefined), where: b.where?.trim() || "anywhere", count: b.count && b.count > 0 ? b.count : DEFAULT_SCRAPE_COUNT };
 }
 
 /** Later values win, but an empty value never erases a known one. */
@@ -82,6 +95,8 @@ export function mergeBrief(base: ScrapeBrief, add: ScrapeBrief): ScrapeBrief {
     what: add.what?.trim() || base.what,
     where: add.where?.trim() || base.where,
     count: add.count && add.count > 0 ? add.count : base.count,
+    product: add.product?.trim() || base.product,
+    products: base.products,
     asked: base.asked,
     again: base.again,
     suggest: base.suggest,
@@ -90,17 +105,20 @@ export function mergeBrief(base: ScrapeBrief, add: ScrapeBrief): ScrapeBrief {
 
 /** Short labels and quick picks for the question card in the chat. */
 export const BRIEF_LABEL: Record<BriefField, string> = {
+  product: "Which product are these leads for?",
   what: "Who should I look for?",
   where: "Where should I look?",
   count: "How many leads?",
 };
 export const BRIEF_OPTIONS: Record<BriefField, string[]> = {
+  product: [],
   what: [],
   where: ["Anywhere", "United States", "United Kingdom", "Europe"],
   count: ["5", "10", "25"],
 };
 
 const BRIEF_QUESTION: Record<BriefField, string> = {
+  product: "Which product should I find leads for? Pick one from your catalog.",
   what: "Who should I look for? Describe the buyer or the kind of company.",
   where: 'Where? A city, a country or a region. Say "anywhere" if location does not matter.',
   count: "How many leads do you want? Up to 25.",
@@ -117,6 +135,9 @@ export function askScrapeDetailsText(b: ScrapeBrief, missing: BriefField[], maxC
   return `${lead}\n${qs.join("\n")} ⟦scrape:${state}⟧`;
 }
 
+/** At most this many catalog products are offered as quick picks. */
+export const MAX_PRODUCT_PICKS = 12;
+
 /** The brief in a ⟦scrape:…⟧ marker, or null. */
 export function pendingScrapeBrief(text: string): ScrapeBrief | null {
   const m = text.match(/⟦scrape:([^⟧]*)⟧/);
@@ -127,7 +148,8 @@ export function pendingScrapeBrief(text: string): ScrapeBrief | null {
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
     const sg = raw.suggest && typeof raw.suggest === "object" ? (raw.suggest as Record<string, unknown>) : null;
     const suggest = sg ? { what: str(sg.what), where: str(sg.where) } : undefined;
-    return { what: str(raw.what), where: str(raw.where), count: num(raw.count), asked: num(raw.asked) ?? 1, ...(raw.again === true ? { again: true } : {}), ...(suggest && (suggest.what || suggest.where) ? { suggest } : {}) };
+    const products = Array.isArray(raw.products) ? raw.products.map(str).filter((n): n is string => !!n).slice(0, MAX_PRODUCT_PICKS) : [];
+    return { what: str(raw.what), where: str(raw.where), count: num(raw.count), asked: num(raw.asked) ?? 1, ...(raw.again === true ? { again: true } : {}), ...(suggest && (suggest.what || suggest.where) ? { suggest } : {}), ...(str(raw.product) ? { product: str(raw.product) } : {}), ...(products.length ? { products } : {}) };
   } catch {
     return null;
   }
@@ -142,9 +164,11 @@ export function askedBriefFields(text: string): BriefField[] {
 /** The quick picks for each field of a ⟦scrape:…⟧ question: the last search's
  *  values first, then the standard options. */
 export function briefOptions(text: string): Record<BriefField, string[]> {
-  const sg = pendingScrapeBrief(text)?.suggest;
+  const b = pendingScrapeBrief(text);
+  const sg = b?.suggest;
   const first = (v: string | undefined, rest: string[]) => (v ? [v, ...rest.filter((o) => o.toLowerCase() !== v.toLowerCase())] : rest);
   return {
+    product: b?.products?.length ? [...b.products, ANY_PRODUCT] : BRIEF_OPTIONS.product,
     what: first(sg?.what, BRIEF_OPTIONS.what),
     where: first(sg?.where && sg.where.toLowerCase() !== "anywhere" ? sg.where : undefined, BRIEF_OPTIONS.where),
     count: BRIEF_OPTIONS.count,
@@ -154,8 +178,8 @@ export function briefOptions(text: string): Record<BriefField, string[]> {
 /** The reply the question card sends: readable text plus a hidden ⟦answer:…⟧
  *  marker with the exact values, so the server needs no parsing. */
 export function scrapeAnswerText(a: Partial<Record<BriefField, string>>): string {
-  const parts = [a.what?.trim(), a.where?.trim(), a.count?.trim() ? `${a.count.trim()} leads` : ""].filter(Boolean);
-  const state = encodeURIComponent(JSON.stringify({ what: a.what?.trim(), where: a.where?.trim(), count: Number(a.count) || undefined }));
+  const parts = [a.product?.trim(), a.what?.trim(), a.where?.trim(), a.count?.trim() ? `${a.count.trim()} leads` : ""].filter(Boolean);
+  const state = encodeURIComponent(JSON.stringify({ product: a.product?.trim(), what: a.what?.trim(), where: a.where?.trim(), count: Number(a.count) || undefined }));
   return `${parts.join(" · ")} ⟦answer:${state}⟧`;
 }
 
@@ -169,7 +193,7 @@ export function scrapeAnswerFrom(text: string): ScrapeBrief | null {
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : undefined);
     const where = str(raw.where);
     const n = typeof raw.count === "number" && Number.isFinite(raw.count) ? Math.floor(raw.count) : 0;
-    return { what: str(raw.what), where: where && /^any ?where$/i.test(where) ? "anywhere" : where, count: n > 0 ? n : undefined };
+    return { product: str(raw.product), what: str(raw.what), where: where && /^any ?where$/i.test(where) ? "anywhere" : where, count: n > 0 ? n : undefined };
   } catch {
     return null;
   }
@@ -184,7 +208,9 @@ export function scrapeAskText(b: ScrapeBrief, count: number, maxCount: number, j
 function briefLines(b: ScrapeBrief, count: number, maxCount: number): string[] {
   const what = (b.what ?? "").trim();
   const where = b.where?.trim();
+  const product = b.product?.trim();
   return [
+    ...(product && product !== ANY_PRODUCT ? [`• For: ${product}`] : []),
     `• Looking for: ${what.length > 160 ? what.slice(0, 157).trimEnd() + "…" : what}`,
     `• Where: ${!where || where.toLowerCase() === "anywhere" ? "Anywhere" : where}`,
     `• How many: ${count} lead${count === 1 ? "" : "s"}${b.count && b.count > maxCount ? ` (${maxCount} is the most per search)` : ""}`,
@@ -193,7 +219,7 @@ function briefLines(b: ScrapeBrief, count: number, maxCount: number): string[] {
 
 /** The brief behind a search instruction written by briefInstruction. */
 export function briefFromInstruction(instruction: string): ScrapeBrief {
-  const m = instruction.trim().match(/^([\s\S]*?)(?:\.\s*Location:\s*([^]+?)\.?)?$/);
+  const m = instruction.trim().replace(/\.?\s*Selling:[^]*?\.(?=\s*Location:|\s*$)/, ".").match(/^([\s\S]*?)(?:\.\s*Location:\s*([^]+?)\.?)?$/);
   const what = m?.[1]?.trim().replace(/\.$/, "");
   return { what: what || undefined, where: m?.[2]?.trim() || undefined };
 }
@@ -204,9 +230,11 @@ export function isMoreRequest(message: string): boolean {
 }
 
 /** The search instruction for a complete brief. */
-export function briefInstruction(b: ScrapeBrief): string {
+/** The search instruction for a brief. `selling` describes the product (or the
+ *  catalog, for "Any product"), so the search plan knows what the user sells. */
+export function briefInstruction(b: ScrapeBrief, selling?: string): string {
   const where = b.where?.trim();
-  return [b.what?.trim(), where && where.toLowerCase() !== "anywhere" ? `Location: ${where}.` : ""].filter(Boolean).join(". ").replace(/\.\./g, ".");
+  return [b.what?.trim(), selling?.trim() ? `Selling: ${selling.trim().replace(/\.$/, "")}.` : "", where && where.toLowerCase() !== "anywhere" ? `Location: ${where}.` : ""].filter(Boolean).join(". ").replace(/\.\./g, ".");
 }
 
 /** The "when?" clarifying prompt for a meeting. Carries the picked lead ids in a

@@ -16,7 +16,7 @@ import { pickLeadsForMatch, addMatches } from "@/lib/matches/store";
 import { matchLead } from "@/lib/ai/match";
 import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
-import { chainNext } from "@/lib/pod/orchestrate";
+import { chainNext, agentInfo } from "@/lib/pod/orchestrate";
 import { jobErrorMessage } from "@/lib/jobs/errors";
 import { reapStaleJobs, withDeadline, LEAD_TIMEOUT_MS, RUN_CLAIM_BUDGET_MS, RUN_LEAD_BUDGET_MS } from "@/lib/jobs/runtime";
 
@@ -76,8 +76,14 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
       finished = true;
     };
     try {
+      // The user may have paused or removed the agent after approving the step.
+      if (!(await agentInfo(userId, candidate.agentId))) {
+        await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "The agent is paused or removed, so the run did not start." })
+          .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
+        continue;
+      }
       if (candidate.kind === "outreach") {
-        const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForRun(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         await eachLead(batch, "lead", async (lead) => {
           const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 3);
           const result = await draftOutreach(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, platform: lead.platform, research: lead.research }, products);
@@ -87,7 +93,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         });
         await done({ draftsCreated: created, failed });
       } else if (candidate.kind === "research") {
-        const batch = await pickLeadsForResearch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForResearch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         await eachLead(batch, "research", async (lead) => {
           const brief = await draftResearch(params.agent, { name: lead.name, title: lead.title, company: lead.company, platform: lead.platform });
           await applyResearchResult(userId, params.agent.id, lead, brief);
@@ -96,7 +102,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         });
         await done({ briefed: created, failed });
       } else if (candidate.kind === "qualify") {
-        const batch = await pickLeadsForQualify(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForQualify(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         await eachLead(batch, "qualify", async (lead) => {
           const q = await qualifyLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, email: lead.email, research: lead.research });
           await applyQualifyResult(userId, params.agent.id, lead, q);
@@ -104,7 +110,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         });
         await done({ qualified: created, failed });
       } else if (candidate.kind === "proposal") {
-        const batch = await pickLeadsForProposal(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForProposal(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         await eachLead(batch, "proposal", async (lead) => {
           const products = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 5);
           const p = await draftProposal(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, products);
@@ -113,7 +119,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         });
         await done({ proposals: created, failed });
       } else if (candidate.kind === "match") {
-        const batch = await pickLeadsForMatch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForMatch(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         await eachLead(batch, "match", async (lead) => {
           const listings = await searchProducts(userId, [lead.title, lead.company, lead.research?.summary].filter(Boolean).join(" ") || lead.company || lead.name, 8);
           const m = await matchLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research }, listings);
@@ -123,7 +129,7 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
         });
         await done({ matched: created, failed });
       } else if (candidate.kind === "assess") {
-        const batch = await pickLeadsForAssess(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5);
+        const batch = await pickLeadsForAssess(userId, params.agent.id, params.leadIds ?? undefined, params.batchSize ?? 5, params.teamId);
         let dismissed = 0;
         await eachLead(batch, "assess", async (lead) => {
           const a = await assessLead(params.agent, { name: lead.name, title: lead.title, company: lead.company, research: lead.research });

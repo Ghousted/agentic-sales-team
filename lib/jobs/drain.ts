@@ -18,6 +18,8 @@ import { searchProducts } from "@/lib/products/store";
 import type { AgentSnapshot } from "@/lib/leads/types";
 import { chainNext, agentInfo, podStageFailed } from "@/lib/pod/orchestrate";
 import { jobErrorMessage } from "@/lib/jobs/errors";
+import { isAIConfigured } from "@/lib/ai/openrouter";
+import { AI_JOB_KINDS } from "@/lib/jobs/limits";
 import { reapStaleJobs, withDeadline, LEAD_TIMEOUT_MS, RUN_CLAIM_BUDGET_MS, RUN_LEAD_BUDGET_MS } from "@/lib/jobs/runtime";
 
 const RUNNER_KINDS = ["outreach", "research", "qualify", "proposal", "match", "assess"];
@@ -83,11 +85,14 @@ export async function drainJobs(opts: { userId: string | null; maxJobs: number }
     };
     try {
       // The user may have paused or removed the agent after approving the step.
-      if (!(await agentInfo(userId, candidate.agentId))) {
-        await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error: "The agent is paused or removed, so the run did not start." })
+      // Without the AI key, an AI step would only save sample output.
+      const stop = !(await agentInfo(userId, candidate.agentId)) ? "paused" : AI_JOB_KINDS.has(candidate.kind) && !isAIConfigured() ? "no-ai" : null;
+      if (stop) {
+        const error = stop === "paused" ? "The agent is paused or removed, so the run did not start." : "AI isn't set up on this server (OPENROUTER_API_KEY), so the run did not start.";
+        await db.update(jobs).set({ status: "failed", finishedAt: new Date(), error })
           .where(and(eq(jobs.id, candidate.id), eq(jobs.userId, userId)));
         if (params.pod && params.teamId) {
-          try { await podStageFailed(userId, params.teamId, candidate.kind, candidate.agentId, "paused"); } catch (e) { console.error("[jobs] notify failed:", e); }
+          try { await podStageFailed(userId, params.teamId, candidate.kind, candidate.agentId, stop); } catch (e) { console.error("[jobs] notify failed:", e); }
         }
         continue;
       }

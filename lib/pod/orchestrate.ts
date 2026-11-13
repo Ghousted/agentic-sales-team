@@ -17,6 +17,8 @@ import { postTeamMessage, userFirstName } from "@/lib/chat/teamMessages";
 import { leadsMarker } from "@/lib/chat/thread";
 import { isStale } from "@/lib/jobs/runtime";
 import { listProducts } from "@/lib/products/store";
+import { isAIConfigured } from "@/lib/ai/openrouter";
+import { AI_JOB_KINDS, NO_AI_TEXT } from "@/lib/jobs/limits";
 
 // `auto`: the capabilities the user set to Auto on the agent page (no Proceed/Cancel ask).
 interface AgentInfo { id: string; name: string; role: string; goal: string; task: string; capabilities: string[]; auto?: string[] }
@@ -107,7 +109,8 @@ export async function countPending(userId: string, agentId: string, capability: 
 
 /** Queue a pod stage and post its ask. "busy" when this team already has an
  *  active job of that kind, "paused" when the agent is paused or removed. */
-export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<"queued" | "busy" | "paused"> {
+export async function enqueuePodStage(userId: string, teamId: string, capability: string, agentId: string): Promise<"queued" | "busy" | "paused" | "no-ai"> {
+  if (AI_JOB_KINDS.has(capability) && !isAIConfigured()) return "no-ai";
   // Don't stack duplicates: skip if this team already has an active job for this capability.
   // A 'running' job past its time limit is dead (the runner reaps it), so it doesn't count.
   const now = new Date();
@@ -133,10 +136,11 @@ export async function enqueuePodStage(userId: string, teamId: string, capability
 
 /** Tell the team that a pod stage did not finish, so the chat is not left on
  *  "Okay, starting now." The chain stops here. */
-export async function podStageFailed(userId: string, teamId: string, kind: string, agentId: string, reason: "error" | "paused"): Promise<void> {
+export async function podStageFailed(userId: string, teamId: string, kind: string, agentId: string, reason: "error" | "paused" | "no-ai"): Promise<void> {
   const noun = NOUN[kind] ?? kind;
   await postTeamMessage(userId, teamId, agentId, reason === "paused"
     ? `I'm paused, so my ${noun} run did not start. Turn me back on, then ask me again.`
+    : reason === "no-ai" ? NO_AI_TEXT
     : `My ${noun} run stopped with an error, so I stopped the chain. Ask me to try again.`);
 }
 
@@ -239,6 +243,7 @@ export async function chainNext(userId: string, teamId: string, completedKind: s
       const r = await enqueuePodStage(userId, teamId, next.capability, next.agentId);
       if (r === "busy") await postTeamMessage(userId, teamId, info.id, `A ${noun} run is already waiting on this team. Answer that one first.`);
       if (r === "paused") await postTeamMessage(userId, teamId, finisher.id, `${first(info)} is paused, so I stopped the chain here.`);
+      if (r === "no-ai") await postTeamMessage(userId, teamId, info.id, NO_AI_TEXT);
     }
   } else {
     const userName = await userFirstName(userId);

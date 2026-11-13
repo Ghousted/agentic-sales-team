@@ -18,6 +18,7 @@ const fake = vi.hoisted(() => {
   return { state, db };
 });
 
+vi.mock("@/lib/ai/openrouter", async (importActual) => ({ ...(await importActual<typeof import("@/lib/ai/openrouter")>()), isAIConfigured: () => true }));
 vi.mock("@/lib/db", async () => ({ ...(await import("@/lib/db/schema")), getDb: () => fake.db, isDbConfigured: () => true }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => null }));
 vi.mock("@/lib/leads/store", () => ({

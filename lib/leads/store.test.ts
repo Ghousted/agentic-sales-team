@@ -26,6 +26,8 @@ const fakeDb = withBatch(drizzle(async (sql, params) => {
   return { rows: [] };
 }, { schema }), batches);
 
+vi.mock("@/lib/ai/openrouter", async (importActual) => ({ ...(await importActual<typeof import("@/lib/ai/openrouter")>()), isAIConfigured: () => true }));
+vi.mock("@/lib/teams/membership", () => ({ leadPoolOf: async (_u: string, agentId: string, teamId?: string | null) => (teamId ? [agentId, "assessor"] : [agentId]), teammatesOf: async (_u: string, agentId: string) => [agentId], membersOfTeam: async () => [] }));
 vi.mock("@/lib/db", async () => ({
   ...(await import("@/lib/db/schema")),
   isDbConfigured: () => true,
@@ -122,6 +124,13 @@ describe("addScrapedLeads", () => {
       expect(leadsInsert.params).toContain(id);
       expect(actInsert.params).toContain(id);
     }
+  });
+
+  it("checks for duplicates across the whole team's leads when the search has a team", async () => {
+    await addScrapedLeads(USER, "scout", [{ name: "A", company: "X", profileUrl: "https://example.com/a" }] as Parameters<typeof addScrapedLeads>[2], "t1");
+    const select = statements[0];
+    expect(select.sql).toMatch(/"leads"."agent_id" in \(\$2, \$3\)/);
+    expect(select.params).toEqual(expect.arrayContaining(["scout", "assessor"]));
   });
 
   it("sends nothing when every prospect is already in the book", async () => {

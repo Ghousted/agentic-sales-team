@@ -4,6 +4,11 @@
 
 /** Most leads one job may work on (outreach, research, qualify, …). The pod uses 20. */
 export const MAX_BATCH_SIZE = 25;
+
+/** Job kinds that need the AI model. Without OPENROUTER_API_KEY they do not
+ *  start, so no sample output is saved as if it were real work. */
+export const AI_JOB_KINDS = new Set(["research", "qualify", "assess", "match", "outreach", "proposal"]);
+export const NO_AI_TEXT = "AI isn't set up on this server, so I can't do that. Ask your admin to add the OpenRouter API key.";
 /** Most leads one scrape may ask for. */
 export const MAX_SCRAPE_TARGET = 25;
 /** Longest scrape instruction (it goes into the search plan and extraction prompts). */

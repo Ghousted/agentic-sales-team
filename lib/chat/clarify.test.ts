@@ -172,3 +172,28 @@ describe("repeat searches", () => {
     expect(o.count).toEqual(["5", "10", "25"]);
   });
 });
+
+describe("a wider search", () => {
+  it("widens the place one step: city to country, region after a comma, country to anywhere", async () => {
+    const { widerPlace } = await import("./clarify");
+    expect(widerPlace("Makati Philippines")).toBe("Philippines");
+    expect(widerPlace("Metro Manila, Philippines")).toBe("Philippines");
+    expect(widerPlace("Austin, Texas")).toBe("Texas");
+    expect(widerPlace("Philippines")).toBe("anywhere");
+    expect(widerPlace("New York")).toBe("anywhere");
+    expect(widerPlace("anywhere")).toBeNull();
+  });
+
+  it("asks for more leads when the search already covered anywhere, and stops at the cap", async () => {
+    const { widerBrief } = await import("./clarify");
+    expect(widerBrief({ what: "dentists", where: "Makati Philippines", count: 2 }, 25)).toEqual({ brief: { what: "dentists", where: "Philippines", count: 2 }, change: "all of Philippines, not only Makati Philippines" });
+    expect(widerBrief({ what: "dentists", where: "anywhere", count: 2 }, 25)).toEqual({ brief: { what: "dentists", where: "anywhere", count: 5 }, change: "5 leads instead of 2" });
+    expect(widerBrief({ what: "dentists", where: "anywhere", count: 25 }, 25)).toBeNull();
+  });
+
+  it("reads what the user sells from a search instruction", async () => {
+    const { sellingFrom } = await import("./clarify");
+    expect(sellingFrom("Anyone. Selling: AI Sales Team Setup (Done-for-you setup). Location: Makati Philippines.")).toBe("AI Sales Team Setup (Done-for-you setup)");
+    expect(sellingFrom("dentists. Location: Texas.")).toBe("");
+  });
+});

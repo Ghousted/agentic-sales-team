@@ -213,8 +213,44 @@ export function scrapeAnswerFrom(text: string): ScrapeBrief | null {
 
 /** The search an agent is about to run, asked before it starts: one line per
  *  detail. The ⟦approve:…⟧ marker shows the Proceed/Cancel panel under it. */
-export function scrapeAskText(b: ScrapeBrief, count: number, maxCount: number, jobId: string): string {
-  return ["I'm ready to search:", ...briefLines(b, count, maxCount), `Proceed? ⟦approve:${jobId}⟧`].join("\n");
+export function scrapeAskText(b: ScrapeBrief, count: number, maxCount: number, jobId: string, lead = "I'm ready to search:"): string {
+  return [lead, ...briefLines(b, count, maxCount), `Proceed? ⟦approve:${jobId}⟧`].join("\n");
+}
+
+// Countries and regions a place can end with ("Makati Philippines").
+const REGIONS = ["philippines", "united states", "usa", "us", "canada", "united kingdom", "uk", "australia", "new zealand", "singapore",
+  "malaysia", "indonesia", "thailand", "vietnam", "japan", "south korea", "china", "hong kong", "taiwan", "india", "united arab emirates",
+  "uae", "saudi arabia", "germany", "france", "spain", "italy", "netherlands", "ireland", "mexico", "brazil", "south africa", "nigeria",
+  "kenya", "europe", "asia", "southeast asia", "middle east", "latin america"];
+
+/** One step wider than `where`: "Makati Philippines" → "Philippines",
+ *  "Austin, Texas" → "Texas", a country or an unknown place → "anywhere".
+ *  Null when the search already covers anywhere. */
+export function widerPlace(where: string | undefined): string | null {
+  const w = (where ?? "").trim().replace(/\.$/, "");
+  if (!w || /^any ?where$/i.test(w)) return null;
+  const parts = w.split(/\s*,\s*/).filter(Boolean);
+  if (parts.length > 1) return parts[parts.length - 1];
+  const lower = w.toLowerCase();
+  const region = REGIONS.filter((r) => lower !== r && lower.endsWith(" " + r)).sort((a, b) => b.length - a.length)[0];
+  return region ? w.slice(w.length - region.length) : "anywhere";
+}
+
+/** A wider version of a search that found no good leads, and what changed:
+ *  a wider place, or, when the search already covered anywhere, more leads.
+ *  Null when there is nothing to widen. */
+export function widerBrief(b: ScrapeBrief, maxCount: number): { brief: ScrapeBrief; change: string } | null {
+  const where = b.where?.trim() || "anywhere";
+  const place = widerPlace(where);
+  if (place) return { brief: { ...b, where: place }, change: place === "anywhere" ? `anywhere, not only ${where}` : `all of ${place}, not only ${where}` };
+  const now = b.count && b.count > 0 ? b.count : DEFAULT_SCRAPE_COUNT;
+  const count = Math.min(maxCount, Math.max(5, now * 2));
+  return count > now ? { brief: { ...b, where: "anywhere", count }, change: `${count} leads instead of ${now}` } : null;
+}
+
+/** The "Selling: …" part of a search instruction (what the user sells), or "". */
+export function sellingFrom(instruction: string): string {
+  return instruction.match(/Selling:\s*([^]*?)\.(?=\s*Location:|\s*$)/)?.[1]?.trim() ?? "";
 }
 
 function briefLines(b: ScrapeBrief, count: number, maxCount: number): string[] {

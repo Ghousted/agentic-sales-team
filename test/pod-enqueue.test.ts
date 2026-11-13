@@ -5,7 +5,7 @@ const fake = vi.hoisted(() => {
   const state = { selects: [] as unknown[][], inserts: [] as unknown[] };
   const chain = (result: () => unknown) => {
     const c: Record<string, unknown> = {};
-    for (const m of ["from", "where", "limit", "returning"]) c[m] = () => c;
+    for (const m of ["from", "where", "orderBy", "limit", "returning"]) c[m] = () => c;
     c.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve().then(result).then(res, rej);
     return c;
   };
@@ -25,6 +25,9 @@ vi.mock("@/lib/leads/store", () => ({
 }));
 vi.mock("@/lib/matches/store", () => ({ pickLeadsForMatch: vi.fn(async () => []) }));
 vi.mock("@/lib/proposals/store", () => ({ pickLeadsForProposal: vi.fn(async () => []) }));
+const keys = vi.hoisted(() => ({ search: false }));
+vi.mock("@/lib/scrape/firecrawl", () => ({ isFirecrawlConfigured: () => keys.search }));
+vi.mock("@/lib/ai/openrouter", () => ({ isAIConfigured: () => true }));
 const catalog = vi.hoisted(() => ({ items: [{ id: "p1", name: "AI Training" }] as { id: string; name: string }[] }));
 vi.mock("@/lib/products/store", () => ({ listProducts: async () => catalog.items }));
 vi.mock("@/lib/chat/teamMessages", () => ({ postTeamMessage: vi.fn(async () => {}), userFirstName: vi.fn(async () => "Sam") }));
@@ -121,6 +124,24 @@ describe("chainNext", () => {
     expect(fake.state.inserts).toHaveLength(0);
     expect(postTeamMessage).toHaveBeenCalledOnce();
     expect(vi.mocked(postTeamMessage).mock.calls[0][3]).toMatch(/^@Sam, I found no new leads.*I stopped the chain here\.$/);
+  });
+
+  it("offers the same search with a wider scope when the review accepted no leads", async () => {
+    keys.search = true;
+    const iris = { ...agentRow, id: "as1", name: "Iris Lee", capabilities: ["assess"] };
+    vi.mocked(membersOfTeam).mockResolvedValue(["s1", "as1"]);
+    fake.state.selects = [
+      [iris], [], [],             // finisher
+      [{ agentId: "s1", params: { instruction: "Anyone. Selling: AI Sales Team Setup. Location: Makati Philippines.", target: 2 } }], // last search
+      [],                         // no search waiting
+      [scout], [], [],            // the last search's agent
+      [scout], [], [],            // agentInfo for the offer
+    ];
+    try { await chainNext("u1", "t1", "assess", 0, "as1"); } finally { keys.search = false; }
+    const texts = vi.mocked(postTeamMessage).mock.calls.map((c) => c[3]);
+    expect(texts[0]).toBe("@Sam, I reviewed the new leads, but none of them were a good fit.");
+    expect(texts[1]).toMatch(/^Want me to look again with a wider scope\? I'll search all of Philippines, not only Makati Philippines:\n• For: AI Sales Team Setup\n• Looking for: Anyone\n• Where: Philippines\n• How many: 2 leads\nProceed\? ⟦approve:new-job⟧$/);
+    expect(fake.state.inserts[0]).toMatchObject({ kind: "scrape", status: "needs_approval", agentId: "s1", params: { target: 2, teamId: "t1", pod: true, instruction: "Anyone. Selling: AI Sales Team Setup. Location: Philippines." } });
   });
 
   it("hands a scrape with leads to the assessor", async () => {
